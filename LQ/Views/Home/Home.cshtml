@@ -1,0 +1,57 @@
+@model List<string>;
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <title>LQ</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            font-size: clamp(0.1em, 1vw + 0.5em, 1em);
+            --main-margin: 0.875em;
+            font-family: monospace;
+            color: white;
+        }
+        
+        html {
+            -webkit-text-size-adjust: 100%;
+        }
+        
+        body {
+            margin: 0;
+            padding: 1em;
+            font-size: 1rem;
+            background-color: black;
+        }
+        
+        li:hover {
+            background-color: darksalmon;
+            color: black;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div style="display: flex;">
+    <div>
+        <h2>Sample CSVs</h2>
+        <ul id="uls" style="list-style-type: none">
+            @foreach (string file in Model)
+            {
+                <li>@file</li>
+            }
+        </ul>
+        
+        <script>
+        const uls = document.getElementById("uls");
+        uls.addEventListener("click", (e) => {
+            if(e.target.tagName === "LI")
+            {
+                
+            }
+        })
+        </script>
+    </div>
+</div>
+</body>
+</html>
