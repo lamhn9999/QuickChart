@@ -47,11 +47,21 @@ public class LQDbService : ILQDbService
     public void InsertTable(Table table)
     {
         InsertCSVFile(table.CSVFile);
-        table.Show(25);
+        // table.Show(25);
         foreach (FieldValues fieldvalues in table.Columns)
         {
+            System.Console.WriteLine(fieldvalues.Field.Name);
+            foreach (Value x in fieldvalues.Values)
+            {
+                System.Console.Write(x.ValueString);
+            }
+            System.Console.WriteLine();
             InsertField(fieldvalues.Field);
-            InsertRangeValue(fieldvalues.Values);
+            // InsertRangeValue(fieldvalues.Values);
+            foreach (Value value in fieldvalues.Values)
+            {
+                InsertValue(value);
+            }
         }
         _lqdbContext.SaveChanges();
     }

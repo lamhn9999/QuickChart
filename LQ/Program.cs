@@ -25,6 +25,7 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     var analystService = services.GetRequiredService<IAnalystService>();
     var csvService = services.GetRequiredService<ICSVService>();
-    Analyst Lam = analystService.GetAnalyst(1);
-    csvService.ProcessUploadedCSV(Lam, BaseDTO.SampleCSVsPath + "/hello2.csv");
+    analystService.InsertAnalyst(new Analyst { Name = "Hung" });
+    Analyst Hung = analystService.GetAnalyst(1);
+    csvService.ProcessUploadedCSV(Hung, BaseDTO.SampleCSVsPath + "/hello.csv");
 }

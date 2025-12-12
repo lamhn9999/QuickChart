@@ -99,7 +99,7 @@ public class CSVService : ICSVService
         CSVFile newCSVFile = new CSVFile{Name = Path.GetFileName(path), Analyst = analyst, CreatedTime = DateTime.UtcNow, ModifiedTime = DateTime.UtcNow};
         Table newTable = Interpret(newCSVFile, path);
         _lqDbService.InsertTable(newTable);
-        newTable.Show(25);
+        // newTable.Show(25);
         return true;
     }
 }
