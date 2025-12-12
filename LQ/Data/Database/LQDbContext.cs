@@ -18,7 +18,7 @@ public class LQDbContext : DbContext
         modelBuilder.Entity<Field>().ToTable("Field");
         modelBuilder.Entity<Value>(eb =>
             {
-                eb.HasNoKey();
+                eb.HasKey(value => new {value.FieldID, value.RowIndex});
                 eb.ToTable("Value");
                 eb.Property(v => v.Existance).HasDefaultValue(true);
             });
