@@ -1,0 +1,61 @@
+@model List<string>;
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <title>LQ</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="~/style.css"/>
+    <script>
+        async function uploadFile(event) {
+            const file = event.target.files[0];
+            if(!file) return;
+            
+            const fileName = file.name;
+            const fileContent = await file.text();
+
+            const response = await fetch("@Url.Action("Upload", "Home")", {
+                method: "POST",
+                body: JSON.stringify({
+                    Name: fileName,
+                    Content: fileContent
+                })
+            });
+            console.log(response);
+        }
+    </script>
+</head>
+<body>
+<div style = "display: flex; gap: var(--main-div-gap);">
+    <div style="width: 50vw">
+        <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
+            <h1 class = "glossy">LQ</h1>
+            <p style="width: 0; font-size: var(--main-div-gap)">Automatic CSV Plotter.</p>
+        </div>
+        <h2 class="listlabel">Select a CSV</h2>
+        <div>
+            @foreach (string file in Model)
+            {
+                <div class="listelement">
+                    <div class="listline"></div>
+                    <div class="listfile">@file</div>
+                </div>
+            }
+        </div>
+        <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
+            <h2>or</h2>
+        </div>
+        <div id="uploadacsv" style="display:flex; align-items:center; gap: var(--main-div-gap);">
+            <h2>Upload a CSV</h2>
+            <button class="addbutton" style = "color: darksalmon; border-color: darksalmon;" onclick="document.getElementById('fileInput').click()"></button>
+            <input type="file"
+                   name="file"
+                   accept=".csv"
+                   id="fileInput"
+                   style="display:none;"
+                   onchange="uploadFile(Event)">
+        </div>
+    </div>
+</div>
+</body>
+</html>

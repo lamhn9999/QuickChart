@@ -17,10 +17,10 @@ public class LQDbContext : DbContext
         modelBuilder.Entity<CSVFile>().ToTable("CSVFile");
         modelBuilder.Entity<Field>().ToTable("Field");
         modelBuilder.Entity<Value>(eb =>
-            {
-                eb.HasNoKey();
-                eb.ToTable("Value");
-                eb.Property(v => v.Existance).HasDefaultValue(true);
-            });
+        {
+            eb.HasKey(value => new { value.FieldID, value.RowIndex });
+            eb.ToTable("Value"); 
+            eb.Property(v => v.Existance).HasDefaultValue(true);
+        });
     }
 }

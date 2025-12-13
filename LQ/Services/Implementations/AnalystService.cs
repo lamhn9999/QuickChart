@@ -1,5 +1,6 @@
 using LQ.Services.Interfaces;
 using LQ.Models.AnalystModels;
+using LQ.Models.TableModels;
 
 namespace LQ.Services.Implementations;
 
@@ -12,15 +13,18 @@ public class AnalystService : IAnalystService
         _lqdbService = lqdbService;
     }
 
+    public Analyst? GetAnalyst(string name)
+    {
+        return _lqdbService.GetAnalyst(name);
+    }
+
     public Analyst? GetAnalyst(int id)
     {
         return _lqdbService.GetAnalyst(id);
     }
 
-    public bool InsertAnalyst(Analyst analyst)
+    public List<CSVFile> GetCSVFiles(int analystid)
     {
-        if (GetAnalyst(analyst.ID) is not null) return false;
-        _lqdbService.InsertAnalyst(analyst);
-        return true;
+        return _lqdbService.GetCSVFiles(analystid);
     }
 }

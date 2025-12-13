@@ -9,7 +9,7 @@ public class Value
     public object ValueCasted { get; set; }
     
     public int RowIndex { get; set; }
-    public bool Existance { get; set; }
+    public bool Existance { get; set; } = true;
     
     public int FieldID { get; set; }
     public Field Field { get; set; }

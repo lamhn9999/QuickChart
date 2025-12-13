@@ -24,7 +24,7 @@ public class Table
 
     public void Show(int maxLen)
     {
-        System.Console.WriteLine(CSVFile.Name);
+        System.Console.WriteLine(CSVFile.ID);
         for (int i = 0; i < Columns.Count; i++)
         {
             System.Console.Write("{0," + maxLen.ToString() + "}", Columns[i].Field.Name);
@@ -34,11 +34,43 @@ public class Table
         {
             for (int j = 0; j < Columns.Count; j++)
             {
-                System.Console.Write("{0," + maxLen.ToString() + "}", Columns[j].Values[i].ValueString);
-                System.Console.Write("{0," + maxLen.ToString() + "}", Columns[j].Values[i].Field.Name);
+                System.Console.Write("{0," + maxLen.ToString() + "}", Columns[j].Values[i].ValueCasted);
             }
             System.Console.WriteLine();
         }
+    }
+
+    public string[][] GetDisplay()
+    {
+        string[][] tableString = new string[RowCount+1][];
+        for (int i = 0; i < RowCount+1; i++)
+        {
+            tableString[i] = new string[Columns.Count];
+        }
+
+        for (int i = 0; i < Columns.Count; i++)
+        {
+            tableString[0][i] = Columns[i].Field.Name;
+        }
+
+        for (int i = 0; i < Columns.Count; i++)
+        {
+            for (int j = 0; j < RowCount; j++)
+            {
+                tableString[j+1][i] = Columns[i].Values[j].ValueString;
+            }
+        }
+
+        for (int i = 0; i <= RowCount; i++)
+        {
+            for (int j = 0; j < Columns.Count; j++)
+            {
+                System.Console.Write($"{tableString[i][j]},");
+            }
+
+            System.Console.WriteLine();
+        }
+        return tableString;
     }
     public void SetRowCount()
     {
