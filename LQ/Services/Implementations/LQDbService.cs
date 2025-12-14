@@ -40,12 +40,12 @@ public class LQDbService : ILQDbService
     }
     public Table GetTable(CSVFile csvFile)
     {
-        Table returnTable = new Table();
+        Table returnTable = new Table(csvFile);
         returnTable.CSVFile = csvFile;
         List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile select f).ToList();
         foreach (Field f in fields)
         {
-            List<Value> values = (from v in _lqdbContext.Values where v.FieldID == f.ID select v).ToList();
+            List<Value> values = (from v in _lqdbContext.Values where v.Field.ID == f.ID select v).ToList();
             returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
         }
         returnTable.SetRowCount();
@@ -73,7 +73,7 @@ public class LQDbService : ILQDbService
     public CSVFile? GetCSVFile(int analystid, string filename)
     {
         return (from f in _lqdbContext.CSVFiles
-                where f.AnalystID == analystid && f.Name == filename 
+                where f.Analyst.ID == analystid && f.Name == filename 
                 select f)
             .FirstOrDefault();
     }
@@ -86,7 +86,7 @@ public class LQDbService : ILQDbService
     public List<CSVFile> GetCSVFiles(int analystid)
     {
         return (from f in _lqdbContext.CSVFiles
-                where f.AnalystID == analystid
+                where f.Analyst.ID == analystid
                 select f)
             .ToList();
     }

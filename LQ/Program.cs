@@ -33,5 +33,9 @@ app.Run("http://0.0.0.0:5000");
 //     var analystService = services.GetRequiredService<IAnalystService>();
 //     var csvService = services.GetRequiredService<ICSVService>();
 //     Analyst lam = analystService.GetAnalyst(BaseDTO.DefaultAnalystID);
-//     //csvService.ProcessUploadedCSV(lam, BaseDTO.SampleCSVsPath + "/hello3.csv");
+//     csvService.ProcessUploadedCSV(lam, BaseDTO.SampleCSVsPath + "/hello3.csv");
+//     Analyst hung = analystService.GetAnalyst(3);
+//     csvService.ProcessUploadedCSV(hung, BaseDTO.SampleCSVsPath + "/Iris_missingdata.csv");
+//     Table? iris = csvService.GetTable(hung.ID, "Iris_missingdata.csv");
+//     iris.GetDisplay();
 // }

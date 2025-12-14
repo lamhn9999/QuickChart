@@ -4,13 +4,11 @@ namespace LQ.Models.TableModels;
 
 public class Value
 {
-    public string ValueString { get; set; }
+    public string? ValueString { get; set; }
     [NotMapped]
-    public object ValueCasted { get; set; }
-    
+    public object? ValueCasted { get; set; }
     public int RowIndex { get; set; }
     public bool Existance { get; set; } = true;
-    
-    public int FieldID { get; set; }
-    public Field Field { get; set; }
+    public int FieldID { get; private set; }
+    public required Field Field { get; set; }
 }

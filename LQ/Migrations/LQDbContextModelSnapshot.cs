@@ -86,7 +86,6 @@ namespace LQ.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("Name")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("TypeName")
@@ -113,7 +112,6 @@ namespace LQ.Migrations
                         .HasDefaultValue(true);
 
                     b.Property<string>("ValueString")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("FieldID", "RowIndex");

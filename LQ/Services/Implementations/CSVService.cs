@@ -162,7 +162,7 @@ public class CSVService : ICSVService
 
     private Table Interpret(CSVFile csvFile, string path)
     {
-        Table newTable = new Table{CSVFile = csvFile, Columns = new List<FieldValues>()};
+        Table newTable = new Table(csvFile);
 
         List<string> fields = new List<string>();
         List<string> lines = new List<string>();
@@ -221,11 +221,11 @@ public class CSVService : ICSVService
     {
         // System.Console.WriteLine(Validate(analyst, path));
         if (!Validate(analyst, path)) return false;
-        CSVFile newCSVFile = new CSVFile{Name = Path.GetFileName(path), Analyst = analyst, CreatedTime = DateTime.UtcNow, ModifiedTime = DateTime.UtcNow};
+        CSVFile newCSVFile = new CSVFile(analyst, Path.GetFileName(path));
         Table newTable = Interpret(newCSVFile, path);
         _lqDbService.InsertTable(newTable);
         newTable.Show(25);
-        return true;
+        return true;    
     }
 
     public Table? GetTable(int analystid, string filename)

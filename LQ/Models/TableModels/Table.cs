@@ -1,15 +1,23 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace LQ.Models.TableModels;
 
 public class FieldValues
 {
-    public Field Field { get; set; }
-    public List<Value> Values { get; set; }
+    public required Field Field { get; set; }
+    public required List<Value> Values { get; set; }
 }
 public class Table
 {
     public int RowCount { get; private set; } = 0;
-    public CSVFile? CSVFile { get; set; }
-    public List<FieldValues> Columns { get; set; } = new();
+    public required CSVFile CSVFile { get; set; }
+    public required List<FieldValues> Columns { get; set; } = new();
+
+    [SetsRequiredMembers]
+    public Table(CSVFile csvFile)
+    {
+        CSVFile = csvFile;
+    }
 
     public void AddRow(int index, List<string?> valuestrings)
     {
