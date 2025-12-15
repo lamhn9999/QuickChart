@@ -16,7 +16,7 @@ public class AuthController : Controller
         _analystService = analystService;
     }
 
-    [HttpPost]
+    [HttpPost("in")]
     [IgnoreAntiforgeryToken]
     public IActionResult SignIn(string aname)
     {
@@ -26,6 +26,14 @@ public class AuthController : Controller
             return Json(new { error = "We do not recognize you!" });
         }
         HttpContext.Session.SetString("AnalystDTO", JsonSerializer.Serialize(new AnalystDTO{ID = analyst.ID, Name = analyst.Name}));
+        return Json(new { redirect = Url.Action("Show", "Home") });
+    }
+
+    [HttpPost("out")]
+    [IgnoreAntiforgeryToken]
+    public new IActionResult SignOut()
+    {
+        HttpContext.Session.Clear();
         return Json(new { redirect = Url.Action("Show", "Home") });
     }
 }

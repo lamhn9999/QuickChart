@@ -1,3 +1,4 @@
+@using Microsoft.AspNetCore.Mvc.Routing
 @model List<string>;
 <!DOCTYPE html>
 <html lang="en-us">
@@ -7,21 +8,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="~/style.css"/>
     <script>
-        async function uploadFile(event) {
-            const file = event.target.files[0];
-            if(!file) return;
-            
-            const fileName = file.name;
-            const fileContent = await file.text();
-
+        async function upload() {
+            const form = document.getElementById('uploadForm');
+            const formData = new FormData(form);
             const response = await fetch("@Url.Action("Upload", "Home")", {
-                method: "POST",
-                body: JSON.stringify({
-                    Name: fileName,
-                    Content: fileContent
-                })
+                method : form.method || 'POST',
+                body: formData
             });
-            console.log(response);
+            const result = await response.json();
+            console.log(result);
+            document.getElementById('fileInput').value = "";
+        }
+        async function signOut() {
+            const response = await fetch("@Url.Action("SignOut","Auth")", {
+                method: "POST"
+            });
+            const result = await response.json();
+            if (result.redirect)
+            {
+                window.location.href = result.redirect;
+            }
         }
     </script>
 </head>
@@ -45,15 +51,21 @@
         <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
             <h2>or</h2>
         </div>
-        <div id="uploadacsv" style="display:flex; align-items:center; gap: var(--main-div-gap);">
+        <div style="display:flex; align-items:center; gap: var(--main-div-gap);">
             <h2>Upload a CSV</h2>
             <button class="addbutton" style = "color: darksalmon; border-color: darksalmon;" onclick="document.getElementById('fileInput').click()"></button>
+            <form method = "post" 
+                  enctype="multipart/form-data"
+                  id="uploadForm">
             <input type="file"
                    name="file"
                    accept=".csv"
                    id="fileInput"
                    style="display:none;"
-                   onchange="uploadFile(Event)">
+                   onchange="upload()"></form>
+        </div>
+        <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
+            <button class="signoutbutton" onclick="signOut()">Sign Out</button>
         </div>
     </div>
 </div>

@@ -34,7 +34,7 @@ public class HomeController : Controller
             : View("HomeSpecific", SampleCSVs);
     }
 
-    [HttpPost]
+    [HttpPost("work")]
     public IActionResult EnterWorkspace(string filename)
     {
         var json = HttpContext.Session.GetString("AnalystDTO");
@@ -60,6 +60,6 @@ public class HomeController : Controller
     [IgnoreAntiforgeryToken]
     public IActionResult Upload(IFormFile file)
     {
-        return Ok($"Received {file.FileName}");
+        return Json(new { received = $"{file.FileName}" });
     }
 }

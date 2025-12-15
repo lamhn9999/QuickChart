@@ -115,7 +115,7 @@ body {
      }
  }
 
-.signinbutton{
+.signinbutton, .signoutbutton{
     padding: 0;
     background: none;
     border: none;
@@ -127,10 +127,10 @@ body {
     text-shadow: -4px 4px 1px goldenrod, 4px -4px 1px green;
     animation: shuffle 0.5s infinite linear;
 }
-.signinbutton:hover {
+.signinbutton:hover, .signoutbutton:hover {
     animation-play-state: paused;
 }
-.signinbutton:active {
+.signinbutton:active, .signoutbutton:active {
     animation: none;
     text-shadow: 5px -5px 10px goldenrod, -5px 5px 10px green;
 }
