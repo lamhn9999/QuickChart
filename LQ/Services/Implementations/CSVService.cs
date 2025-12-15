@@ -14,35 +14,46 @@ public class CSVService : ICSVService
         _lqDbService = lqdbService;
     }
     
-    public bool Validate(Analyst analyst, string path)
+    private bool Validate(Analyst analyst, StreamReader reader)
     {
         int numCommas = -1;
         int numLines = 0;
-        using (var reader = new StreamReader(path))
+        
+        string? line = null;
+        while ((line = reader.ReadLine()) != null)
         {
-            string? line = null;
-            while ((line = reader.ReadLine()) != null)
+            numLines++;
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            int cnt = 0, unit = 1;
+            for (int i = 0; i < line.Length; i++)
             {
-                numLines++;
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                int cnt = 0, unit = 1;
-                for (int i = 0; i < line.Length; i++)
-                {
-                    if (line[i] == ',') cnt += unit; 
-                    else if (line[i] == '"') unit = 1 - unit;
-                }
-                // System.Console.WriteLine(cnt);
-                if (numCommas == -1) numCommas = cnt;
-                else if (cnt != numCommas) return false;
+                if (line[i] == ',') cnt += unit; 
+                else if (line[i] == '"') unit = 1 - unit;
             }
+            // System.Console.WriteLine(cnt);
+            if (numCommas == -1) numCommas = cnt;
+            else if (cnt != numCommas) return false;
         }
+        
         if (numCommas < 1 || numLines < 2) return false;
         return true;
     }
 
+    public bool Validate(Analyst analyst, string path)
+    {
+        return Validate(analyst, new StreamReader(path)) && 
+               !_lqDbService.SearchFileByAnalyst(analyst, Path.GetFileName(path));
+    }
+
+    public bool Validate(Analyst analyst, IFormFile file)
+    {
+        return Validate(analyst, new StreamReader(file.OpenReadStream())) && 
+               !_lqDbService.SearchFileByAnalyst(analyst, file.FileName);
+    }
+
     private bool DetectDateTime(FieldValues fieldvalues)
     {
-        string[] testformats = { "dd/MM/yyyy"};
+        // string[] testformats = { "dd/MM/yyyy"};
         string[] formats = {"M/d/yyyy", "MM/dd/yyyy",                                    
             "d/M/yyyy", "dd/MM/yyyy", 
             "yyyy/M/d", "yyyy/MM/dd",
@@ -59,7 +70,7 @@ public class CSVService : ICSVService
             "d M yyyy", "dd MM yyyy", 
             "yyyy M d", "yyyy MM dd"
         };
-        foreach (string dateTimeFormat in testformats)
+        foreach (string dateTimeFormat in formats)
         {
             bool trueFormat = true;
             foreach (Value value in fieldvalues.Values)
@@ -69,7 +80,6 @@ public class CSVService : ICSVService
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
                     out DateTime dateRes);
-                System.Console.WriteLine(dateRes);
             }
 
             if (trueFormat)
@@ -166,33 +176,31 @@ public class CSVService : ICSVService
         return typeof(string);
     }
 
-    private Table Interpret(CSVFile csvFile, string path)
+    private Table Interpret(CSVFile csvFile, StreamReader reader)
     {
         Table newTable = new Table(csvFile);
 
         List<string> fields = new List<string>();
         List<string> lines = new List<string>();
-        using (var reader = new StreamReader(path))
+        
+        string? headerLine = null;
+        while ((headerLine = reader.ReadLine()) != null)
         {
-            string? headerLine = null;
-            while ((headerLine = reader.ReadLine()) != null)
-            {
-                if (!string.IsNullOrWhiteSpace(headerLine))
-                    break;
-            }
-        
-            if (headerLine == null)
-            {
-                return newTable;
-            }
-        
-            fields = headerLine.Split(',').Select(f => f.Trim()).ToList();
-            string? line;
-            while ((line = reader.ReadLine()) != null)
-            {
-                if (!string.IsNullOrWhiteSpace(line))
-                    lines.Add(line);
-            }
+            if (!string.IsNullOrWhiteSpace(headerLine))
+                break;
+        }
+    
+        if (headerLine == null)
+        {
+            return newTable;
+        }
+    
+        fields = headerLine.Split(',').Select(f => f.Trim()).ToList();
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+                lines.Add(line);
         }
         
         for (int i = 0; i < fields.Count; i++)
@@ -226,13 +234,24 @@ public class CSVService : ICSVService
     public bool ProcessUploadedCSV(Analyst analyst, string path)
     {
         // System.Console.WriteLine(Validate(analyst, path));
-        if (!Validate(analyst, path) || _lqDbService.SearchFileByAnalyst(analyst, Path.GetFileName(path))) 
+        if (!Validate(analyst, path)) 
             return false;
         CSVFile newCSVFile = new CSVFile(analyst, Path.GetFileName(path));
-        Table newTable = Interpret(newCSVFile, path);
+        Table newTable = Interpret(newCSVFile, new StreamReader(path));
         _lqDbService.InsertTable(newTable);
-        newTable.Show(25);
+        // newTable.Show(25);
         return true;    
+    }
+
+    public bool ProcessUploadedCSV(Analyst analyst, IFormFile file)
+    {
+        if (!Validate(analyst, file)) 
+            return false;
+        CSVFile newCSVFile = new CSVFile(analyst, file.FileName);
+        Table newTable = Interpret(newCSVFile, new StreamReader(file.OpenReadStream()));
+        _lqDbService.InsertTable(newTable);
+        // newTable.Show(25);
+        return true;
     }
 
     public Table? GetTable(int analystid, string filename)

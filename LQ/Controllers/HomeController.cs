@@ -60,6 +60,10 @@ public class HomeController : Controller
     [IgnoreAntiforgeryToken]
     public IActionResult Upload(IFormFile file)
     {
+        var json = HttpContext.Session.GetString("AnalystDTO");
+        if (json is null) return NotFound();
+        var analystdto = JsonSerializer.Deserialize<AnalystDTO>(json);
+        _csvService.ProcessUploadedCSV(_analystService.GetAnalyst(analystdto.ID), file);
         return Json(new { received = $"{file.FileName}" });
     }
 }
