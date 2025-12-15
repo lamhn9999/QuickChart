@@ -13,86 +13,97 @@ public class LQDbService : ILQDbService
     {
         _lqdbContext = lqdbContext;
     }
-    public void InsertField(Field field)
+    
+    public bool InsertAnalyst(Analyst analyst)
     {
-        _lqdbContext.Fields.Add(field);
+        if (GetAnalyst(analyst.Name) is not null) return false;
+        _lqdbContext.Add(analyst);
         _lqdbContext.SaveChanges();
+        return true;
+    }
+    public Analyst? GetAnalyst(string name)
+    {
+        return (from a in _lqdbContext.Analysts where a.Name == name select a).FirstOrDefault();
+    }
+    public Analyst? GetAnalyst(int id)
+    {
+        return (from a in _lqdbContext.Analysts where a.ID == id select a).FirstOrDefault();
+    }
+    public void InsertTable(Table table)
+    {
+        InsertCSVFile(table.CSVFile);
+        foreach (FieldValues fieldvalues in table.Columns)
+        {
+            InsertField(fieldvalues.Field);
+            InsertValues(fieldvalues.Values);
+        }
+    }
+    public Table GetTable(CSVFile csvFile)
+    {
+        Table returnTable = new Table(csvFile);
+        returnTable.CSVFile = csvFile;
+        List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile select f).ToList();
+        foreach (Field f in fields)
+        {
+            List<Value> values = (from v in _lqdbContext.Values where v.Field.ID == f.ID select v).ToList();
+            returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
+        }
+        returnTable.SetRowCount();
+        return returnTable;
     }
 
-    public void InsertValue(Value value)
+    public Table? GetTable(int analystid, string filename)
     {
-        _lqdbContext.Values.Add(value);
-        _lqdbContext.SaveChanges();
+        CSVFile? csvfile = GetCSVFile(analystid, filename);
+        return csvfile is null
+            ? null
+            : GetTable(csvfile);
     }
-
-    public void InsertRangeValue(List<Value> values)
-    {
-        _lqdbContext.Values.AddRange(values);
-        _lqdbContext.SaveChanges();
-    }
-
+    
     public void InsertCSVFile(CSVFile csvFile)
     {
         _lqdbContext.CSVFiles.Add(csvFile);
         _lqdbContext.SaveChanges();
     }
-
     public CSVFile? GetCSVFile(Analyst analyst, string filename)
     {
+        return GetCSVFile(analyst.ID, filename);
+    }
+
+    public CSVFile? GetCSVFile(int analystid, string filename)
+    {
         return (from f in _lqdbContext.CSVFiles
-                where f.AnalystID == analyst.ID && f.Name == filename 
+                where f.Analyst.ID == analystid && f.Name == filename 
                 select f)
             .FirstOrDefault();
     }
-    public void InsertTable(Table table)
+
+    public List<CSVFile> GetCSVFiles(Analyst analyst)
     {
-        InsertCSVFile(table.CSVFile);
-        // table.Show(25);
-        foreach (FieldValues fieldvalues in table.Columns)
-        {
-            System.Console.WriteLine(fieldvalues.Field.Name);
-            foreach (Value x in fieldvalues.Values)
-            {
-                System.Console.Write(x.ValueString);
-            }
-            System.Console.WriteLine();
-            InsertField(fieldvalues.Field);
-            // InsertRangeValue(fieldvalues.Values);
-            foreach (Value value in fieldvalues.Values)
-            {
-                InsertValue(value);
-            }
-        }
+        return GetCSVFiles(analyst.ID);
+    }
+
+    public List<CSVFile> GetCSVFiles(int analystid)
+    {
+        return (from f in _lqdbContext.CSVFiles
+                where f.Analyst.ID == analystid
+                select f)
+            .ToList();
+    }
+    public void InsertField(Field field)
+    {
+        _lqdbContext.Fields.Add(field);
         _lqdbContext.SaveChanges();
     }
-
-    public Table GetTable(CSVFile csvFile)
+    public void InsertValue(Value value)
     {
-        Table returnTable = new Table();
-        returnTable.CSVFile = csvFile;
-        List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile select f).ToList();
-        foreach (Field f in fields)
-        {
-            List<Value> values = (from v in _lqdbContext.Values where v.Field == f select v).ToList();
-            returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
-        }
-
-        return returnTable;
-    }
-
-    public void InsertAnalyst(Analyst analyst)
-    {
-        _lqdbContext.Add(analyst);
+        _lqdbContext.Values.Add(value);
         _lqdbContext.SaveChanges();
     }
-
-    public List<Analyst> GetAnalyst(string name)
+    public void InsertValues(List<Value> values)
     {
-        return (from a in _lqdbContext.Analysts where a.Name == name select a).ToList();
+        _lqdbContext.Values.AddRange(values);
+        _lqdbContext.SaveChanges();
     }
-
-    public Analyst? GetAnalyst(int id)
-    {
-        return (from a in _lqdbContext.Analysts where a.ID == id select a).FirstOrDefault();
-    }
+    
 }

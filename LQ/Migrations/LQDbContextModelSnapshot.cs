@@ -86,7 +86,6 @@ namespace LQ.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("Name")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("TypeName")
@@ -101,22 +100,21 @@ namespace LQ.Migrations
 
             modelBuilder.Entity("LQ.Models.TableModels.Value", b =>
                 {
-                    b.Property<bool>("Existance")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
                     b.Property<int>("FieldID")
                         .HasColumnType("integer");
 
                     b.Property<int>("RowIndex")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("Existance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("ValueString")
-                        .IsRequired()
                         .HasColumnType("text");
 
-                    b.HasIndex("FieldID");
+                    b.HasKey("FieldID", "RowIndex");
 
                     b.ToTable("Value", (string)null);
                 });

@@ -1,3 +1,4 @@
+using System.Globalization;
 using LQ.Data.Database;
 using LQ.Models.TableModels;
 using LQ.Models.AnalystModels;
@@ -8,14 +9,13 @@ namespace LQ.Services.Implementations;
 public class CSVService : ICSVService
 {
     private readonly ILQDbService _lqDbService;
-
     public CSVService(ILQDbService lqdbService)
     {
         _lqDbService = lqdbService;
     }
     public bool Validate(Analyst analyst, string path)
     {
-        int cnt1 = -1, cnt2 = -1;
+        int numCommas = -1;
         using (var reader = new StreamReader(path))
         {
             string? line = null;
@@ -29,20 +29,140 @@ public class CSVService : ICSVService
                     else if (line[i] == '"') unit = 1 - unit;
                 }
 
-                if (cnt1 == -1) cnt1 = cnt;
-                else if (cnt != cnt1 && cnt2 == -1) { 
-                    cnt2 = cnt; 
-                    if (Math.Abs(cnt1 - cnt2) != 1) return false; 
-                }
-                else if (cnt1 != cnt && cnt2 != cnt) return false;
+                if (numCommas == -1) numCommas = cnt;
+                else if (cnt != numCommas) return false;
             }
         }
         return true;
     }
 
+    private bool DetectDateTime(FieldValues fieldvalues)
+    {
+        string[] formats = {"M/d/yyyy", "MM/dd/yyyy",                                    
+            "d/M/yyyy", "dd/MM/yyyy", 
+            "yyyy/M/d", "yyyy/MM/dd",
+            "M-d-yyyy", "MM-dd-yyyy",                                    
+            "d-M-yyyy", "dd-MM-yyyy", 
+            "yyyy-M-d", "yyyy-MM-dd",
+            "M.d.yyyy", "MM.dd.yyyy",                                    
+            "d.M.yyyy", "dd.MM.yyyy", 
+            "yyyy.M.d", "yyyy.MM.dd",
+            "M,d,yyyy", "MM,dd,yyyy",                                    
+            "d,M,yyyy", "dd,MM,yyyy", 
+            "yyyy,M,d", "yyyy,MM,dd",
+            "M d yyyy", "MM dd yyyy",                                    
+            "d M yyyy", "dd MM yyyy", 
+            "yyyy M d", "yyyy MM dd"
+        };
+        foreach (string dateTimeFormat in formats)
+        {
+            bool trueFormat = true;
+            foreach (Value value in fieldvalues.Values)
+            {
+                if (String.IsNullOrWhiteSpace(value.ValueString)) continue;
+                trueFormat &= DateTime.TryParseExact(value.ValueString, dateTimeFormat,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime dateRes);
+            }
+
+            if (trueFormat)
+            {
+                foreach (Value value in fieldvalues.Values)
+                {
+                    if (String.IsNullOrWhiteSpace(value.ValueString))
+                    {
+                        value.ValueCasted = null;
+                        continue;
+                    }
+                    value.ValueCasted = DateTime.ParseExact(value.ValueString, dateTimeFormat,
+                        CultureInfo.InvariantCulture, DateTimeStyles.None);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+    private Type DetectType(FieldValues fieldvalues)
+    {
+        if (DetectDateTime(fieldvalues)) return typeof(DateTime);
+        bool isInt = true;
+        bool isDouble = true;
+        List<String> valueStringList = new List<string>();
+        foreach (Value value in fieldvalues.Values)
+        {
+            if (String.IsNullOrWhiteSpace(value.ValueString)) continue;
+            if (!int.TryParse(value.ValueString, out int result)) isInt = false;
+            if (!double.TryParse(value.ValueString, out double resultd)) isDouble = false;
+            valueStringList.Add(value.ValueString.ToLower());
+        }
+
+        List<String> uniqueValue = valueStringList.Distinct().ToList();
+        var boolTokens = new HashSet<string> { "true", "false", "yes", "no", "0", "1" };
+        if (uniqueValue.All(x => boolTokens.Contains(x)) &&
+            uniqueValue.Any(x => x is "true" or "yes" or "1") &&
+            uniqueValue.Any(x => x is "false" or "no" or "0"))
+        {
+            foreach (Value value in fieldvalues.Values)
+            {
+                if (String.IsNullOrWhiteSpace(value.ValueString))
+                {
+                    value.ValueCasted = null;
+                    continue;
+                }
+                value.ValueCasted = (value.ValueString == "true" ||
+                                     value.ValueString == "yes" ||
+                                     value.ValueString == "1");
+            }
+            return typeof(bool);
+        }
+
+        if (isInt)
+        {
+            foreach (Value value in fieldvalues.Values)
+            {
+                if (String.IsNullOrWhiteSpace(value.ValueString))
+                {
+                    value.ValueCasted = null;
+                    continue;
+                }
+
+                value.ValueCasted = int.Parse(value.ValueString);
+            }
+            return typeof(int);
+        }
+
+        if (isDouble)
+        {
+            foreach (Value value in fieldvalues.Values)
+            {
+                if (String.IsNullOrWhiteSpace(value.ValueString))
+                {
+                    value.ValueCasted = null;
+                    continue;
+                }
+
+                value.ValueCasted = float.Parse(value.ValueString);
+            }
+            return typeof(double);
+        }
+        
+        foreach (Value value in fieldvalues.Values)
+        {
+            if (String.IsNullOrWhiteSpace(value.ValueString))
+            {
+                value.ValueCasted = null;
+                continue;
+            }
+
+            value.ValueCasted = value.ValueString;
+        }
+        return typeof(string);
+    }
+
     private Table Interpret(CSVFile csvFile, string path)
     {
-        Table newTable = new Table{CSVFile = csvFile, Columns = new List<FieldValues>()};
+        Table newTable = new Table(csvFile);
 
         List<string> fields = new List<string>();
         List<string> lines = new List<string>();
@@ -90,16 +210,26 @@ public class CSVService : ICSVService
             newTable.AddRow(i, newValues);
         }
 
+        foreach (FieldValues fieldvalue in newTable.Columns)
+        {
+            fieldvalue.Field.Type = DetectType(fieldvalue);
+        }
         return newTable;
     }
 
     public bool ProcessUploadedCSV(Analyst analyst, string path)
     {
+        // System.Console.WriteLine(Validate(analyst, path));
         if (!Validate(analyst, path)) return false;
-        CSVFile newCSVFile = new CSVFile{Name = Path.GetFileName(path), Analyst = analyst, CreatedTime = DateTime.UtcNow, ModifiedTime = DateTime.UtcNow};
+        CSVFile newCSVFile = new CSVFile(analyst, Path.GetFileName(path));
         Table newTable = Interpret(newCSVFile, path);
         _lqDbService.InsertTable(newTable);
-        // newTable.Show(25);
-        return true;
+        newTable.Show(25);
+        return true;    
+    }
+
+    public Table? GetTable(int analystid, string filename)
+    {
+        return _lqDbService.GetTable(analystid, filename);
     }
 }

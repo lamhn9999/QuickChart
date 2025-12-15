@@ -6,4 +6,5 @@ public interface ICSVService
 {
     public bool Validate(Analyst analyst, string path);
     public bool ProcessUploadedCSV(Analyst analyst, string path);
+    public Table? GetTable(int AnalystID, string filename);
 }

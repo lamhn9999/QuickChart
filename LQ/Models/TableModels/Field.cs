@@ -9,8 +9,8 @@ public enum Category
 
 public class Field
 {
-    public int ID { get; set; }
-    public string Name { get; set; }
+    public int ID { get; private set; }
+    public string? Name { get; set; }
     public int Index { get; set; }
     
     public string? TypeName { get; set; }   
@@ -20,8 +20,7 @@ public class Field
         get => string.IsNullOrEmpty(TypeName) ? null : Type.GetType(TypeName); 
         set => TypeName = value?.AssemblyQualifiedName;
     }
-    public List<Category> Categories { get; set; }
-    
-    public int CSVFileID { get; set; }
-    public CSVFile CSVFile { get; set; }
+
+    public required List<Category> Categories { get; set; } = new();
+    public required CSVFile CSVFile { get; set; }
 }
