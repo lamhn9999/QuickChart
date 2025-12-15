@@ -13,14 +13,17 @@ public class CSVService : ICSVService
     {
         _lqDbService = lqdbService;
     }
+    
     public bool Validate(Analyst analyst, string path)
     {
         int numCommas = -1;
+        int numLines = 0;
         using (var reader = new StreamReader(path))
         {
             string? line = null;
             while ((line = reader.ReadLine()) != null)
             {
+                numLines++;
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 int cnt = 0, unit = 1;
                 for (int i = 0; i < line.Length; i++)
@@ -28,16 +31,18 @@ public class CSVService : ICSVService
                     if (line[i] == ',') cnt += unit; 
                     else if (line[i] == '"') unit = 1 - unit;
                 }
-
+                // System.Console.WriteLine(cnt);
                 if (numCommas == -1) numCommas = cnt;
                 else if (cnt != numCommas) return false;
             }
         }
+        if (numCommas < 1 || numLines < 2) return false;
         return true;
     }
 
     private bool DetectDateTime(FieldValues fieldvalues)
     {
+        string[] testformats = { "dd/MM/yyyy"};
         string[] formats = {"M/d/yyyy", "MM/dd/yyyy",                                    
             "d/M/yyyy", "dd/MM/yyyy", 
             "yyyy/M/d", "yyyy/MM/dd",
@@ -54,7 +59,7 @@ public class CSVService : ICSVService
             "d M yyyy", "dd MM yyyy", 
             "yyyy M d", "yyyy MM dd"
         };
-        foreach (string dateTimeFormat in formats)
+        foreach (string dateTimeFormat in testformats)
         {
             bool trueFormat = true;
             foreach (Value value in fieldvalues.Values)
@@ -64,6 +69,7 @@ public class CSVService : ICSVService
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
                     out DateTime dateRes);
+                System.Console.WriteLine(dateRes);
             }
 
             if (trueFormat)
@@ -220,7 +226,8 @@ public class CSVService : ICSVService
     public bool ProcessUploadedCSV(Analyst analyst, string path)
     {
         // System.Console.WriteLine(Validate(analyst, path));
-        if (!Validate(analyst, path)) return false;
+        if (!Validate(analyst, path) || _lqDbService.SearchFileByAnalyst(analyst, Path.GetFileName(path))) 
+            return false;
         CSVFile newCSVFile = new CSVFile(analyst, Path.GetFileName(path));
         Table newTable = Interpret(newCSVFile, path);
         _lqDbService.InsertTable(newTable);

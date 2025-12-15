@@ -19,4 +19,5 @@ public interface ILQDbService
     public void InsertField(Field field);
     public void InsertValue(Value value);
     public void InsertValues(List<Value> values);
+    public bool SearchFileByAnalyst(Analyst analyst,  string fileName);
 }

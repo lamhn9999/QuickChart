@@ -105,5 +105,10 @@ public class LQDbService : ILQDbService
         _lqdbContext.Values.AddRange(values);
         _lqdbContext.SaveChanges();
     }
-    
+
+    public bool SearchFileByAnalyst(Analyst analyst, string fileName)
+    {
+        return (from a in _lqdbContext.CSVFiles 
+            where a.Analyst.ID == analyst.ID && a.Name == fileName select a).Count() > 0;
+    }
 }

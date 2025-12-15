@@ -25,17 +25,29 @@ var app = builder.Build();
 app.MapControllers();
 app.UseStaticFiles();
 app.UseSession();
-app.Run("http://0.0.0.0:5000");
+// app.Run("http://0.0.0.0:5000");
 
-// using (var scope = app.Services.CreateScope())
-// {
-//     var services = scope.ServiceProvider;
-//     var analystService = services.GetRequiredService<IAnalystService>();
-//     var csvService = services.GetRequiredService<ICSVService>();
-//     Analyst lam = analystService.GetAnalyst(BaseDTO.DefaultAnalystID);
-//     csvService.ProcessUploadedCSV(lam, BaseDTO.SampleCSVsPath + "/hello3.csv");
-//     Analyst hung = analystService.GetAnalyst(3);
-//     csvService.ProcessUploadedCSV(hung, BaseDTO.SampleCSVsPath + "/Iris_missingdata.csv");
-//     Table? iris = csvService.GetTable(hung.ID, "Iris_missingdata.csv");
-//     iris.GetDisplay();
-// }
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var analystService = services.GetRequiredService<IAnalystService>();
+    var csvService = services.GetRequiredService<ICSVService>();
+    var lqdbService = services.GetRequiredService<ILQDbService>();
+    
+    // lqdbService.InsertAnalyst(Analyst.GiveBirth("Hung"));
+    // lqdbService.InsertAnalyst(Analyst.GiveBirth("Lam"));
+    // lqdbService.InsertAnalyst(Analyst.GiveBirth("Messi"));
+    lqdbService.InsertAnalyst(Analyst.GiveBirth("Ta_Hai_Tung"));
+
+    Analyst Hung = lqdbService.GetAnalyst(1);
+    Analyst Lam = lqdbService.GetAnalyst(2);
+    Analyst Messi = lqdbService.GetAnalyst(3);
+    Analyst Tung = lqdbService.GetAnalyst(4);
+
+    // System.Console.WriteLine(Hung.ID);
+    // csvService.ProcessUploadedCSV(Messi, BaseDTO.SampleCSVsPath + "/Iris_missingdata.csv");
+    System.Console.WriteLine(csvService.ProcessUploadedCSV(Tung, BaseDTO.SampleCSVsPath + "/hello3.csv"));
+    // csvService.ProcessUploadedCSV(Lam, BaseDTO.SampleCSVsPath + "/pedestrians.csv");
+    // csvService.ProcessUploadedCSV(Messi, BaseDTO.SampleCSVsPath + "/Iris_missingdata.csv");
+    // csvService.ProcessUploadedCSV(Tung, BaseDTO.SampleCSVsPath + "/Student_List.csv"); 
+}
