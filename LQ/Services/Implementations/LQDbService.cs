@@ -109,6 +109,6 @@ public class LQDbService : ILQDbService
     public bool SearchFileByAnalyst(Analyst analyst, string fileName)
     {
         return (from a in _lqdbContext.CSVFiles 
-            where a.Analyst.ID == analyst.ID && a.Name == fileName select a).Count() > 0;
+            where a.Analyst.ID == analyst.ID && a.Name == fileName select a).Any();
     }
 }
