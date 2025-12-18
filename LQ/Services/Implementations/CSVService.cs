@@ -76,7 +76,7 @@ public class CSVService : ICSVService
             foreach (Value value in fieldvalues.Values)
             {
                 if (String.IsNullOrWhiteSpace(value.ValueString)) continue;
-                trueFormat &= DateTime.TryParseExact(value.ValueString, dateTimeFormat,
+                trueFormat &= DateTime.TryParseExact(value.ValueString.Trim(), dateTimeFormat,
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
                     out DateTime dateRes);
@@ -115,9 +115,9 @@ public class CSVService : ICSVService
 
         List<String> uniqueValue = valueStringList.Distinct().ToList();
         var boolTokens = new HashSet<string> { "true", "false", "yes", "no", "0", "1" };
-        if (uniqueValue.All(x => boolTokens.Contains(x)) &&
-            uniqueValue.Any(x => x is "true" or "yes" or "1") &&
-            uniqueValue.Any(x => x is "false" or "no" or "0"))
+        if (uniqueValue.All(x => boolTokens.Contains(x.Trim())) &&
+            uniqueValue.Any(x => x.Trim() is "true" or "yes" or "1") &&
+            uniqueValue.Any(x => x.Trim() is "false" or "no" or "0"))
         {
             foreach (Value value in fieldvalues.Values)
             {
@@ -176,7 +176,7 @@ public class CSVService : ICSVService
         return typeof(string);
     }
 
-    private Table Interpret(CSVFile csvFile, StreamReader reader)
+    private Table? Interpret(CSVFile csvFile, StreamReader reader)
     {
         Table newTable = new Table(csvFile);
 
@@ -190,10 +190,7 @@ public class CSVService : ICSVService
                 break;
         }
     
-        if (headerLine == null)
-        {
-            return newTable;
-        }
+        if (headerLine == null) return null;
     
         fields = headerLine.Split(',').Select(f => f.Trim()).ToList();
         string? line;
@@ -214,7 +211,27 @@ public class CSVService : ICSVService
         
         for (int i = 0; i < lines.Count; i++)
         {
-            List<string> splits = lines[i].Split(',').ToList();
+            List<string> splits = new List<string>();
+            int cntQuotes = 0;
+            string temp = "";
+            foreach (char c in lines[i])
+            {
+                if (c == ',')
+                {
+                    if (cntQuotes == 0)
+                    {
+                        splits.Add(temp);
+                        temp = "";
+                    }
+                    else temp += c;
+                }
+                else
+                {
+                    temp += c;
+                    if (c == '"') cntQuotes ^= 1;
+                }
+            }
+            splits.Add(temp);
             List<string?> newValues = new List<string?>();
             foreach (string split in splits)
             {
@@ -233,13 +250,15 @@ public class CSVService : ICSVService
 
     public bool ProcessUploadedCSV(Analyst analyst, string path)
     {
-        // System.Console.WriteLine(Validate(analyst, path));
         if (!Validate(analyst, path)) 
             return false;
         CSVFile newCSVFile = new CSVFile(analyst, Path.GetFileName(path));
-        Table newTable = Interpret(newCSVFile, new StreamReader(path));
+        Table? newTable = Interpret(newCSVFile, new StreamReader(path));
+        if (newTable is null)
+        {
+            return false;
+        }
         _lqDbService.InsertTable(newTable);
-        // newTable.Show(25);
         return true;    
     }
 
@@ -249,9 +268,12 @@ public class CSVService : ICSVService
             return false;
         CSVFile newCSVFile = new CSVFile(analyst, file.FileName);
         Table newTable = Interpret(newCSVFile, new StreamReader(file.OpenReadStream()));
+        if (newTable is null)
+        {
+            return false;
+        }
         _lqDbService.InsertTable(newTable);
-        // newTable.Show(25);
-        return true;
+        return true;  
     }
 
     public Table? GetTable(int analystid, string filename)

@@ -1,5 +1,5 @@
 :root {
-    font-size: clamp(0.3em, 3vw + 1.5em, 3em);
+    font-size: clamp(0.2em, 2vw + 1em, 2em);
     --main-margin: 0.875em;
     --main-div-gap: 0.75em;
     font-family: monospace;
@@ -167,7 +167,7 @@ body {
     background-position: -250% 0, 0 0;
     background-clip: text;
     -webkit-background-clip: text;
-    animation: shine 20s infinite linear;
+    animation: shine 10s infinite linear;
 }
 
 @keyframes shine {

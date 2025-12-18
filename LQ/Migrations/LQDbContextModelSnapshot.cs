@@ -122,7 +122,7 @@ namespace LQ.Migrations
             modelBuilder.Entity("LQ.Models.TableModels.CSVFile", b =>
                 {
                     b.HasOne("LQ.Models.AnalystModels.Analyst", "Analyst")
-                        .WithMany("CSVFiles")
+                        .WithMany()
                         .HasForeignKey("AnalystID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -150,11 +150,6 @@ namespace LQ.Migrations
                         .IsRequired();
 
                     b.Navigation("Field");
-                });
-
-            modelBuilder.Entity("LQ.Models.AnalystModels.Analyst", b =>
-                {
-                    b.Navigation("CSVFiles");
                 });
 #pragma warning restore 612, 618
         }

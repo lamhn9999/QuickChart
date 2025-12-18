@@ -45,7 +45,7 @@ public class LQDbService : ILQDbService
         List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile select f).ToList();
         foreach (Field f in fields)
         {
-            List<Value> values = (from v in _lqdbContext.Values where v.Field.ID == f.ID select v).ToList();
+            List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).ToList();
             returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
         }
         returnTable.SetRowCount();

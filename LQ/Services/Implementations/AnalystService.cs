@@ -23,6 +23,11 @@ public class AnalystService : IAnalystService
         return _lqdbService.GetAnalyst(id);
     }
 
+    public bool InsertAnalyst(Analyst analyst)
+    {
+        return _lqdbService.InsertAnalyst(analyst);
+    }
+
     public List<CSVFile> GetCSVFiles(int analystid)
     {
         return _lqdbService.GetCSVFiles(analystid);

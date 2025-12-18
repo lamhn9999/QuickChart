@@ -3,7 +3,7 @@
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
-    <title>LQ</title>
+    <title>eiesei'pi</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="~/style.css"/>
@@ -18,6 +18,16 @@
             const result = await response.json();
             console.log(result);
             document.getElementById('fileInput').value = "";
+        }
+        async function select(filename) {
+            const response = await fetch("@Url.Action("EnterWorkspace","Home")", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: `filename=${encodeURIComponent(filename)}`
+            });
+            console.log(response);
         }
         async function signOut() {
             const response = await fetch("@Url.Action("SignOut","Auth")", {
@@ -34,38 +44,41 @@
 <body>
 <div style = "display: flex; gap: var(--main-div-gap);">
     <div style="width: 50vw">
-        <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
-            <h1 class = "glossy">LQ</h1>
-            <p style="width: 0; font-size: var(--main-div-gap)">Automatic CSV Plotter.</p>
-        </div>
-        <h2 class="listlabel">Select a CSV</h2>
+        <header style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
+            <div style="display:flex; gap:0; flex-direction:column; justify-content:center; align-items: center">
+                <h1 class="glossy">THE WORLD'S NO.1 AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</h1>
+            </div>
+        </header>
+        <h2 class="listlabel">At your convenience, please select the CSV you would like to proceed with.</h2>
         <div>
             @foreach (string file in Model)
             {
-                <div class="listelement">
+                <div class="listelement" onclick="select('@file')">
                     <div class="listline"></div>
                     <div class="listfile">@file</div>
                 </div>
             }
         </div>
-        <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
-            <h2>or</h2>
-        </div>
         <div style="display:flex; align-items:center; gap: var(--main-div-gap);">
-            <h2>Upload a CSV</h2>
-            <button class="addbutton" style = "color: darksalmon; border-color: darksalmon;" onclick="document.getElementById('fileInput').click()"></button>
-            <form method = "post" 
-                  enctype="multipart/form-data"
-                  id="uploadForm">
-            <input type="file"
-                   name="file"
-                   accept=".csv"
-                   id="fileInput"
-                   style="display:none;"
-                   onchange="upload()"></form>
+            <h2>You could upload a CSV. Gently click the round orange button
+                <span>
+                    <button class="addbutton" style = "color: darksalmon; border-color: darksalmon;" onclick="document.getElementById('fileInput').click()"></button>
+                    <form method = "post" 
+                          enctype="multipart/form-data"
+                          id="uploadForm">
+                        <input type="file"
+                               name="file"
+                               accept=".csv"
+                               id="fileInput"
+                               style="display:none;"
+                               onchange="upload()"></form>
+                </span></h2>
         </div>
         <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
-            <button class="signoutbutton" onclick="signOut()">Sign Out</button>
+            <h2>Has the job been finalized?</h2>
+        </div>
+        <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start;">
+            <button class="signoutbutton" onclick="signOut()">WE WISH YOU A MERRY CHRISTMAS</button>
         </div>
     </div>
 </div>

@@ -7,5 +7,6 @@ public interface IAnalystService
 {
     public Analyst? GetAnalyst(string name);
     public Analyst? GetAnalyst(int id);
+    public bool InsertAnalyst(Analyst analyst);
     public List<CSVFile> GetCSVFiles(int analystid);
 }
