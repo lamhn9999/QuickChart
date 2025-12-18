@@ -40,6 +40,7 @@
             const data = await response.json();
             const table = document.getElementById("dataTable");
             table.innerHTML = "";
+            table.setAttribute("border", "1");
 
             data.forEach((row, i) => {
                 const tr = document.createElement("tr");

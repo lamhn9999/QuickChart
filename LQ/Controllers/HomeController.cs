@@ -66,7 +66,8 @@ public class HomeController : Controller
         if (analystdto is null) return NotFound();
         Analyst? analyst = _analystService.GetAnalyst(analystdto.ID);
         if (analyst is null) return NotFound();
-        _csvService.ProcessUploadedCSV(analyst, file);
-        return Json(new { received = $"{file.FileName}" });
+        return _csvService.ProcessUploadedCSV(analyst, file) 
+            ? Json(new { received = $"{file.FileName}" })
+            : Json(new { badcsv = $"{file.FileName}"});
     }
 }

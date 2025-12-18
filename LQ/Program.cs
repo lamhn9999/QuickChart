@@ -1,7 +1,4 @@
 using LQ.Data.Database;
-using LQ.Models.TableModels;
-using LQ.Models.AnalystModels;
-using LQ.Models.DTOs;
 using LQ.Services.Implementations;
 using LQ.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -25,7 +22,7 @@ var app = builder.Build();
 app.MapControllers();
 app.UseStaticFiles();
 app.UseSession();
-// app.Run("http://0.0.0.0:5000");
+app.Run("http://0.0.0.0:5000");
 
 // using (var scope = app.Services.CreateScope())
 // {

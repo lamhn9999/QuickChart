@@ -1,5 +1,6 @@
 using System.Globalization;
 using LQ.Data.Database;
+using System.Diagnostics;
 using LQ.Models.TableModels;
 using LQ.Models.AnalystModels;
 using LQ.Services.Interfaces;
@@ -32,7 +33,11 @@ public class CSVService : ICSVService
             }
             // System.Console.WriteLine(cnt);
             if (numCommas == -1) numCommas = cnt;
-            else if (cnt != numCommas) return false;
+            else if (cnt != numCommas)
+            {
+                Debug.WriteLine(line);
+                return false;
+            }
         }
         
         if (numCommas < 1 || numLines < 2) return false;
