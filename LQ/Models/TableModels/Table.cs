@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace LQ.Models.TableModels;
@@ -32,19 +33,19 @@ public class Table
 
     public void Show(int maxLen)
     {
-        System.Console.WriteLine(CSVFile.ID);
+        Debug.WriteLine(CSVFile.ID);
         for (int i = 0; i < Columns.Count; i++)
         {
-            System.Console.Write("{0," + maxLen.ToString() + "}", Columns[i].Field.Name);
+            Debug.Write("{0," + maxLen.ToString() + "}", Columns[i].Field.Name);
         }
-        System.Console.WriteLine();
+        Debug.WriteLine("");
         for (int i = 0; i < RowCount; i++)
         {
             for (int j = 0; j < Columns.Count; j++)
             {
-                System.Console.Write("{0," + maxLen.ToString() + "}", Columns[j].Values[i].ValueCasted);
+                Debug.Write("{0," + maxLen.ToString() + "}", Columns[j].Values[i].ValueCasted.ToString());
             }
-            System.Console.WriteLine();
+            Debug.WriteLine("");
         }
     }
 

@@ -180,7 +180,7 @@ public class CSVService : ICSVService
         }
         return typeof(string);
     }
-
+    
     private Table? Interpret(CSVFile csvFile, StreamReader reader)
     {
         Table newTable = new Table(csvFile);

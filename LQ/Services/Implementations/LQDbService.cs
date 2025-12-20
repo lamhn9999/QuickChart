@@ -41,7 +41,6 @@ public class LQDbService : ILQDbService
     public Table GetTable(CSVFile csvFile)
     {
         Table returnTable = new Table(csvFile);
-        returnTable.CSVFile = csvFile;
         List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile select f).ToList();
         foreach (Field f in fields)
         {
@@ -58,6 +57,27 @@ public class LQDbService : ILQDbService
         return csvfile is null
             ? null
             : GetTable(csvfile);
+    }
+
+    public Table GetTable(int csvfileid)
+    {
+        return GetTable(GetCSVFile(csvfileid));
+    }
+
+    public Table GetTable(int csvfileid, List<int> fieldindexes)
+    {
+        fieldindexes.Sort();
+        Table returnTable = new Table(GetCSVFile(csvfileid));
+        List<Field> fields = (from f in _lqdbContext.Fields 
+            where f.CSVFileID == csvfileid && fieldindexes.BinarySearch(f.Index) >= 0
+            select f).ToList();
+        foreach (Field f in fields)
+        {
+            List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).ToList();
+            returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
+        }
+        returnTable.SetRowCount();
+        return returnTable;
     }
     
     public void InsertCSVFile(CSVFile csvFile)
@@ -76,6 +96,13 @@ public class LQDbService : ILQDbService
                 where f.Analyst.ID == analystid && f.Name == filename 
                 select f)
             .FirstOrDefault();
+    }
+
+    public CSVFile? GetCSVFile(int csvfileid)
+    {
+        return (from f in _lqdbContext.CSVFiles
+            where f.ID == csvfileid
+            select f).FirstOrDefault();
     }
 
     public List<CSVFile> GetCSVFiles(Analyst analyst)

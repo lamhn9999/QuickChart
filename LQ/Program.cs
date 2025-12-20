@@ -14,6 +14,7 @@ builder.Services.AddDbContext<LQDbContext>(options =>
 builder.Services.AddScoped<ILQDbService, LQDbService>();
 builder.Services.AddScoped<ICSVService, CSVService>();
 builder.Services.AddScoped<IAnalystService, AnalystService>();
+builder.Services.AddScoped<IAutoChartService, AutoChartService>();
 // AddSession
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession();
