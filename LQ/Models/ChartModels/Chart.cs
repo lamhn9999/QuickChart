@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace LQ.Models.ChartModels;
 
 public enum ChartType 
@@ -20,4 +22,9 @@ public class Chart
     public List<object> X { get; set; } = new();
     public List<LabelData> Y { get; set; } = new();
     public List<LabelData> Z { get; set; } = new();
+
+    public string ShowJson()
+    {
+        return JsonSerializer.Serialize(this);
+    }
 }

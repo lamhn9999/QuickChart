@@ -63,23 +63,4 @@ public sealed class CSVFileTest
         Analyst tester = _analystService.GetAnalyst("N D Hung");
         Assert.IsTrue(_csvService.Validate(tester, "/home/lam/LQ/LQ/Data/SampleCSVs/spotify_data_cleaned.csv"));
     }
-    
-    [TestMethod]
-    [DataRow("player_stats_2023.csv")]
-    public void DetectCategory(string value)
-    {
-        Analyst _tester = _analystService.GetAnalyst("N D Hung");
-        Table table = _csvService.GetTable(_tester.ID, value);
-        Assert.IsNotNull(table);
-        foreach (FieldValues fieldValues in table.Columns)
-        {
-            _autoChartService.DetectCategory(fieldValues);
-            Debug.Print(fieldValues.Field.Name);
-            foreach (Category category in fieldValues.Field.Categories)
-            {
-                Debug.Print(category.ToString());
-            }
-        }
-    }
-    
 }

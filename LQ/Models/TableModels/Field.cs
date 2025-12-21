@@ -24,6 +24,5 @@ public class Field
     }
 
     public required List<Category> Categories { get; set; } = new();
-    public int CSVFileID { get; private set; }
     public required CSVFile CSVFile { get; set; }
 }

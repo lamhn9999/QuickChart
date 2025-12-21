@@ -69,7 +69,8 @@ public class LQDbService : ILQDbService
         fieldindexes.Sort();
         Table returnTable = new Table(GetCSVFile(csvfileid));
         List<Field> fields = (from f in _lqdbContext.Fields 
-            where f.CSVFileID == csvfileid && fieldindexes.BinarySearch(f.Index) >= 0
+            where f.CSVFile.ID == csvfileid && (fieldindexes.Contains(f.Index))
+            // where f.CSVFile.ID == csvfileid && (fieldindexes.BinarySearch(f.Index) >= 0)
             select f).ToList();
         foreach (Field f in fields)
         {
