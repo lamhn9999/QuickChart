@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LQ UI Test</title>
+    <script src="/home/lam/LQ/LQ/wwwroot/node_modules/chart.js/dist/chart.umd.min.js"></script>
+</head>
+<body style = "background:black;">
+<div style="width: 700px; max-width: 100%;">
+    <canvas id="myChart"></canvas>
+</div>
+
+<script>
+    const ctx = document.getElementById('myChart');
+    const data = [
+        { x: 2010, y : [10, 20], z: 1},
+        { x: 2011, y : [14, 34], z: 2},
+        { x: 2012, y : [20, 30], z : 3},
+        { x: 2013, y : [40, 40], z : 4},
+    ];
+    const cfg = {
+        type: 'bar',
+        data: {
+            labels: data.map(row => row.x),
+            datasets: [
+                {
+                    label: 'Acquisitions by year',
+                    data: data.map(row => row.y[0]),
+                    backgroundColor: 'white',
+                },
+                {
+                    label: 'Acquisitions by year',
+                    data: data.map(row => row.y[1]),
+                    backgroundColor: 'white',
+                },
+            ]
+        },
+        options: {
+            animation: false,
+            scales: {
+                x: {
+                    border: {
+                        display: false
+                    },
+                    grid: {
+                        display: true,
+                        drawOnChartArea: true,
+                        drawTicks: true,
+                        color: '#FFFFFF'
+                    }
+                },
+                y: {
+                    border: {
+                        display: false
+                    },
+                    grid: {
+                        display: true,
+                        drawOnChartArea: true,
+                        drawTicks: true,
+                        color: '#FFFFFF'
+                    }
+                },
+            }
+        },
+    };
+    new Chart(ctx, cfg);
+</script>
+</body>
+</html>

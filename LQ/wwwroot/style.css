@@ -54,6 +54,10 @@ body {
     color: black;
     cursor: pointer;
 }
+.listelement:active {
+    background-color: darksalmon;
+    color: black;
+}
 
 .sealed {
     z-index: 10;
@@ -174,3 +178,9 @@ body {
      0% { background-position: -250% 0, 0 0; }
      100% { background-position: 250% 0, 0 0; }
  }
+
+.resizer {
+    width: 5px;
+    cursor: col-resize;
+    background: white;
+}

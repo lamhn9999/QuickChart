@@ -114,6 +114,9 @@ namespace LQ.Migrations
                     b.Property<string>("ValueString")
                         .HasColumnType("text");
 
+                    b.Property<string>("ValueStringFormatted")
+                        .HasColumnType("text");
+
                     b.HasKey("FieldID", "RowIndex");
 
                     b.ToTable("Value", (string)null);

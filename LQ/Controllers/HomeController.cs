@@ -21,6 +21,7 @@ public class HomeController : Controller
     [HttpGet]
     public IActionResult Show()
     {
+        HttpContext.Session.Remove("TableDTO");
         var json = HttpContext.Session.GetString("AnalystDTO");
         var analystdto = json is null
             ? null
@@ -35,7 +36,7 @@ public class HomeController : Controller
 
     [HttpPost("table")]
     [IgnoreAntiforgeryToken]
-    public IActionResult EnterWorkspace(string filename)
+    public IActionResult Select(string filename)
     {
         var json = HttpContext.Session.GetString("AnalystDTO");
         var analystdto = json is null
@@ -53,6 +54,7 @@ public class HomeController : Controller
             RowCount = table.RowCount,
             CSVFileID = table.CSVFile.ID
         }));
+        
         return Json(table.GetDisplay());
     }
 

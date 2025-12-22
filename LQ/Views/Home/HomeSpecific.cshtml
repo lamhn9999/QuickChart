@@ -1,13 +1,20 @@
-@using Microsoft.AspNetCore.Mvc.Routing
 @model List<string>;
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
-    <title>eiesei'pi</title>
+    <title>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="~/style.css"/>
     <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            document
+                .getElementById("signoutbutton")
+                .addEventListener("click", signOut);
+            document
+                .getElementById("workspaceButton")
+                .addEventListener("click", enterWorkspace);
+        });
         async function upload() {
             const form = document.getElementById('uploadForm');
             const formData = new FormData(form);
@@ -20,7 +27,7 @@
             document.getElementById('fileInput').value = "";
         }
         async function select(filename) {
-            const response = await fetch("@Url.Action("EnterWorkspace","Home")", {
+            const response = await fetch("@Url.Action("Select","Home")", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded"
@@ -30,8 +37,12 @@
 
             const data = await response.json();
             const table = document.getElementById("dataTable");
+            table.hidden = false;
             table.innerHTML = "";
             table.setAttribute("border", "1");
+
+            document.getElementById("noPreview").style.display = "none";
+            document.getElementById("workspaceButton").style.removeProperty('display');
 
             data.forEach((row, i) => {
                 const tr = document.createElement("tr");
@@ -52,6 +63,10 @@
             {
                 window.location.href = result.redirect;
             }
+        }
+        function enterWorkspace()
+        {
+            window.location.href = '/workspace';
         }
     </script>
 </head>
@@ -92,11 +107,20 @@
             <h2>Has the job been finalized?</h2>
         </div>
         <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start;">
-            <button class="signoutbutton" onclick="signOut()">WE WISH YOU A MERRY CHRISTMAS</button>
+            <button class="signoutbutton" id = "signoutbutton">WE WISH YOU A MERRY CHRISTMAS</button>
         </div>
     </div>
-    <div style="width: 50vw; height: 90vh; overflow: auto;">
-        <table id="dataTable"></table>
+    <div style="width: 50vw; height: 90vh;">
+        <div style="display: flex; justify-content: space-between;">
+            <h2 style="font-style: italic">Preview</h2>
+            <button class="signinbutton" id="workspaceButton" style="display: none">Enter Workspace /></button>
+        </div>
+        <div style="max-height: 85vh; overflow: auto">
+            <table id="dataTable" hidden></table>
+            <div id="noPreview" style="border: 1px solid white; display: flex; justify-content: center; align-items: center; height: calc(85vh - 2px);">
+                <h3 style="color: darkgrey">No preview available.</h3>
+            </div>
+        </div>
     </div>
 </div>
 </body>

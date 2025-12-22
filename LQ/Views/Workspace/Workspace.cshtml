@@ -1,26 +1,125 @@
-@model string[][]
-
-<table id="dataTable">
-    <thead></thead>
-    <tbody></tbody>
-</table>
-
+@using LQ.Models.TableModels
+@model LQ.Models.TableModels.Table;
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <title>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="~/style.css"/>
+    <script src="/node_modules/chart.js/dist/chart.umd.min.js"></script>
+    <script>
+        let chartInstance = null;
+        const listIndexes = new Set();
+        const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea'];
+        function fieldClicked(fieldindex)
+        {
+            if(listIndexes.has(fieldindex)) listIndexes.delete(fieldindex);
+            else listIndexes.add(fieldindex);
+            console.log(listIndexes);
+            autoChart();
+        }
+        async function autoChart()
+        {
+            const response = await fetch("@Url.Action("","")",{
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify([...listIndexes].map(Number))
+            });
+            const result = await response.json();
+            const sample = result[0];
+            const ctx = document.getElementById('myChart');
+            const cfg = {
+                type: chartArray[sample.chartType],
+                data: {
+                    labels: sample.x,
+                    datasets: sample.y.map(ds => ({
+                        label: ds.label,
+                        data: ds.data
+                    }))
+                }
+            };
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+            chartInstance = new Chart(ctx, cfg);
+        }
+    </script>
+</head>
+<body>
+<div style="max-height: 10vh">
+    <header style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
+        <div style="display:flex; gap:0; flex-direction:column; justify-content:center; align-items: center">
+            <h3 class="glossy">WORKSPACE!</h3>
+        </div>
+    </header>
+</div>
+<div style="display: flex; gap: 0;">
+    <div style="min-width:30vw; max-width: 60vw; height: 85vh; background: darkgrey; user-select: none; flex-shrink: 0; margin: 0; padding: 0; overflow: auto;" id="tablePanel">
+        <table id="dataTable" border="1" style="font-size: 0.5rem;">
+            <thead>
+            <tr>
+                @{
+                    foreach (FieldValues fv in Model.Columns)
+                    {
+                        <th onclick="fieldClicked(@fv.Field.Index)">
+                            @fv.Field.Name
+                        </th>
+                    }
+                }
+            </tr>
+            </thead>
+            <tbody>
+            @for(int i = 0; i < Model.RowCount-1; i++)
+            {
+                <tr>
+                @foreach (FieldValues fv in Model.Columns)
+                {
+                    <td>@fv.Values[i].ValueString</td>
+                }
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <div class="resizer" id="drag"></div>
+    <div style="flex: 1; background: white; margin: 0; padding: 0;" id="chartPanel">
+        <canvas id="myChart"></canvas>
+    </div>
+</div>
 <script>
-    const response = @Html.Raw(
-    System.Text.Json.JsonSerializer.Serialize(Model)
-    );
+    const resizer = document.getElementById('drag');
+    const left = document.getElementById('tablePanel');
 
-    const table = document.getElementById("dataTable");
-    const thead = table.querySelector("thead");
-    const tbody = table.querySelector("tbody");
+    let startX = 0;
+    let startWidth = 0;
+    let isDragging = false;
 
-    response.forEach((row, i) => {
-        const tr = document.createElement("tr");
-        row.forEach(cell => {
-            const el = document.createElement(i === 0 ? "th" : "td");
-            el.textContent = cell;
-            tr.appendChild(el);
-        });
-        i === 0 ? thead.appendChild(tr) : tbody.appendChild(tr);
+    resizer.addEventListener('mousedown', e => {
+        isDragging = true;
+
+        startX = e.clientX;
+        startWidth = left.getBoundingClientRect().width;
+
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+
+        const dx = e.clientX - startX;
+        left.style.width = `${startWidth + dx}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
     });
 </script>
+</body>
+</html>

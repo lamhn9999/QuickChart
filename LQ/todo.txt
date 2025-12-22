@@ -1,3 +1,1 @@
-test csv có field, value, format không hợp lệ => những value có dấu phẩy, được bỏ trong 
-ngoặc kép đang bị split sai (hello.csv)
-hoàn thành giao diện chọn csv file 
+viết lại hàm swap trong detect bar chart 

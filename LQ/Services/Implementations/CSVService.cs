@@ -10,9 +10,11 @@ namespace LQ.Services.Implementations;
 public class CSVService : ICSVService
 {
     private readonly ILQDbService _lqDbService;
-    public CSVService(ILQDbService lqdbService)
+    private readonly IAutoChartService _autoChartService;
+    public CSVService(ILQDbService lqdbService, IAutoChartService autoChartService)
     {
         _lqDbService = lqdbService;
+        _autoChartService = autoChartService;
     }
     
     private bool Validate(Analyst analyst, StreamReader reader)
@@ -93,11 +95,11 @@ public class CSVService : ICSVService
                 {
                     if (String.IsNullOrWhiteSpace(value.ValueString))
                     {
-                        value.ValueCasted = null;
+                        value.ValueStringFormatted = null;
                         continue;
                     }
-                    value.ValueCasted = DateTime.ParseExact(value.ValueString, dateTimeFormat,
-                        CultureInfo.InvariantCulture, DateTimeStyles.None);
+                    value.ValueStringFormatted = DateTime.ParseExact(value.ValueString, dateTimeFormat,
+                        CultureInfo.InvariantCulture, DateTimeStyles.None).ToString();
                 }
                 return true;
             }
@@ -128,12 +130,12 @@ public class CSVService : ICSVService
             {
                 if (String.IsNullOrWhiteSpace(value.ValueString))
                 {
-                    value.ValueCasted = null;
+                    value.ValueStringFormatted = null;
                     continue;
                 }
-                value.ValueCasted = (value.ValueString == "true" ||
-                                     value.ValueString == "yes" ||
-                                     value.ValueString == "1");
+                value.ValueStringFormatted = (value.ValueString == "true" ||
+                                              value.ValueString == "yes" ||
+                                              value.ValueString == "1")? "true" : "false";
             }
             return typeof(bool);
         }
@@ -144,11 +146,11 @@ public class CSVService : ICSVService
             {
                 if (String.IsNullOrWhiteSpace(value.ValueString))
                 {
-                    value.ValueCasted = null;
+                    value.ValueStringFormatted = null;
                     continue;
                 }
 
-                value.ValueCasted = int.Parse(value.ValueString);
+                value.ValueStringFormatted = value.ValueString;
             }
             return typeof(int);
         }
@@ -159,11 +161,11 @@ public class CSVService : ICSVService
             {
                 if (String.IsNullOrWhiteSpace(value.ValueString))
                 {
-                    value.ValueCasted = null;
+                    value.ValueStringFormatted = null;
                     continue;
                 }
 
-                value.ValueCasted = float.Parse(value.ValueString);
+                value.ValueStringFormatted = value.ValueString;
             }
             return typeof(double);
         }
@@ -172,15 +174,15 @@ public class CSVService : ICSVService
         {
             if (String.IsNullOrWhiteSpace(value.ValueString))
             {
-                value.ValueCasted = null;
+                value.ValueStringFormatted = null;
                 continue;
             }
 
-            value.ValueCasted = value.ValueString;
+            value.ValueStringFormatted = value.ValueString;
         }
         return typeof(string);
     }
-
+    
     private Table? Interpret(CSVFile csvFile, StreamReader reader)
     {
         Table newTable = new Table(csvFile);
@@ -263,6 +265,10 @@ public class CSVService : ICSVService
         {
             return false;
         }
+        foreach (FieldValues fv in newTable.Columns)
+        {
+            _autoChartService.DetectCategory(fv);
+        }
         _lqDbService.InsertTable(newTable);
         return true;    
     }
@@ -277,6 +283,10 @@ public class CSVService : ICSVService
         {
             return false;
         }
+        foreach (FieldValues fv in newTable.Columns)
+        {
+            _autoChartService.DetectCategory(fv);
+        }
         _lqDbService.InsertTable(newTable);
         return true;  
     }
@@ -284,5 +294,10 @@ public class CSVService : ICSVService
     public Table? GetTable(int analystid, string filename)
     {
         return _lqDbService.GetTable(analystid, filename);
+    }
+
+    public Table? GetTable(int analystId, int csvFileId)
+    {
+        return _lqDbService.GetTable(analystId, csvFileId);
     }
 }

@@ -9,6 +9,8 @@ public enum Category
 
 public class Field
 {
+    public const double IDENTIFIER_THRESHOLD = 0.9;
+    public const double CATEGORICAL_THRESHOLD = 0.1;
     public int ID { get; private set; }
     public string? Name { get; set; }
     public int Index { get; set; }
