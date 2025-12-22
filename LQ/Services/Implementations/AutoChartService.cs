@@ -47,8 +47,19 @@ public class AutoChartService : IAutoChartService
 
     private Chart? DetectBarChart(Table table)
     {
-        bool isBar = true;
-        isBar &= table.Columns[0].Field.Categories.Contains(Category.Categorical);
+        if (table.Columns.Count == 1) return null;
+        bool isBar = false;
+        for (int i = 0; i < table.Columns.Count; i++)
+        {
+            if (table.Columns[i].Field.Categories.Contains(Category.Categorical))
+            {
+                FieldValues temp = table.Columns[i];
+                table.Columns[i] = table.Columns[0];
+                table.Columns[0] = temp;
+                isBar = true;
+                break;
+            }
+        }
         for (int i = 1; i < table.Columns.Count; i++)
         {
             isBar &= table.Columns[i].Field.Categories.Contains(Category.Numeric);
@@ -71,16 +82,16 @@ public class AutoChartService : IAutoChartService
                 FieldValues fieldValues = table.Columns[i];
                 LabelData labeldata = new LabelData();
                 labeldata.Label = fieldValues.Field.Name;
-                float[] sumYValue = new float[barChart.X.Count];
+                double[] sumYValue = new double[barChart.X.Count];
                 for (int j = 0; j < table.RowCount; j++)
                 {
                     object xLabel = table.Columns[0].Values[j].ValueCasted;
                     if (xLabel == null) continue;
                     if (fieldValues.Values[j].ValueCasted != null)
-                        sumYValue[barChart.X.IndexOf(xLabel)] += (float)fieldValues.Values[j].ValueCasted;
+                        sumYValue[barChart.X.IndexOf(xLabel)] += Convert.ToDouble(fieldValues.Values[j].ValueCasted);
                 }
 
-                foreach (float value in sumYValue)
+                foreach (double value in sumYValue)
                 {
                     labeldata.Data.Add(value / table.RowCount);
                 }
@@ -95,22 +106,6 @@ public class AutoChartService : IAutoChartService
 
     private Chart? DetectPieChart(Table table)
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !dir.GetFiles("*.csproj").Any())
-        {
-            dir = dir.Parent;
-        }
-        var logPath = Path.Combine(dir!.FullName, "test.log");
-        foreach(FieldValues fv in table.Columns)
-        {
-            File.AppendAllText(logPath, JsonSerializer.Serialize(new {
-                name = fv.Field.Name,
-                categories = fv.Field.Categories,
-                values = (from f in fv.Values select f.ValueString).ToList()
-            })
-            );
-        }
-
         if (table.Columns.Count != 1 ||
             !table.Columns[0].Field.Categories.Contains(Category.Categorical)) return null;
         Chart pieChart = new Chart();
@@ -119,7 +114,6 @@ public class AutoChartService : IAutoChartService
         List<object> XValueString = new List<object>();
         foreach (Value value in table.Columns[0].Values)
         {
-            File.AppendAllText(logPath, value.ValueString is null ? "null" : value.ValueString);
             if (value.ValueCasted != null)
             {
                 XValueString.Add(value.ValueCasted);
@@ -138,12 +132,163 @@ public class AutoChartService : IAutoChartService
         
         foreach (int value in cntLabel)
         {
-            File.AppendAllText(logPath, value.ToString() + '\n');
+            // File.AppendAllText(logPath, value.ToString() + '\n');
             labelData.Data.Add(value);
         }
         pieChart.Y.Add(labelData);
         return pieChart;
     }
+
+    private Chart? DetectLineChart(Table table)
+    {
+        if (table.Columns.Count == 1) return null;
+        bool isLine = false;
+        for (int i = 0; i < table.Columns.Count; i++)
+        {
+            if (table.Columns[i].Field.Categories.Contains(Category.Categorical))
+            {
+                FieldValues temp = table.Columns[i];
+                table.Columns[i] = table.Columns[0];
+                table.Columns[0] = temp;
+                isLine = true;
+                break;
+            }
+        }
+        
+        for (int i = 1; i < table.Columns.Count; i++)
+        {
+            isLine &= table.Columns[i].Field.Categories.Contains(Category.Numeric);
+        }
+
+        if (isLine)
+        {
+            Chart LineChart = new Chart();
+            LineChart.ChartType = ChartType.Line;
+            
+            List<object> XValueString = new List<object>();
+            foreach (Value value in table.Columns[0].Values)
+            {
+                if (value.ValueCasted != null) XValueString.Add(value.ValueCasted);
+            }
+            LineChart.X = XValueString.Distinct().ToList();
+
+            for (int i = 1; i < table.Columns.Count; i++)
+            {
+                FieldValues fieldValues = table.Columns[i];
+                LabelData labeldata = new LabelData();
+                labeldata.Label = fieldValues.Field.Name;
+                double[] sumYValue = new double[LineChart.X.Count];
+                for (int j = 0; j < table.RowCount; j++)
+                {
+                    object xLabel = table.Columns[0].Values[j].ValueCasted;
+                    if (xLabel == null) continue;
+                    if (fieldValues.Values[j].ValueCasted != null)
+                        sumYValue[LineChart.X.IndexOf(xLabel)] += Convert.ToDouble(fieldValues.Values[j].ValueCasted);
+                }
+
+                foreach (double value in sumYValue)
+                {
+                    labeldata.Data.Add(value / table.RowCount);
+                }
+
+                LineChart.Y.Add(labeldata);
+            }
+
+            return LineChart;
+        }
+        return null;
+    }
+
+    private Chart? DetectPolarAreaChart(Table table)
+    {
+        if (table.Columns.Count != 1 ||
+            !table.Columns[0].Field.Categories.Contains(Category.Categorical)) return null;
+        Chart polarAreaChart = new Chart();
+        polarAreaChart.ChartType = ChartType.PolarArea;
+        
+        List<object> XValueString = new List<object>();
+        foreach (Value value in table.Columns[0].Values)
+        {
+            if (value.ValueCasted != null)
+            {
+                XValueString.Add(value.ValueCasted);
+            }
+        }
+        
+        polarAreaChart.X = XValueString.Distinct().ToList();
+
+        LabelData labelData = new LabelData();
+        labelData.Label = table.Columns[0].Field.Name;
+        int[] cntLabel = new int[polarAreaChart.X.Count];
+        foreach (Value value in table.Columns[0].Values)
+        {
+            if (value.ValueCasted != null) cntLabel[polarAreaChart.X.IndexOf(value.ValueCasted)] += 1;
+        }
+        
+        foreach (int value in cntLabel)
+        {
+            // File.AppendAllText(logPath, value.ToString() + '\n');
+            labelData.Data.Add(value);
+        }
+        polarAreaChart.Y.Add(labelData);
+        return polarAreaChart;
+    }
+
+    private Chart? DetectHistogram(Table table)
+    {
+        if (table.Columns.Count != 1 ||
+            !table.Columns[0].Field.Categories.Contains(Category.Numeric)) return null;
+
+        List<double> valueList = new List<double>();
+        
+        foreach (Value value in table.Columns[0].Values)
+        {
+            if (value.ValueCasted == null) continue;
+            valueList.Add((double)value.ValueCasted);
+        }
+        valueList.Sort();
+        double gap = ((valueList[valueList.Count - 1] - valueList[0]) / 10);
+        if (gap == 0) gap = 1;
+        Chart histogramChart = new Chart();
+        histogramChart.ChartType = ChartType.Histogram;
+        double xvalue = valueList[0] / gap * gap;
+        while (xvalue < valueList[valueList.Count - 1])
+        {
+            histogramChart.X.Add(xvalue);
+            xvalue += gap;
+        }
+        histogramChart.X.Add(xvalue);
+        
+        LabelData labelData = new LabelData();
+        labelData.Label = table.Columns[0].Field.Name;
+        int[] yValue = new int[histogramChart.X.Count - 1];
+        foreach (Value value in table.Columns[0].Values)
+        {
+            for (int i = 0; i < histogramChart.X.Count - 1; i++)
+            {
+                if (value.ValueCasted == null) continue;
+                if ((double)value.ValueCasted >= (double)histogramChart.X[i] &&
+                    (double)value.ValueCasted < (double)histogramChart.X[i + 1])
+                {
+                    yValue[i]++;
+                    break;
+                }
+            }
+        }
+
+        foreach (int yv in yValue)
+        {
+            labelData.Data.Add(yv);
+        }
+        histogramChart.Y.Add(labelData);
+        return histogramChart;
+    }
+
+    // private Chart? DetectScatter(Table table)
+    // {
+    //     if (table.Columns.Count != 2 ||
+    //         table.Columns[0].Field.Categories.Contains())
+    // }
 
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes)
     {
@@ -151,12 +296,41 @@ public class AutoChartService : IAutoChartService
         
         List<Chart> res = new List<Chart>();
         
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !dir.GetFiles("*.csproj").Any())
+        {
+            dir = dir.Parent;
+        }
+        var logPath = Path.Combine(dir!.FullName, "test.log");
+        foreach(FieldValues fv in tempTable.Columns)
+        {
+            File.AppendAllText(logPath, JsonSerializer.Serialize(new {
+                name = fv.Field.Name,
+                categories = fv.Field.Categories,
+                values = (from f in fv.Values select f.ValueCasted).ToList(),
+                types = fv.Field.TypeName
+            }) + "\n"
+            );
+        }
+        
         // Bar chart
         Chart? barResult = DetectBarChart(tempTable);
         if (barResult != null) res.Add(barResult);
         // Pie chart
         Chart? pieResult = DetectPieChart(tempTable);
         if (pieResult != null) res.Add(pieResult);
+        // Line chart
+        Chart? lineResult = DetectLineChart(tempTable);
+        if (lineResult != null) res.Add(lineResult);
+        // Polar Area
+        Chart? polarAreaResult = DetectPolarAreaChart(tempTable);
+        if (polarAreaResult != null) res.Add(polarAreaResult);
+        // Histogram
+        Chart? histogramResult = DetectHistogram(tempTable);
+        if (histogramResult != null) res.Add(histogramResult);
+        // Scatter
+        // Chart? scatterResult = DetectScatter(tempTable);
+        // if (scatterResult != null) res.Add(scatterResult);
         return res;
     }
 }

@@ -7,7 +7,9 @@ public enum ChartType
     Pie,
     Bar,
     Line,
-    Histogram
+    Histogram,
+    Scatter,
+    PolarArea,
 }
 
 public class LabelData

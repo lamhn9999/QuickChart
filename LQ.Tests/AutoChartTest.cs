@@ -17,7 +17,8 @@ public class AutoChartTest
     private IAnalystService _analystService;
     private ICSVService _csvService;
     private IAutoChartService _autoChartService;
-    public TestContext TestContext { get; set; }
+    private string logPath { get; set; }
+    
     [TestInitialize]
     public void Setup()
     {
@@ -34,27 +35,25 @@ public class AutoChartTest
         _analystService = provider.GetService<IAnalystService>();
         _csvService = provider.GetService<ICSVService>();
         _autoChartService = provider.GetService<IAutoChartService>();
-    }
-    
-    [TestMethod]
-    public void DetectChartTest()
-    {
-        Analyst lam = _analystService.GetAnalyst(1);
-        Table tempTable = _csvService.GetTable(lam.ID, "hello2.csv");
-        List<int> fieldindexes = new List<int> { 3 };
-        foreach (FieldValues fvs in tempTable.Columns)
-        {
-            _autoChartService.DetectCategory(fvs);
-        }
-        List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
+        
         
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !dir.GetFiles("*.csproj").Any())
         {
             dir = dir.Parent;
         }
-        var logPath = Path.Combine(dir!.FullName, "test.log");
-        // File.WriteAllText(logPath, string.Empty);
+        logPath = Path.Combine(dir!.FullName, "test.log");
+    }
+    
+    [TestMethod]
+    public void DetectChartTest()
+    {
+        File.WriteAllText(logPath, String.Empty);
+        Analyst tester = _analystService.GetAnalyst("Lam");
+        Table tempTable = _csvService.GetTable(tester.ID, "application_record.csv");
+        List<int> fieldindexes = new List<int> { 5, 4 };
+        List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
+        
         File.AppendAllText(logPath, "--------------------------------------------\n");
         foreach (Chart c in res)
         {

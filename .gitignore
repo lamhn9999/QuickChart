@@ -6,4 +6,5 @@ riderModule.iml
 
 LQ/Data/SampleCSVs
 LQ/appsettings.json
+LQ.Tests/test.log
 user
