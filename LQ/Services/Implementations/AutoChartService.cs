@@ -83,17 +83,21 @@ public class AutoChartService : IAutoChartService
                 LabelData labeldata = new LabelData();
                 labeldata.Label = fieldValues.Field.Name;
                 double[] sumYValue = new double[barChart.X.Count];
+                int[] cntYValue = new int[barChart.X.Count];
                 for (int j = 0; j < table.RowCount; j++)
                 {
                     object xLabel = table.Columns[0].Values[j].ValueCasted;
                     if (xLabel == null) continue;
                     if (fieldValues.Values[j].ValueCasted != null)
+                    {
+                        cntYValue[barChart.X.IndexOf(xLabel)] += 1;
                         sumYValue[barChart.X.IndexOf(xLabel)] += Convert.ToDouble(fieldValues.Values[j].ValueCasted);
+                    }
                 }
 
-                foreach (double value in sumYValue)
+                for (int j = 0; j < sumYValue.Length; j++)
                 {
-                    labeldata.Data.Add(value / table.RowCount);
+                    labeldata.Data.Add(sumYValue[j] / (1.0 * cntYValue[j]));
                 }
 
                 barChart.Y.Add(labeldata);
@@ -178,17 +182,21 @@ public class AutoChartService : IAutoChartService
                 LabelData labeldata = new LabelData();
                 labeldata.Label = fieldValues.Field.Name;
                 double[] sumYValue = new double[LineChart.X.Count];
+                int[] cntYValue = new int[LineChart.X.Count];
                 for (int j = 0; j < table.RowCount; j++)
                 {
                     object xLabel = table.Columns[0].Values[j].ValueCasted;
                     if (xLabel == null) continue;
                     if (fieldValues.Values[j].ValueCasted != null)
+                    {
                         sumYValue[LineChart.X.IndexOf(xLabel)] += Convert.ToDouble(fieldValues.Values[j].ValueCasted);
+                        cntYValue[LineChart.X.IndexOf(xLabel)] += 1;
+                    }
                 }
 
-                foreach (double value in sumYValue)
+                for (int j = 0; j < cntYValue.Length; j++)
                 {
-                    labeldata.Data.Add(value / table.RowCount);
+                    labeldata.Data.Add(sumYValue[j] / (1.0 * cntYValue[j]));
                 }
 
                 LineChart.Y.Add(labeldata);
