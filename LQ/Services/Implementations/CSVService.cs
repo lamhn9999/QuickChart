@@ -133,9 +133,9 @@ public class CSVService : ICSVService
                     value.ValueStringFormatted = null;
                     continue;
                 }
-                value.ValueStringFormatted = (value.ValueString == "true" ||
-                                              value.ValueString == "yes" ||
-                                              value.ValueString == "1")? "true" : "false";
+                value.ValueStringFormatted = (value.ValueString.ToLower().Trim() == "true" ||
+                                              value.ValueString.ToLower().Trim() == "yes" ||
+                                              value.ValueString.ToLower().Trim() == "1") ? "true" : "false";
             }
             return typeof(bool);
         }

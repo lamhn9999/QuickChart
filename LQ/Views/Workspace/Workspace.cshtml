@@ -21,7 +21,7 @@
         }
         async function autoChart()
         {
-            const response = await fetch("@Url.Action("","")",{
+            const response = await fetch("@Url.Action("AutoChart","Workspace")",{
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -39,6 +39,9 @@
                         label: ds.label,
                         data: ds.data
                     }))
+                },
+                options: {
+                    responsive: true,
                 }
             };
             if (chartInstance) {
@@ -50,17 +53,17 @@
     </script>
 </head>
 <body>
-<div style="max-height: 10vh">
+<div>
     <header style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
         <div style="display:flex; gap:0; flex-direction:column; justify-content:center; align-items: center">
-            <h3 class="glossy">WORKSPACE!</h3>
+            <p class = "p11">@Model.CSVFile.Name</p>
         </div>
     </header>
 </div>
-<div style="display: flex; gap: 0;">
-    <div style="min-width:30vw; max-width: 60vw; height: 85vh; background: darkgrey; user-select: none; flex-shrink: 0; margin: 0; padding: 0; overflow: auto;" id="tablePanel">
-        <table id="dataTable" border="1" style="font-size: 0.5rem;">
-            <thead>
+<div style="display: flex;">
+    <div style="min-width:30vw; max-width: 60vw; max-height: calc(100vh - 4rem); user-select: none; flex-shrink: 0; overflow: auto;" id="tablePanel">
+        <table id="dataTable">
+            <thead class = "p31">
             <tr>
                 @{
                     foreach (FieldValues fv in Model.Columns)
@@ -72,8 +75,8 @@
                 }
             </tr>
             </thead>
-            <tbody>
-            @for(int i = 0; i < Model.RowCount-1; i++)
+            <tbody class = "p32">
+            @for(int i = 0; i < Model.RowCount; i++)
             {
                 <tr>
                 @foreach (FieldValues fv in Model.Columns)
@@ -86,13 +89,28 @@
         </table>
     </div>
     <div class="resizer" id="drag"></div>
-    <div style="flex: 1; background: white; margin: 0; padding: 0;" id="chartPanel">
+    <div style="flex: 1;" id="chartPanel">
         <canvas id="myChart"></canvas>
     </div>
 </div>
 <script>
     const resizer = document.getElementById('drag');
     const left = document.getElementById('tablePanel');
+    const table = document.getElementById("dataTable");
+
+    table.addEventListener("click", e => {
+        const th = e.target.closest("th");
+        if (!th) return;
+
+        const colIndex = th.cellIndex;
+
+        table.querySelectorAll("tr").forEach(row => {
+            const cell = row.children[colIndex];
+            if (cell) {
+                cell.classList.toggle("col-selected");
+            }
+        });
+    });
 
     let startX = 0;
     let startWidth = 0;

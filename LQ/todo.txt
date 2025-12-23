@@ -1,1 +1,4 @@
 viết lại hàm swap trong detect bar chart 
+fix bug chèn thiếu dòng 
+sửa valueformatted của text 
+sửa lỗi vote int32 to double 
