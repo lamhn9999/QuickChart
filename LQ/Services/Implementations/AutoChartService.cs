@@ -39,12 +39,11 @@ public class AutoChartService : IAutoChartService
         // Numeric
         if ((fieldValues.Field.Type == typeof(int) || 
             fieldValues.Field.Type == typeof(double) || 
-            fieldValues.Field.Type == typeof(DateTime)) && 
-            !result.Contains(Category.Categorical)) result.Add(Category.Numeric);
+            fieldValues.Field.Type == typeof(DateTime))) result.Add(Category.Numeric);
 
         fieldValues.Field.Categories = result;
     }
-
+    
     private Chart? DetectBarChart(Table table)
     {
         if (table.Columns.Count == 1) return null;
@@ -115,30 +114,18 @@ public class AutoChartService : IAutoChartService
         Chart pieChart = new Chart();
         pieChart.ChartType = ChartType.Pie;
         
-        List<object> XValueString = new List<object>();
+        Dictionary<object, int> cnt =  new Dictionary<object, int>();
         foreach (Value value in table.Columns[0].Values)
         {
-            if (value.ValueCasted != null)
-            {
-                XValueString.Add(value.ValueCasted);
-            }
+            if (value.ValueCasted == null) continue;
+            if (cnt.ContainsKey(value.ValueCasted)) cnt[value.ValueCasted] += 1;
+            else cnt[value.ValueCasted] = 1;
         }
         
-        pieChart.X = XValueString.Distinct().ToList();
-
+        pieChart.X = cnt.Select(kv => kv.Key).ToList();
         LabelData labelData = new LabelData();
-        labelData.Label = table.Columns[0].Field.Name;
-        int[] cntLabel = new int[pieChart.X.Count];
-        foreach (Value value in table.Columns[0].Values)
-        {
-            if (value.ValueCasted != null) cntLabel[pieChart.X.IndexOf(value.ValueCasted)] += 1;
-        }
-        
-        foreach (int value in cntLabel)
-        {
-            // File.AppendAllText(logPath, value.ToString() + '\n');
-            labelData.Data.Add(value);
-        }
+        labelData.Label = "count";
+        labelData.Data = cnt.Select(kv => kv.Value).Cast<object>().ToList();
         pieChart.Y.Add(labelData);
         return pieChart;
     }
@@ -214,89 +201,159 @@ public class AutoChartService : IAutoChartService
         Chart polarAreaChart = new Chart();
         polarAreaChart.ChartType = ChartType.PolarArea;
         
-        List<object> XValueString = new List<object>();
+        Dictionary<object, int> cnt =  new Dictionary<object, int>();
         foreach (Value value in table.Columns[0].Values)
         {
-            if (value.ValueCasted != null)
-            {
-                XValueString.Add(value.ValueCasted);
-            }
+            if (value.ValueCasted == null) continue;
+            if (cnt.ContainsKey(value.ValueCasted)) cnt[value.ValueCasted] += 1;
+            else cnt[value.ValueCasted] = 1;
         }
         
-        polarAreaChart.X = XValueString.Distinct().ToList();
-
+        polarAreaChart.X = cnt.Select(kv => kv.Key).ToList();
         LabelData labelData = new LabelData();
-        labelData.Label = table.Columns[0].Field.Name;
-        int[] cntLabel = new int[polarAreaChart.X.Count];
-        foreach (Value value in table.Columns[0].Values)
-        {
-            if (value.ValueCasted != null) cntLabel[polarAreaChart.X.IndexOf(value.ValueCasted)] += 1;
-        }
-        
-        foreach (int value in cntLabel)
-        {
-            // File.AppendAllText(logPath, value.ToString() + '\n');
-            labelData.Data.Add(value);
-        }
+        labelData.Label = "count";
+        labelData.Data = cnt.Select(kv => kv.Value).Cast<object>().ToList();
         polarAreaChart.Y.Add(labelData);
         return polarAreaChart;
     }
 
     private Chart? DetectHistogram(Table table)
     {
-        if (table.Columns.Count != 1 ||
-            !table.Columns[0].Field.Categories.Contains(Category.Numeric)) return null;
+        if (table.Columns.Count != 1) return null;
 
-        List<double> valueList = new List<double>();
-        
-        foreach (Value value in table.Columns[0].Values)
+        if (table.Columns[0].Field.Categories.Contains(Category.Numeric))
         {
-            if (value.ValueCasted == null) continue;
-            valueList.Add((double)value.ValueCasted);
-        }
-        valueList.Sort();
-        double gap = ((valueList[valueList.Count - 1] - valueList[0]) / 10);
-        if (gap == 0) gap = 1;
-        Chart histogramChart = new Chart();
-        histogramChart.ChartType = ChartType.Histogram;
-        double xvalue = valueList[0] / gap * gap;
-        while (xvalue < valueList[valueList.Count - 1])
-        {
-            histogramChart.X.Add(xvalue);
-            xvalue += gap;
-        }
-        histogramChart.X.Add(xvalue);
-        
-        LabelData labelData = new LabelData();
-        labelData.Label = table.Columns[0].Field.Name;
-        int[] yValue = new int[histogramChart.X.Count - 1];
-        foreach (Value value in table.Columns[0].Values)
-        {
-            for (int i = 0; i < histogramChart.X.Count - 1; i++)
+            List<double> valueList = new List<double>();
+
+            foreach (Value value in table.Columns[0].Values)
             {
                 if (value.ValueCasted == null) continue;
-                if ((double)value.ValueCasted >= (double)histogramChart.X[i] &&
-                    (double)value.ValueCasted < (double)histogramChart.X[i + 1])
+                valueList.Add((double)value.ValueCasted);
+            }
+
+            valueList.Sort();
+            double gap = ((valueList[valueList.Count - 1] - valueList[0]) / 10);
+            if (gap == 0) gap = 1;
+            Chart histogramChart = new Chart();
+            histogramChart.ChartType = ChartType.Histogram;
+            double xvalue = valueList[0] / gap * gap;
+            while (xvalue < valueList[valueList.Count - 1])
+            {
+                histogramChart.X.Add(xvalue);
+                xvalue += gap;
+            }
+
+            histogramChart.X.Add(xvalue);
+
+            LabelData labelData = new LabelData();
+            labelData.Label = table.Columns[0].Field.Name;
+            int[] yValue = new int[histogramChart.X.Count - 1];
+            foreach (Value value in table.Columns[0].Values)
+            {
+                for (int i = 0; i < histogramChart.X.Count - 1; i++)
                 {
-                    yValue[i]++;
-                    break;
+                    if (value.ValueCasted == null) continue;
+                    if ((double)value.ValueCasted >= (double)histogramChart.X[i] &&
+                        (double)value.ValueCasted < (double)histogramChart.X[i + 1])
+                    {
+                        yValue[i]++;
+                        break;
+                    }
                 }
             }
+
+            foreach (int yv in yValue)
+            {
+                labelData.Data.Add(yv);
+            }
+
+            histogramChart.Y.Add(labelData);
+            return histogramChart;
         }
 
-        foreach (int yv in yValue)
+        if (table.Columns[0].Field.Categories.Contains(Category.Categorical))
         {
-            labelData.Data.Add(yv);
+            Chart histogramChart = new Chart();
+            histogramChart.ChartType = ChartType.Histogram;
+            Dictionary<object, int> cnt =  new Dictionary<object, int>();
+            foreach (Value value in table.Columns[0].Values)
+            {
+                if (value.ValueCasted == null) continue;
+                if (cnt.ContainsKey(value.ValueCasted)) cnt[value.ValueCasted] += 1;
+                else cnt[value.ValueCasted] = 1;
+            }
+        
+            histogramChart.X = cnt.Select(kv => kv.Key).ToList();
+            LabelData labelData = new LabelData();
+            labelData.Label = "count";
+            labelData.Data = cnt.Select(kv => kv.Value).Cast<object>().ToList();
+            histogramChart.Y.Add(labelData);
+            
+            return histogramChart;
         }
-        histogramChart.Y.Add(labelData);
-        return histogramChart;
+
+        return null;
     }
 
-    // private Chart? DetectScatter(Table table)
-    // {
-    //     if (table.Columns.Count != 2 ||
-    //         table.Columns[0].Field.Categories.Contains())
-    // }
+    private Chart? DetectScatter(Table table)
+    {
+        if (table.Columns.Count != 2 ||
+            !table.Columns[0].Field.Categories.Contains(Category.Numeric) ||
+            !table.Columns[1].Field.Categories.Contains(Category.Numeric)) return null;
+        
+        Chart scatterChart = new Chart();
+        scatterChart.ChartType = ChartType.Scatter;
+        LabelData labelData = new LabelData();
+        labelData.Label = (table.Columns[0].Field.Name + " vs " + table.Columns[1].Field.Name);
+        for (int i = 0; i < table.Columns[0].Values.Count; i++)
+        {
+            if (table.Columns[0].Values[i].ValueCasted == null ||
+                table.Columns[1].Values[i].ValueCasted == null) continue;
+            labelData.Data.Add(new {x = table.Columns[0].Values[i].ValueCasted, 
+                                y = table.Columns[1].Values[i].ValueCasted});
+        }
+        scatterChart.Y.Add(labelData);
+        return scatterChart;
+    }
+
+    private Chart? DetectSideBar(Table table)
+    {
+        bool isBar = false;
+        for (int i = 0; i < table.Columns.Count; i++)
+        {
+            if (table.Columns[i].Field.Categories.Contains(Category.Categorical) || table.Columns[i].Field.Categories.Contains(Category.Identifier))
+            {
+                FieldValues temp = table.Columns[i];
+                table.Columns[i] = table.Columns[0];
+                table.Columns[0] = temp;
+                isBar = true;
+                break;
+            }
+        }
+        if (!isBar) return null;
+        if (table.Columns.Count == 1)
+        {
+            Chart sideBarChart = new Chart();
+            sideBarChart.ChartType = ChartType.SideBar;
+            Dictionary<object, int> cnt =  new Dictionary<object, int>();
+            foreach (Value value in table.Columns[0].Values)
+            {
+                if (value.ValueCasted == null) continue;
+                if (cnt.ContainsKey(value.ValueCasted)) cnt[value.ValueCasted] += 1;
+                else cnt[value.ValueStringFormatted] = 1;
+            }
+
+            var showData = cnt.OrderByDescending(kv => kv.Value).Take(20).ToList();
+            sideBarChart.X = showData.Select(kv => kv.Key).ToList();
+            LabelData labelData = new LabelData();
+            labelData.Label = "count";
+            labelData.Data = showData.Select(kv => kv.Value).Cast<object>().ToList();
+            sideBarChart.Y.Add(labelData);
+            return sideBarChart;
+        }
+
+        return null;
+    }
 
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes)
     {
@@ -337,8 +394,11 @@ public class AutoChartService : IAutoChartService
         Chart? histogramResult = DetectHistogram(tempTable);
         if (histogramResult != null) res.Add(histogramResult);
         // Scatter
-        // Chart? scatterResult = DetectScatter(tempTable);
-        // if (scatterResult != null) res.Add(scatterResult);
+        Chart? scatterResult = DetectScatter(tempTable);
+        if (scatterResult != null) res.Add(scatterResult);
+        // Side Bar
+        Chart? sideBarResult = DetectSideBar(tempTable);
+        if (sideBarResult != null) res.Add(sideBarResult);
         return res;
     }
 }
