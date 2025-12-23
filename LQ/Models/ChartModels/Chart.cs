@@ -10,6 +10,7 @@ public enum ChartType
     Histogram,
     Scatter,
     PolarArea,
+    SideBar,
 }
 
 public class LabelData
