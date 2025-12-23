@@ -1,7 +1,8 @@
-using System.Diagnostics;
+using System.Text.Json;
 using LQ.Data.Database;
 using LQ.Models.AnalystModels;
 using LQ.Models.ChartModels;
+using LQ.Models.DTOs;
 using LQ.Models.TableModels;
 using LQ.Services.Implementations;
 using LQ.Services.Interfaces;
@@ -49,12 +50,17 @@ public class AutoChartTest
     public void DetectChartTest()
     {
         File.WriteAllText(logPath, String.Empty);
-        Analyst tester = _analystService.GetAnalyst("Lam");
-        Table tempTable = _csvService.GetTable(tester.ID, "application_record.csv");
-        List<int> fieldindexes = new List<int> { 5, 4 };
+        Analyst tester = _analystService.GetAnalyst(BaseDTO.DefaultAnalystName);
+        Table tempTable = _csvService.GetTable(tester.ID, "top_rated_2000webseries.csv");
+        List<int> fieldindexes = new List<int> { 9 };
         List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
         
         File.AppendAllText(logPath, "--------------------------------------------\n");
+        foreach (FieldValues fv in tempTable.Columns)
+        {
+            if(fieldindexes.Contains(fv.Field.Index))
+                File.AppendAllText(logPath, JsonSerializer.Serialize(fv.Field.Categories) + "\n");
+        }
         foreach (Chart c in res)
         {
             File.AppendAllText(logPath, c.ShowJson() + "\n");

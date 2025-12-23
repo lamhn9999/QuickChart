@@ -43,7 +43,7 @@ public class AutoChartService : IAutoChartService
 
         fieldValues.Field.Categories = result;
     }
-    
+
     private Chart? DetectBarChart(Table table)
     {
         if (table.Columns.Count == 1) return null;
@@ -224,37 +224,36 @@ public class AutoChartService : IAutoChartService
         if (table.Columns[0].Field.Categories.Contains(Category.Numeric))
         {
             List<double> valueList = new List<double>();
-
+        
             foreach (Value value in table.Columns[0].Values)
             {
                 if (value.ValueCasted == null) continue;
-                valueList.Add((double)value.ValueCasted);
+                valueList.Add(Convert.ToDouble(value.ValueCasted));
             }
-
             valueList.Sort();
             double gap = ((valueList[valueList.Count - 1] - valueList[0]) / 10);
             if (gap == 0) gap = 1;
             Chart histogramChart = new Chart();
             histogramChart.ChartType = ChartType.Histogram;
             double xvalue = valueList[0] / gap * gap;
+            List<double> listXValue = new List<double>();
             while (xvalue < valueList[valueList.Count - 1])
             {
-                histogramChart.X.Add(xvalue);
+                listXValue.Add(xvalue);
+                histogramChart.X.Add($"[{xvalue},{xvalue + gap})");
                 xvalue += gap;
             }
-
-            histogramChart.X.Add(xvalue);
-
+            listXValue.Add(xvalue);
             LabelData labelData = new LabelData();
             labelData.Label = table.Columns[0].Field.Name;
-            int[] yValue = new int[histogramChart.X.Count - 1];
+            int[] yValue = new int[histogramChart.X.Count];
             foreach (Value value in table.Columns[0].Values)
             {
-                for (int i = 0; i < histogramChart.X.Count - 1; i++)
+                if (value.ValueCasted == null) continue;
+                for (int i = 0; i < histogramChart.X.Count; i++)
                 {
-                    if (value.ValueCasted == null) continue;
-                    if ((double)value.ValueCasted >= (double)histogramChart.X[i] &&
-                        (double)value.ValueCasted < (double)histogramChart.X[i + 1])
+                    if ((double)value.ValueCasted >= listXValue[i] &&
+                        (double)value.ValueCasted < listXValue[i + 1])
                     {
                         yValue[i]++;
                         break;
@@ -266,7 +265,6 @@ public class AutoChartService : IAutoChartService
             {
                 labelData.Data.Add(yv);
             }
-
             histogramChart.Y.Add(labelData);
             return histogramChart;
         }
@@ -361,22 +359,22 @@ public class AutoChartService : IAutoChartService
         
         List<Chart> res = new List<Chart>();
         
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !dir.GetFiles("*.csproj").Any())
-        {
-            dir = dir.Parent;
-        }
-        var logPath = Path.Combine(dir!.FullName, "test.log");
-        foreach(FieldValues fv in tempTable.Columns)
-        {
-            File.AppendAllText(logPath, JsonSerializer.Serialize(new {
-                name = fv.Field.Name,
-                categories = fv.Field.Categories,
-                values = (from f in fv.Values select f.ValueCasted).ToList(),
-                types = fv.Field.TypeName
-            }) + "\n"
-            );
-        }
+        // var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        // while (dir != null && !dir.GetFiles("*.csproj").Any())
+        // {
+        //     dir = dir.Parent;
+        // }
+        // var logPath = Path.Combine(dir!.FullName, "test.log");
+        // foreach(FieldValues fv in tempTable.Columns)
+        // {
+        //     File.AppendAllText(logPath, JsonSerializer.Serialize(new {
+        //         name = fv.Field.Name,
+        //         categories = fv.Field.Categories,
+        //         values = (from f in fv.Values select f.ValueCasted).ToList(),
+        //         types = fv.Field.TypeName
+        //     }) + "\n"
+        //     );
+        // }
         
         // Bar chart
         Chart? barResult = DetectBarChart(tempTable);
