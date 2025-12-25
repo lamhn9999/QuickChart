@@ -1,71 +1,7 @@
+@import "tailwindcss" source("../Views/");
 :root {
-    font-size: clamp(0.2em, 1.5vw + 0.75em, 1.5em);
-    --main-margin: 0.85em;
-    --main-div-gap: 0.7em;
-    font-family: monospace;
-    color: white;
+    font-size: medium;
 }
-* {
-    /*border: 1px dashed green;*/
-    margin: 0;
-    padding: 0;
-}
-/* Chrome / Edge / Safari */
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: rgba(120,120,120,0.4);
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-/* Firefox */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(120,120,120,0.4) transparent;
-}
-
-html {
-    -webkit-text-size-adjust: 100%;
-}
-
-body {
-    padding: 1rem;
-    background-color: black;
-}
-
-/*--- TEXT ---*/
-.p11, .p12 {
-    color: darksalmon;
-    font-size: 1rem;
-}
-.p11 {
-    font-weight: bold;
-}
-.p21, .p22{
-    font-size: 0.5rem;
-}
-.p21 {
-    color: white;
-}
-.p22 {
-    color: lightgray;
-}
-.p31, .p32 {
-    font-size: 0.5rem;
-}
-.p31 {
-    color: white;
-}
-.p32 {
-    color: lightgray;
-}
-
 /*--- TABLE ---*/
 table {
     table-layout: fixed;
@@ -73,8 +9,8 @@ table {
     width: 100%;
 }
 td, th {
-    width: 5rem;
-    height: 3rem;
+    width: 13rem;
+    max-height: 8rem;
     padding: 0.25rem;
 
     overflow: hidden;
@@ -99,82 +35,12 @@ thead th {
             inset 0 -1px 0 #666,    /* bottom border */
             inset -1px 0 0 #666;    /* right border */
 }
-
 .col-selected {
     background-color: lightsalmon;
     color: black;
 }
 
-/*--- FILE LIST ---*/
-.listlabel {
-}
-.listlabel + div {
-    margin-left: calc(2 * var(--main-margin));
-}
-
-.listelement {
-    display: flex;
-    min-height: 1rem;
-    gap: 0;
-}
-.listfile {
-}
-.listconnectline {
-    height: 1rem;
-    border: 1px solid white;
-    border-top: none;
-    border-right: none;
-    border-bottom: none;
-}
-.listline {
-    border: 1px solid white;
-    border-top-color: transparent;
-    border-right-color: transparent;
-    width: 1rem;
-    margin-right: 1rem;
-}
-
-.listelement:hover {
-    background-color: darksalmon;
-    color: black;
-    cursor: pointer;
-}
-.listelement:active {
-    background-color: darksalmon;
-    color: black;
-}
-
-.sealed {
-    z-index: 10;
-    position: absolute;
-    top: 20px;
-    background: transparent;
-    width: 100%;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    color: yellow;
-    font-weight: 700;
-    font-size: 1rem;
-}
-.sealed-track {
-    display: flex;
-    width: 200%;
-    animation: sealed-scroll 6s linear infinite;
-    will-change: transform;
-}
-.sealed-segment {
-    display: flex;
-    gap: 1rem;
-    white-space: nowrap;
-    align-items: center;
-    padding-right: 2rem;
-}
-@keyframes sealed-scroll {
-     0%   { transform: translateX(0); }
-     100% { transform: translateX(-50%); }
- }
-
+/*--- ADD BUTTON ---*/
 .addbutton {
     display: inline-flex;
     justify-content: center;
@@ -204,14 +70,12 @@ thead th {
      }
  }
 
+/*--- SIGN BUTTON ---*/
 .signinbutton, .signoutbutton{
-    padding: 0;
     background: none;
     border: none;
     cursor: pointer;
     display: inline-block;
-    font-size: 1.25rem;
-    font-weight: bolder;
     color: darksalmon;
     text-shadow: -4px 4px 1px goldenrod, 4px -4px 1px green;
     animation: shuffle 0.5s infinite linear;
@@ -229,9 +93,41 @@ thead th {
      100% { text-shadow: -4px 4px 1px goldenrod, 4px -4px 1px green; }
  }
 
+/*--- FILE LIST ---*/
+.listelement {
+    display: flex;
+    min-height: 1rem;
+    gap: 0;
+}
+.listfile {
+}
+.listconnectline {
+    height: 1rem;
+    border: 1px solid white;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+}
+.listline {
+    border: 1px solid white;
+    border-top-color: transparent;
+    border-right-color: transparent;
+    width: 1rem;
+    margin-right: 1rem;
+}
+.listelement:hover {
+    background-color: darksalmon;
+    color: black;
+    cursor: pointer;
+}
+.listelement:active {
+    background-color: darksalmon;
+    color: black;
+}
+
+/*--- Glossy ---*/
 .glossy {
     font-weight: bold;
-    font-family: "URW Gothic";
     color: transparent;
     -webkit-text-fill-color: transparent;
     background-image:
@@ -260,12 +156,6 @@ thead th {
 }
 
 @keyframes shine {
-     0% { background-position: -250% 0, 0 0; }
-     100% { background-position: 250% 0, 0 0; }
- }
-
-.resizer {
-    width: 5px;
-    cursor: col-resize;
-    background: darkgray;
+    0% { background-position: -250% 0, 0 0; }
+    100% { background-position: 250% 0, 0 0; }
 }

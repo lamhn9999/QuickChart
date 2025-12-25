@@ -8,3 +8,5 @@ LQ/Data/SampleCSVs
 LQ/appsettings.json
 LQ.Tests/test.log
 user
+LQ/wwwroot/input.css
+LQ/wwwroot/output.css

@@ -1,68 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang = "en_US">
 <head>
+    <meta charset = "UTF-8">
     <title>LQ UI Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="/home/lam/LQ/LQ/wwwroot/node_modules/chart.js/dist/chart.umd.min.js"></script>
+    <link href="/home/lam/LQ/LQ/wwwroot/output.css" rel="stylesheet">
 </head>
-<body style = "background:black;">
-<div style="width: 700px; max-width: 100%;">
-    <canvas id="myChart"></canvas>
+<body>
+<div class="flex flex-col h-screen">
+    <!-- Header -->
+    <div class="flex">
+        <div class="text-lg">HELLO</div>
+    </div>
+
+    <!-- Content -->
+    <div class="flex flex-1 flex-col md:flex-row">
+        <!-- Left panel -->
+        <div
+                id="tablePanel"
+                class="rounded-r-lg bg-amber-400 cursor-grab
+                   w-full md:w-1/2 md:min-w-1/5"
+        ></div>
+
+        <!-- Resizer -->
+        <div
+                id="drag"
+                class="hidden md:block mx-1 w-1 rounded-full
+                   cursor-col-resize bg-gray-500"
+        ></div>
+
+        <!-- Right panel stack -->
+        <div class="flex flex-col flex-1 w-full md:min-w-1/5">
+            <div class="rounded-l-lg flex-1 bg-amber-700"></div>
+            <div class="rounded-l-lg flex-1 bg-amber-600"></div>
+            <div class="rounded-l-lg flex-1 bg-amber-500"></div>
+            <div class="rounded-l-lg flex-1 bg-amber-400"></div>
+        </div>
+    </div>
 </div>
 
+
 <script>
-    const ctx = document.getElementById('myChart');
-    const data = [
-        { x: 2010, y : [10, 20], z: 1},
-        { x: 2011, y : [14, 34], z: 2},
-        { x: 2012, y : [20, 30], z : 3},
-        { x: 2013, y : [40, 40], z : 4},
-    ];
-    const cfg = {
-        type: 'bar',
-        data: {
-            labels: data.map(row => row.x),
-            datasets: [
-                {
-                    label: 'Acquisitions by year',
-                    data: data.map(row => row.y[0]),
-                    backgroundColor: 'white',
-                },
-                {
-                    label: 'Acquisitions by year',
-                    data: data.map(row => row.y[1]),
-                    backgroundColor: 'white',
-                },
-            ]
-        },
-        options: {
-            animation: false,
-            scales: {
-                x: {
-                    border: {
-                        display: false
-                    },
-                    grid: {
-                        display: true,
-                        drawOnChartArea: true,
-                        drawTicks: true,
-                        color: '#FFFFFF'
-                    }
-                },
-                y: {
-                    border: {
-                        display: false
-                    },
-                    grid: {
-                        display: true,
-                        drawOnChartArea: true,
-                        drawTicks: true,
-                        color: '#FFFFFF'
-                    }
-                },
-            }
-        },
-    };
-    new Chart(ctx, cfg);
+    const resizer = document.getElementById('drag');
+    const left = document.getElementById('tablePanel');
+
+    let startX = 0;
+    let startWidth = 0;
+    let isDragging = false;
+
+    resizer.addEventListener('mousedown', e => {
+        isDragging = true;
+
+        startX = e.clientX;
+        startWidth = left.getBoundingClientRect().width;
+
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+
+        const dx = e.clientX - startX;
+        left.style.width = `${startWidth + dx}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    });
 </script>
 </body>
 </html>
