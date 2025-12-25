@@ -1,0 +1,1 @@
+﻿select * from "CSVFile" where "CSVFile"."AnalystID" = 1

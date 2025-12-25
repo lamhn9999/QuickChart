@@ -54,7 +54,7 @@ public sealed class CSVFileTest
     public void ProcessUploadedCSV_ReturnTrue()
     {
         Analyst tester = _analystService.GetAnalyst("Lam");
-        Assert.IsTrue(_csvService.ProcessUploadedCSV(tester, "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv"));
+        Assert.IsTrue(_csvService.ProcessUploadedCSV(tester, "E:/src/project/LQ/LQ/Data/SampleCSVs/netflix_titles.csv"));
     }
 
     [TestMethod]
