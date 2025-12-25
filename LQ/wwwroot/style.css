@@ -5,8 +5,11 @@
 /*--- TABLE ---*/
 table {
     table-layout: fixed;
-    border-collapse: collapse;
     width: 100%;
+}
+thead {
+    border: 3px solid green;
+    background-color: black;
 }
 td, th {
     width: 13rem;
@@ -14,26 +17,16 @@ td, th {
     padding: 0.25rem;
 
     overflow: hidden;
-    white-space: nowrap;
+    /*white-space: normal;      */
+    /*word-break: break-word; */
+    /*overflow-wrap: anywhere;*/
+    text-overflow: ellipsis;
+
     text-align: left;
     vertical-align: top;
-    text-overflow: ellipsis;
     user-select: text;
 
-    border: 1px solid white;
-}
-thead th {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-
-    background-color: #000;     /* match main background */
-    color: #fff;                /* white text */
-
-    /* border drawn ABOVE background */
-    box-shadow:
-            inset 0 -1px 0 #666,    /* bottom border */
-            inset -1px 0 0 #666;    /* right border */
+    border: 2px solid white;
 }
 .col-selected {
     background-color: lightsalmon;

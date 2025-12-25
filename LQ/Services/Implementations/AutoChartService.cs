@@ -3,6 +3,8 @@ using LQ.Models.ChartModels;
 using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Table = LQ.Models.TableModels.Table;
 
 namespace LQ.Services.Implementations;
 
@@ -350,6 +352,35 @@ public class AutoChartService : IAutoChartService
             return sideBarChart;
         }
 
+        if (table.Columns.Count == 2 &&
+            table.Columns[1].Field.Categories.Contains(Category.Numeric))
+        {
+            Chart sideBarChart = new Chart();
+            sideBarChart.ChartType = ChartType.SideBar;
+            Dictionary<object, (double sum, int cnt)> avg = new Dictionary<object, (double sum, int cnt)>();
+            for (int i = 0; i < table.RowCount; i++)
+            {
+                var key = table.Columns[0].Values[i].ValueCasted;
+                var val = table.Columns[1].Values[i].ValueCasted;
+                if (key == null || val == null) continue;
+
+                if (avg.TryGetValue(key, out var sc)) avg[key] = (sc.sum + Convert.ToDouble(val), sc.cnt + 1);
+                else avg[key] = (Convert.ToDouble(val), 1);
+            }
+
+            var top20 = avg
+                .Select(kv => new { Key = kv.Key, Val = kv.Value.sum / (1.0 * kv.Value.cnt) })
+                .OrderByDescending(x => x.Val)
+                .Take(20)
+                .ToList();
+            
+            sideBarChart.X = top20.Select(kv => kv.Key).ToList();
+            LabelData labelData = new LabelData();
+            labelData.Label = "mean of " + table.Columns[1].Field.Name;
+            labelData.Data = top20.Select(kv => kv.Val).Cast<object>().ToList();
+            sideBarChart.Y.Add(labelData);
+            return sideBarChart;
+        }
         return null;
     }
 
@@ -376,25 +407,25 @@ public class AutoChartService : IAutoChartService
         //     );
         // }
         
-        // Bar chart
+        // // Bar chart
         Chart? barResult = DetectBarChart(tempTable);
         if (barResult != null) res.Add(barResult);
-        // Pie chart
+        // // Pie chart
         Chart? pieResult = DetectPieChart(tempTable);
         if (pieResult != null) res.Add(pieResult);
-        // Line chart
+        // // Line chart
         Chart? lineResult = DetectLineChart(tempTable);
         if (lineResult != null) res.Add(lineResult);
-        // Polar Area
+        // // Polar Area
         Chart? polarAreaResult = DetectPolarAreaChart(tempTable);
         if (polarAreaResult != null) res.Add(polarAreaResult);
-        // Histogram
+        // // Histogram
         Chart? histogramResult = DetectHistogram(tempTable);
         if (histogramResult != null) res.Add(histogramResult);
-        // Scatter
+        // // Scatter
         Chart? scatterResult = DetectScatter(tempTable);
         if (scatterResult != null) res.Add(scatterResult);
-        // Side Bar
+        // // Side Bar
         Chart? sideBarResult = DetectSideBar(tempTable);
         if (sideBarResult != null) res.Add(sideBarResult);
         return res;

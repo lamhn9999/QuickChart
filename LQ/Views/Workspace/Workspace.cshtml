@@ -6,21 +6,23 @@
     <title>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="~/style.css"/>
+    <link rel="stylesheet" href="~/style_tw.css"/>
     <script src="/node_modules/chart.js/dist/chart.umd.min.js"></script>
-    <script>
-        let chartInstance = null;
+    <script defer>
+        let chartInstances = [];
         const listIndexes = new Set();
         const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar'];
-        function fieldClicked(fieldindex)
-        {
-            if(listIndexes.has(fieldindex)) listIndexes.delete(fieldindex);
-            else listIndexes.add(fieldindex);
-            console.log(listIndexes);
-            autoChart();
-        }
+        
         async function autoChart()
         {
+            if(listIndexes.size === 0)
+            {
+                selPlot.hidden = false;
+                return;
+            }
+            selPlot.hidden = true;
+            noPlot.hidden = true;
+            
             const response = await fetch("@Url.Action("AutoChart","Workspace")",{
                 method: "POST",
                 headers: {
@@ -29,70 +31,107 @@
                 body: JSON.stringify([...listIndexes].map(Number))
             });
             const result = await response.json();
-            const sample = result[0];
-            const ctx = document.getElementById('myChart');
-            const cfg = {
-                type: chartArray[sample.chartType],
-                data: {
-                    labels: sample.x,
-                    datasets: sample.y.map(ds => ({
-                        label: ds.label,
-                        data: ds.data
-                    }))
-                },
-                options: {
-                    responsive: true,
-                }
-            };
-            if (chartInstance) {
-                chartInstance.destroy();
-                chartInstance = null;
+
+            chartInstances.forEach(c => c.destroy());
+            chartInstances.length = 0;
+
+            result.forEach(sample => {
+                const ctx = document.createElement("canvas");
+                panel.appendChild(ctx);
+                const cfg = {
+                    type: chartArray[sample.chartType],
+                    data: {
+                        labels: sample.x,
+                        datasets: sample.y.map(ds => ({
+                            label: ds.label,
+                            data: ds.data
+                        }))
+                    },
+                    options: {
+                        responsive: true,
+                    }
+                };
+                const chartInstance = new Chart(ctx, cfg);
+                chartInstances.push(chartInstance);
+            });
+            
+            if(chartInstances.length === 0)
+            {
+                console.log("No charts found.");
+                noPlot.hidden = false;
             }
-            chartInstance = new Chart(ctx, cfg);
         }
     </script>
 </head>
-<body>
-<div>
-    <header style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
-        <div style="display:flex; gap:0; flex-direction:column; justify-content:center; align-items: center">
-            <p class = "p11">@Model.CSVFile.Name</p>
-        </div>
+<body class="bg-black text-white">
+<div class="flex flex-col h-screen max-h-screen">
+    <header class="flex shrink-0">
+        <p class = "text-4xl font-bold italic text-" style="color:darksalmon">@Model.CSVFile.Name</p>
     </header>
-</div>
-<div style="display: flex;">
-    <div style="min-width:30vw; max-width: 60vw; max-height: calc(100vh - 4rem); user-select: none; flex-shrink: 0; overflow: auto;" id="tablePanel">
-        <table id="dataTable">
-            <thead class = "p31">
-            <tr>
-                @{
-                    foreach (FieldValues fv in Model.Columns)
-                    {
-                        <th onclick="fieldClicked(@fv.Field.Index)">
-                            @fv.Field.Name
-                        </th>
-                    }
-                }
-            </tr>
-            </thead>
-            <tbody class = "p32">
-            @for(int i = 0; i < Model.RowCount; i++)
-            {
+
+    <div class="flex flex-1 flex-col md:flex-row min-h-0 md:max-h-full">
+        <div
+            id="tablePanel"
+            class="overflow-auto
+                   w-full md:w-1/2 md:min-w-1/5">
+            <table id="dataTable" class="w-full border-separate border-spacing-0">
+                <thead class="sticky top-0">
                 <tr>
-                @foreach (FieldValues fv in Model.Columns)
-                {
-                    <td>@fv.Values[i].ValueString</td>
-                }
+                    @{
+                        foreach (FieldValues fv in Model.Columns)
+                        {
+                            <th onclick="fieldClicked(@fv.Field.Index)">
+                                @fv.Field.Name
+                            </th>
+                        }
+                    }
                 </tr>
-            }
-            </tbody>
-        </table>
-    </div>
-    <div class="resizer" id="drag"></div>
-    <div style="flex: 1;" id="chartPanel">
-        <canvas id="myChart"></canvas>
+                </thead>
+                <tbody>
+                @for(int i = 0; i < Model.RowCount; i++)
+                {
+                    // DELETE LATER
+                    if (i > 200) break;
+                    <tr>
+                        @foreach (FieldValues fv in Model.Columns)
+                        {
+                            <td>@fv.Values[i].ValueString</td>
+                        }
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <div
+            id="drag"
+            class="hidden md:block mx-1 w-1 rounded-full
+                   cursor-col-resize bg-gray-500"
+        ></div>
+        <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto" id="plotPanel">
+            <div class="flex-1 border-2 border-gray-500 content-center" id="selPlot">
+                <p class="p-10 text-3xl text-center text-gray-500">Please click a table header to select a column. We will generate appropriate plots based on your selection.</p>
+            </div>
+            <div hidden class="flex-1 border-2 border-red-600 content-center" id="noPlot">
+                <p class="p-10 text-3xl text-center text-red-500">ZERO ZERO</p>
+            </div>
+        </div>
     </div>
 </div>
+<script>
+    const panel = document.getElementById("plotPanel");
+    const selPlot = document.getElementById("selPlot");
+    const noPlot = document.getElementById("noPlot");
+
+    function fieldClicked(fieldindex)
+    {
+        panel.querySelectorAll("canvas").forEach(c => c.remove());
+        if(listIndexes.has(fieldindex)) listIndexes.delete(fieldindex);
+        else listIndexes.add(fieldindex);
+        console.log(listIndexes);
+        autoChart();
+    }
+</script>
 <script>
     const resizer = document.getElementById('drag');
     const left = document.getElementById('tablePanel');

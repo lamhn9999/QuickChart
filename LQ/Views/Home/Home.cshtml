@@ -52,15 +52,21 @@
             document.getElementById("noPreview").style.display = "none";
             document.getElementById("workspaceButton").style.removeProperty('display');
 
-            data.forEach((row, i) => {
-                const tr = (i === 0) ? document.createElement("thead") : document.createElement("tr");
+            for (let i = 0; i < data.length && i <= 200; i++) {
+                const row = data[i];
+
+                const tr = (i === 0)
+                    ? document.createElement("thead")
+                    : document.createElement("tr");
+
                 row.forEach(cell => {
                     const el = document.createElement(i === 0 ? "th" : "td");
                     el.textContent = cell;
                     tr.appendChild(el);
                 });
+
                 table.appendChild(tr);
-            });
+            }
         }
     </script>
 </head>
@@ -69,8 +75,8 @@
 <header class="glossy text-5xl mb-5 text-center">
     <p>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</p>
 </header>
-<div class="flex flex-1">
-    <div class="w-1/2 max-w-1/2">
+<div class="flex sm:flex-col md:flex-row flex-1">
+    <div class="md:w-1/2 sm:w-full">
         <div class="text-4xl">
             <p class="font-bold">Our service automatically visualizes data from CSV files. Try it out by selecting one of these sample CSVs.</p>
             <div class="mb-5">
@@ -97,12 +103,12 @@
             </div>
         </div>
     </div>
-    <div class="flex flex-col text-4xl w-1/2 max-h-200">
+    <div class="flex flex-col flex-1 text-4xl md:w-1/2 sm:w-full max-h-200">
         <div class="flex font-bold justify-between">
-            <p>Preview</p>
+            <p class="italic">Preview</p>
             <button class="signinbutton" id="workspaceButton" style="display: none">Enter Workspace /></button>
         </div>
-        <div class="overflow-auto border-solid border-gray-500 border-2 flex-1 align-middle">
+        <div class="overflow-auto border-solid border-gray-500 border-2 flex-1 content-center align-middle">
             <table class="text-lg" id="dataTable" hidden></table>
             <div id="noPreview" class="text-center">
                 <p class="text-gray-500 font-bold">No preview available</p>
