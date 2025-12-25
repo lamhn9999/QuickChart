@@ -82,7 +82,7 @@ public class AutoChartService : IAutoChartService
             {
                 FieldValues fieldValues = table.Columns[i];
                 LabelData labeldata = new LabelData();
-                labeldata.Label = fieldValues.Field.Name;
+                labeldata.Label = "mean of " + fieldValues.Field.Name;
                 double[] sumYValue = new double[barChart.X.Count];
                 int[] cntYValue = new int[barChart.X.Count];
                 for (int j = 0; j < table.RowCount; j++)
@@ -169,7 +169,7 @@ public class AutoChartService : IAutoChartService
             {
                 FieldValues fieldValues = table.Columns[i];
                 LabelData labeldata = new LabelData();
-                labeldata.Label = fieldValues.Field.Name;
+                labeldata.Label = "mean of " + fieldValues.Field.Name;
                 double[] sumYValue = new double[LineChart.X.Count];
                 int[] cntYValue = new int[LineChart.X.Count];
                 for (int j = 0; j < table.RowCount; j++)
@@ -233,7 +233,10 @@ public class AutoChartService : IAutoChartService
                 valueList.Add(Convert.ToDouble(value.ValueCasted));
             }
             valueList.Sort();
-            double gap = ((valueList[valueList.Count - 1] - valueList[0]) / 10);
+            double q1 = valueList[Math.Max((valueList.Count + 1) / 4 - 1, 0)];
+            double q3 = valueList[valueList.Count - 1 - (valueList.Count + 1) / 4];
+            double iqr = q3 - q1;
+            double gap = (iqr <= 0) ? (valueList[valueList.Count - 1] - valueList[0]) / Math.Max(1, (int)Math.Sqrt(valueList.Count)) : 2.0 * iqr / Math.Pow(valueList.Count, 1.0 / 3.0);
             if (gap == 0) gap = 1;
             Chart histogramChart = new Chart();
             histogramChart.ChartType = ChartType.Histogram;
@@ -242,8 +245,8 @@ public class AutoChartService : IAutoChartService
             while (xvalue < valueList[valueList.Count - 1])
             {
                 listXValue.Add(xvalue);
-                histogramChart.X.Add($"[{xvalue},{xvalue + gap})");
-                xvalue += gap;
+                histogramChart.X.Add($"[{xvalue},{Math.Round(xvalue + gap, 2)})");
+                xvalue = Math.Round(xvalue + gap, 2);
             }
             listXValue.Add(xvalue);
             LabelData labelData = new LabelData();
