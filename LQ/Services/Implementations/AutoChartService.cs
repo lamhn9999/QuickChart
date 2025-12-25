@@ -235,7 +235,7 @@ public class AutoChartService : IAutoChartService
             if (gap == 0) gap = 1;
             Chart histogramChart = new Chart();
             histogramChart.ChartType = ChartType.Histogram;
-            double xvalue = valueList[0] / gap * gap;
+            double xvalue = valueList[0];
             List<double> listXValue = new List<double>();
             while (xvalue < valueList[valueList.Count - 1])
             {
@@ -252,8 +252,8 @@ public class AutoChartService : IAutoChartService
                 if (value.ValueCasted == null) continue;
                 for (int i = 0; i < histogramChart.X.Count; i++)
                 {
-                    if ((double)value.ValueCasted >= listXValue[i] &&
-                        (double)value.ValueCasted < listXValue[i + 1])
+                    if (Convert.ToDouble(value.ValueCasted) >= listXValue[i] &&
+                        Convert.ToDouble(value.ValueCasted) < listXValue[i + 1])
                     {
                         yValue[i]++;
                         break;
