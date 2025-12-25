@@ -5,7 +5,7 @@
     <title>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="~/style.css"/>
+    <link rel="stylesheet" href="~/style_tw.css"/>
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             document
@@ -53,7 +53,7 @@
             document.getElementById("workspaceButton").style.removeProperty('display');
 
             data.forEach((row, i) => {
-                const tr = document.createElement("tr");
+                const tr = (i === 0) ? document.createElement("thead") : document.createElement("tr");
                 row.forEach(cell => {
                     const el = document.createElement(i === 0 ? "th" : "td");
                     el.textContent = cell;
@@ -64,58 +64,52 @@
         }
     </script>
 </head>
-<body>
-<div style = "display: flex; gap: var(--main-div-gap);">
-    <div style="width: 50vw">
-        <header style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
-            <div style="display:flex; gap:0; flex-direction:column; justify-content:center; align-items: center">
-                <h1 class="glossy">AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</h1>
-            </div>
-        </header>
-        <h2 class="listlabel">Our service automatically visualizes data from CSV files. Try it out by selecting one of these sample CSVs.</h2>
-        <div>
-            @{
-                int id = 0;
-                foreach (string file in Model)
-                {
-                    <div class="listelement" id="listelement@id" onclick="select('@file');">
-                        <div class="listline"></div>
-                        <div class="listfile">@file</div>
-                    </div>
-                    id++;
+<body class="bg-black text-white p-5">
+<div class="flex flex-col h-screen">
+<header class="glossy text-5xl mb-5 text-center">
+    <p>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</p>
+</header>
+<div class="flex flex-1">
+    <div class="w-1/2 max-w-1/2">
+        <div class="text-4xl">
+            <p class="font-bold">Our service automatically visualizes data from CSV files. Try it out by selecting one of these sample CSVs.</p>
+            <div class="mb-5">
+                @{
+                    int id = 0;
+                    foreach (string file in Model)
+                    {
+                        <div class="listelement ml-10" id="listelement@id" onclick="select('@file');">
+                            <div class="listline"></div>
+                            <div class="listfile">@file</div>
+                        </div>
+                        id++;
+                    }
                 }
-            }
-        </div>
-        <div style="display: flex; gap: var(--main-div-gap); justify-content: flex-start; align-items: center">
-            <h2>Or</h2>
-            <button class="signinbutton" id="signinbutton1">Sign In</button>
-            <input type="text" id="nameinput1"/>
-            <h2>to</h2>
-        </div>
-        <div style="position: relative; width: fit-content">
-            <div style="display:flex; align-items:center; gap: var(--main-div-gap); position: relative; z-index: 1">
-                <h2 style="color: darkgrey">Upload a CSV</h2>
             </div>
-            <div class="sealed">
-                <div class="sealed-track">
-                    <div class="sealed-segment">sealed sealed sealed sealed sealed sealed sealed sealed</div>
-                    <div class="sealed-segment">sealed sealed sealed sealed sealed sealed sealed</div>
-                </div>
+            <div class="flex">
+                <p class="font-bold">You could
+                    <span>
+                        <button class="signinbutton font-extrabold" id="signinbutton1">SIGN IN</button>
+                        <input class="text-black bg-white placeholder:text-black" type="text" autocomplete="off" id="nameinput1"/>
+                    </span>
+                    to upload a CSV!
+                </p>
             </div>
         </div>
     </div>
-    <div style="width: 50vw; height: 90vh;">
-        <div style="display: flex; justify-content: space-between;">
-            <h2 style="font-style: italic">Preview</h2>
+    <div class="flex flex-col text-4xl w-1/2 max-h-200">
+        <div class="flex font-bold justify-between">
+            <p>Preview</p>
             <button class="signinbutton" id="workspaceButton" style="display: none">Enter Workspace /></button>
         </div>
-        <div style="max-height: 85vh; overflow: auto">
-            <table id="dataTable" hidden></table>
-            <div id="noPreview" style="border: 1px solid white; display: flex; justify-content: center; align-items: center; height: calc(85vh - 2px);">
-                <h3 style="color: darkgrey">No preview available.</h3>
+        <div class="overflow-auto border-solid border-gray-500 border-2 flex-1 align-middle">
+            <table class="text-lg" id="dataTable" hidden></table>
+            <div id="noPreview" class="text-center">
+                <p class="text-gray-500 font-bold">No preview available</p>
             </div>
         </div>
     </div>
+</div>
 </div>
 </body>
 </html>
