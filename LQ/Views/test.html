@@ -9,38 +9,5 @@
 </head>
 <body>
 
-
-
-<script>
-    const resizer = document.getElementById('drag');
-    const left = document.getElementById('tablePanel');
-
-    let startX = 0;
-    let startWidth = 0;
-    let isDragging = false;
-
-    resizer.addEventListener('mousedown', e => {
-        isDragging = true;
-
-        startX = e.clientX;
-        startWidth = left.getBoundingClientRect().width;
-
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    document.addEventListener('mousemove', e => {
-        if (!isDragging) return;
-
-        const dx = e.clientX - startX;
-        left.style.width = `${startWidth + dx}px`;
-    });
-
-    document.addEventListener('mouseup', () => {
-        isDragging = false;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-    });
-</script>
 </body>
 </html>

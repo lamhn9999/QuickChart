@@ -41,7 +41,7 @@ public class LQDbService : ILQDbService
     public Table? GetTable(CSVFile csvFile)
     {
         Table returnTable = new Table(csvFile);
-        List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile select f).ToList();
+        List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
         foreach (Field f in fields)
         {
             List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).ToList();

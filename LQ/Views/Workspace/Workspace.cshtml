@@ -12,53 +12,70 @@
         let chartInstances = [];
         const listIndexes = new Set();
         const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar'];
+        // pie, vertical bar, line, histogram, scatter, polarArea, horizontal bar
+        let controller;
         
         async function autoChart()
         {
             if(listIndexes.size === 0)
             {
+                loader.hidden = true;
                 selPlot.hidden = false;
+                noPlot.hidden = true;
                 return;
             }
             selPlot.hidden = true;
             noPlot.hidden = true;
+            loader.hidden = false;
             
-            const response = await fetch("@Url.Action("AutoChart","Workspace")",{
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify([...listIndexes].map(Number))
-            });
-            const result = await response.json();
-
-            chartInstances.forEach(c => c.destroy());
-            chartInstances.length = 0;
-
-            result.forEach(sample => {
-                const ctx = document.createElement("canvas");
-                panel.appendChild(ctx);
-                const cfg = {
-                    type: chartArray[sample.chartType],
-                    data: {
-                        labels: sample.x,
-                        datasets: sample.y.map(ds => ({
-                            label: ds.label,
-                            data: ds.data
-                        }))
+            controller = new AbortController();
+            try {
+                const response = await fetch("@Url.Action("AutoChart", "Workspace")", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
                     },
-                    options: {
-                        responsive: true,
+                    body: JSON.stringify([...listIndexes].map(Number)),
+                    signal: controller.signal
+                });
+                const result = await response.json();
+
+                chartInstances.forEach(c => c.destroy());
+                chartInstances.length = 0;
+                loader.hidden = true;
+
+                result.forEach(sample => {
+                    const ctx = document.createElement("canvas");
+                    panel.appendChild(ctx);
+                    const cfg = {
+                        type: chartArray[sample.chartType],
+                        data: {
+                            labels: sample.x,
+                            datasets: sample.y.map(ds => ({
+                                label: ds.label,
+                                data: ds.data
+                            }))
+                        },
+                        options: {
+                            responsive: true,
+                        }
+                    };
+                    if(sample.chartType === 6) {
+                        cfg.options['indexAxis'] = 'y';
                     }
-                };
-                const chartInstance = new Chart(ctx, cfg);
-                chartInstances.push(chartInstance);
-            });
-            
-            if(chartInstances.length === 0)
-            {
-                console.log("No charts found.");
-                noPlot.hidden = false;
+                    const chartInstance = new Chart(ctx, cfg);
+                    chartInstances.push(chartInstance);
+                });
+
+                if(chartInstances.length === 0)
+                {
+                    console.log("No charts found.");
+                    selPlot.hidden = true;
+                    noPlot.hidden = false;
+                }
+            }
+            catch (error) {
+                console.log(error);
             }
         }
     </script>
@@ -115,6 +132,16 @@
             <div hidden class="flex-1 border-2 border-red-600 content-center" id="noPlot">
                 <p class="p-10 text-3xl text-center text-red-500">ZERO ZERO</p>
             </div>
+            <div hidden class="flex-1 content-center" id="loader">
+                <div class="loader">
+                    <div class="loader__bar"></div>
+                    <div class="loader__bar"></div>
+                    <div class="loader__bar"></div>
+                    <div class="loader__bar"></div>
+                    <div class="loader__bar"></div>
+                    <div class="loader__ball"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -122,9 +149,13 @@
     const panel = document.getElementById("plotPanel");
     const selPlot = document.getElementById("selPlot");
     const noPlot = document.getElementById("noPlot");
+    const loader = document.getElementById("loader");
 
     function fieldClicked(fieldindex)
     {
+        if(controller) {
+            controller.abort("New fetch!");
+        }
         panel.querySelectorAll("canvas").forEach(c => c.remove());
         if(listIndexes.has(fieldindex)) listIndexes.delete(fieldindex);
         else listIndexes.add(fieldindex);

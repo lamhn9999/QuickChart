@@ -1,8 +1,12 @@
 using System.Text.Json;
+using System;
+using System.Diagnostics.Metrics;
+using System.Net;
 using LQ.Models.ChartModels;
 using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Mvc.TagHelpers;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Table = LQ.Models.TableModels.Table;
 
@@ -15,219 +19,203 @@ public class AutoChartService : IAutoChartService
     {
         _lqDbService = lqDbService;
     }
-    public void DetectCategory(FieldValues fieldValues)
+
+    private void Index(Dictionary<object, int> cnt, FieldValues table)
     {
-        List <Category> result =  new List<Category>();
-        List<string> valueStringlist = new List<string>();
-        foreach (Value value in fieldValues.Values)
+        foreach (var value in table.Values)
         {
-            if (string.IsNullOrWhiteSpace(value.ValueString)) continue;
-            valueStringlist.Add(value.ValueString.Trim());
+            if (value.ValueCasted == null)
+                continue;
+
+            if (table.Field.Type == typeof(List<string>))
+            {
+                foreach (var f in (List<string>)value.ValueCasted)
+                {
+                    if (f == null) continue;
+                    cnt[f] = cnt.TryGetValue(f, out var n) ? n + 1 : 1;
+                }
+            }
+            else
+            {
+                cnt[value.ValueCasted] = cnt.TryGetValue(value.ValueCasted, out var n) ? n + 1 : 1;
+            }
         }
-
-        double uniqPercentage = (1.0 * valueStringlist.Distinct().ToList().Count) / (fieldValues.Values.Count * 1.0);
-        
-        // Categorical
-        if (uniqPercentage <= Field.CATEGORICAL_THRESHOLD &&
-            (fieldValues.Field.Type == typeof(string) || fieldValues.Field.Type == typeof(int)) ||
-            fieldValues.Field.Type == typeof(bool)) result.Add(Category.Categorical);
-        
-        // Identifier
-        if ((uniqPercentage >= Field.IDENTIFIER_THRESHOLD &&
-            (fieldValues.Field.Type == typeof(string) || 
-             fieldValues.Field.Type == typeof(int))) ||
-            (fieldValues.Field.Type == typeof(string) && !result.Contains(Category.Categorical))) result.Add(Category.Identifier);
-        
-        // Numeric
-        if ((fieldValues.Field.Type == typeof(int) || 
-            fieldValues.Field.Type == typeof(double) || 
-            fieldValues.Field.Type == typeof(DateTime))) result.Add(Category.Numeric);
-
-        fieldValues.Field.Categories = result;
+    }
+    private DateTime ConvertToDateTime(long val)
+    {
+        return new DateTime(val, DateTimeKind.Utc).Date;
     }
 
-    private Chart? DetectBarChart(Table table)
+    private string GetYear(object val)
     {
-        if (table.Columns.Count == 1) return null;
-        bool isBar = false;
-        for (int i = 0; i < table.Columns.Count; i++)
-        {
-            if (table.Columns[i].Field.Categories.Contains(Category.Categorical))
-            {
-                FieldValues temp = table.Columns[i];
-                table.Columns[i] = table.Columns[0];
-                table.Columns[0] = temp;
-                isBar = true;
-                break;
-            }
-        }
-        for (int i = 1; i < table.Columns.Count; i++)
-        {
-            isBar &= table.Columns[i].Field.Categories.Contains(Category.Numeric);
-        }
+        return ConvertToDateTime((long)val).Year.ToString();
+    }
 
-        if (isBar)
+    private Chart? DetectBarChart(List<FieldValues> table)
+    {
+        if (table.Count == 1) return null;
+        Chart barChart = new Chart();
+        barChart.ChartType = ChartType.Bar; 
+        Dictionary<object, (double sum, int cnt)> prep = new Dictionary<object, (double sum, int cnt)>();
+        for (int i = 0; i < table[0].Values.Count; i++)
         {
-            Chart barChart = new Chart();
-            barChart.ChartType = ChartType.Bar;
-            
-            List<object> XValueString = new List<object>();
-            foreach (Value value in table.Columns[0].Values)
+            if (table[0].Values[i].ValueCasted == null) continue;
+            if (table[0].Field.Type == typeof(List<String>))
             {
-                if (value.ValueCasted != null) XValueString.Add(value.ValueCasted);
-            }
-            barChart.X = XValueString.Distinct().ToList();
-
-            for (int i = 1; i < table.Columns.Count; i++)
-            {
-                FieldValues fieldValues = table.Columns[i];
-                LabelData labeldata = new LabelData();
-                labeldata.Label = "mean of " + fieldValues.Field.Name;
-                double[] sumYValue = new double[barChart.X.Count];
-                int[] cntYValue = new int[barChart.X.Count];
-                for (int j = 0; j < table.RowCount; j++)
+                foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
                 {
-                    object xLabel = table.Columns[0].Values[j].ValueCasted;
-                    if (xLabel == null) continue;
-                    if (fieldValues.Values[j].ValueCasted != null)
+                    if (f == null) continue;
+                    if (!prep.TryGetValue(f, out var sc)) prep[f] = (0, 0);
+                }
+            }
+            else
+            {
+                var key = table[0].Values[i].ValueCasted;
+                if (!prep.TryGetValue(key, out var sc)) prep[key] = (0, 0);
+            }
+        }
+
+        barChart.X = prep.OrderBy(x => x.Key).Select(kv => kv.Key).ToList();
+        if (barChart.X.Count > 20) return null;
+        
+        for (int j = 1; j < table.Count; j++)
+        {
+            Dictionary<object, (double sum, int cnt)> avg = new Dictionary<object, (double sum, int cnt)>(prep);
+            for (int i = 0; i < table[0].Values.Count; i++)
+            {
+                var val = table[j].Values[i].ValueCasted;
+                if (table[0].Values[i].ValueCasted == null) continue;
+                if (val != null)
+                {
+                    if (table[0].Field.Type == typeof(List<String>))
                     {
-                        cntYValue[barChart.X.IndexOf(xLabel)] += 1;
-                        sumYValue[barChart.X.IndexOf(xLabel)] += Convert.ToDouble(fieldValues.Values[j].ValueCasted);
+                        foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
+                        {
+                            if (f == null) continue;
+                            avg[f] = (avg[f].sum + Convert.ToDouble(val), avg[f].cnt + 1);
+                        }
+                    }
+                    else
+                    {
+                        var key = table[0].Values[i].ValueCasted;
+                        if (key == null) continue;
+                        avg[key] = (avg[key].sum + Convert.ToDouble(val), avg[key].cnt + 1);
                     }
                 }
-
-                for (int j = 0; j < sumYValue.Length; j++)
-                {
-                    labeldata.Data.Add(sumYValue[j] / (1.0 * cntYValue[j]));
-                }
-
-                barChart.Y.Add(labeldata);
             }
-
-            return barChart;
+            var data = avg.Select(kv => new { Key = kv.Key, Val = kv.Value.sum / (1.0 * kv.Value.cnt) })
+            .OrderBy(x => x.Key)
+            .ToList();
+            LabelData labelData = new LabelData();
+            labelData.Label = $"Mean of \"{table[j].Field.Name}\" by \"{table[0].Field.Name}\"";
+            labelData.Data = data.Select(kv => kv.Val).Cast<object>().ToList();
+            barChart.Y.Add(labelData);
         }
-        return null;
+
+        return barChart;
     }
 
-    private Chart? DetectPieChart(Table table)
+    private Chart? DetectPieChart(List<FieldValues> table)
     {
-        if (table.Columns.Count != 1 ||
-            !table.Columns[0].Field.Categories.Contains(Category.Categorical)) return null;
         Chart pieChart = new Chart();
         pieChart.ChartType = ChartType.Pie;
         
         Dictionary<object, int> cnt =  new Dictionary<object, int>();
-        foreach (Value value in table.Columns[0].Values)
-        {
-            if (value.ValueCasted == null) continue;
-            if (cnt.ContainsKey(value.ValueCasted)) cnt[value.ValueCasted] += 1;
-            else cnt[value.ValueCasted] = 1;
-        }
+        Index(cnt, table[0]);
         
         pieChart.X = cnt.Select(kv => kv.Key).ToList();
         LabelData labelData = new LabelData();
-        labelData.Label = "count";
+        labelData.Label = $"Count of \"{table[0].Field.Name}\"";
         labelData.Data = cnt.Select(kv => kv.Value).Cast<object>().ToList();
         pieChart.Y.Add(labelData);
         return pieChart;
     }
 
-    private Chart? DetectLineChart(Table table)
+    private Chart? DetectLineChart(List<FieldValues> table)
     {
-        if (table.Columns.Count == 1) return null;
-        bool isLine = false;
-        for (int i = 0; i < table.Columns.Count; i++)
+        Chart LineChart = new Chart();
+        LineChart.ChartType = ChartType.Line;
+        Dictionary<object, (double sum, int cnt)> prep = new Dictionary<object, (double sum, int cnt)>();
+        for (int i = 0; i < table[0].Values.Count; i++)
         {
-            if (table.Columns[i].Field.Categories.Contains(Category.Categorical))
+            if (table[0].Values[i].ValueCasted == null) continue;
+            if (table[0].Field.Type == typeof(List<String>))
             {
-                FieldValues temp = table.Columns[i];
-                table.Columns[i] = table.Columns[0];
-                table.Columns[0] = temp;
-                isLine = true;
-                break;
-            }
-        }
-        
-        for (int i = 1; i < table.Columns.Count; i++)
-        {
-            isLine &= table.Columns[i].Field.Categories.Contains(Category.Numeric);
-        }
-
-        if (isLine)
-        {
-            Chart LineChart = new Chart();
-            LineChart.ChartType = ChartType.Line;
-            
-            List<object> XValueString = new List<object>();
-            foreach (Value value in table.Columns[0].Values)
-            {
-                if (value.ValueCasted != null) XValueString.Add(value.ValueCasted);
-            }
-            LineChart.X = XValueString.Distinct().ToList();
-
-            for (int i = 1; i < table.Columns.Count; i++)
-            {
-                FieldValues fieldValues = table.Columns[i];
-                LabelData labeldata = new LabelData();
-                labeldata.Label = "mean of " + fieldValues.Field.Name;
-                double[] sumYValue = new double[LineChart.X.Count];
-                int[] cntYValue = new int[LineChart.X.Count];
-                for (int j = 0; j < table.RowCount; j++)
+                foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
                 {
-                    object xLabel = table.Columns[0].Values[j].ValueCasted;
-                    if (xLabel == null) continue;
-                    if (fieldValues.Values[j].ValueCasted != null)
+                    if (f == null) continue;
+                    if (!prep.TryGetValue(f, out var sc)) prep[f] = (0, 0);
+                }
+            }
+            else
+            {
+                var key = table[0].Values[i].ValueCasted;
+                if (!prep.TryGetValue(key, out var sc)) prep[key] = (0, 0);
+            }
+        }
+
+        LineChart.X = prep.OrderBy(x => x.Key).Select(kv => kv.Key).ToList();
+        
+        for (int j = 1; j < table.Count; j++)
+        {
+            Dictionary<object, (double sum, int cnt)> avg = new Dictionary<object, (double sum, int cnt)>(prep);
+            for (int i = 0; i < table[0].Values.Count; i++)
+            {
+                var val = table[j].Values[i].ValueCasted;
+                if (table[0].Values[i].ValueCasted == null) continue;
+                if (val != null)
+                {
+                    if (table[0].Field.Type == typeof(List<String>))
                     {
-                        sumYValue[LineChart.X.IndexOf(xLabel)] += Convert.ToDouble(fieldValues.Values[j].ValueCasted);
-                        cntYValue[LineChart.X.IndexOf(xLabel)] += 1;
+                        foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
+                        {
+                            if (f == null) continue;
+                            avg[f] = (avg[f].sum + Convert.ToDouble(val), avg[f].cnt + 1);
+                        }
+                    }
+                    else
+                    {
+                        var key = table[0].Values[i].ValueCasted;
+                        if (key == null) continue;
+                        avg[key] = (avg[key].sum + Convert.ToDouble(val), avg[key].cnt + 1);
                     }
                 }
-
-                for (int j = 0; j < cntYValue.Length; j++)
-                {
-                    labeldata.Data.Add(sumYValue[j] / (1.0 * cntYValue[j]));
-                }
-
-                LineChart.Y.Add(labeldata);
             }
-
-            return LineChart;
+            
+            var data = avg.Select(kv => new { Key = kv.Key, Val = kv.Value.sum / (1.0 * kv.Value.cnt) })
+                .OrderBy(x => x.Key)
+                .ToList();
+            LabelData labelData = new LabelData();
+            labelData.Label = $"Mean of \"{table[j].Field.Name}\" by \"{table[0].Field.Name}\"";
+            labelData.Data = data.Select(kv => kv.Val).Cast<object>().ToList();
+            LineChart.Y.Add(labelData);
         }
-        return null;
+
+        return LineChart;
     }
 
-    private Chart? DetectPolarAreaChart(Table table)
+    private Chart? DetectPolarAreaChart(List<FieldValues> table)
     {
-        if (table.Columns.Count != 1 ||
-            !table.Columns[0].Field.Categories.Contains(Category.Categorical)) return null;
         Chart polarAreaChart = new Chart();
         polarAreaChart.ChartType = ChartType.PolarArea;
         
         Dictionary<object, int> cnt =  new Dictionary<object, int>();
-        foreach (Value value in table.Columns[0].Values)
-        {
-            if (value.ValueCasted == null) continue;
-            if (cnt.ContainsKey(value.ValueCasted)) cnt[value.ValueCasted] += 1;
-            else cnt[value.ValueCasted] = 1;
-        }
+        Index(cnt, table[0]);
         
         polarAreaChart.X = cnt.Select(kv => kv.Key).ToList();
         LabelData labelData = new LabelData();
-        labelData.Label = "count";
+        labelData.Label = $"Count of \"{table[0].Field.Name}\"";
         labelData.Data = cnt.Select(kv => kv.Value).Cast<object>().ToList();
         polarAreaChart.Y.Add(labelData);
         return polarAreaChart;
     }
-
-    private Chart? DetectHistogram(Table table)
+    private Chart? DetectHistogram(List<FieldValues> table)
     {
-        if (table.Columns.Count != 1) return null;
-
-        if (table.Columns[0].Field.Categories.Contains(Category.Numeric))
+        if (table[0].Field.Categories.Contains(Category.Numeric))
         {
             List<double> valueList = new List<double>();
         
-            foreach (Value value in table.Columns[0].Values)
+            foreach (Value value in table[0].Values)
             {
                 if (value.ValueCasted == null) continue;
                 valueList.Add(Convert.ToDouble(value.ValueCasted));
@@ -245,20 +233,22 @@ public class AutoChartService : IAutoChartService
             while (xvalue < valueList[valueList.Count - 1])
             {
                 listXValue.Add(xvalue);
-                histogramChart.X.Add($"[{xvalue},{Math.Round(xvalue + gap, 2)})");
+                if (table[0].Field.Type == typeof(DateTime))
+                    histogramChart.X.Add(
+                        $"[{ConvertToDateTime((long)xvalue)},{ConvertToDateTime((long)(xvalue + gap))})");
+                else histogramChart.X.Add($"[{xvalue}, {Math.Round(xvalue + gap, 2)})");
                 xvalue = Math.Round(xvalue + gap, 2);
             }
             listXValue.Add(xvalue);
             LabelData labelData = new LabelData();
-            labelData.Label = table.Columns[0].Field.Name;
+            labelData.Label = $"Distribution of \"{table[0].Field.Name}\"";
             int[] yValue = new int[histogramChart.X.Count];
-            foreach (Value value in table.Columns[0].Values)
+            foreach (double value in valueList)
             {
-                if (value.ValueCasted == null) continue;
                 for (int i = 0; i < histogramChart.X.Count; i++)
                 {
-                    if (Convert.ToDouble(value.ValueCasted) >= listXValue[i] &&
-                        Convert.ToDouble(value.ValueCasted) < listXValue[i + 1])
+                    if (value >= listXValue[i] &&
+                        value < listXValue[i + 1])
                     {
                         yValue[i]++;
                         break;
@@ -274,21 +264,16 @@ public class AutoChartService : IAutoChartService
             return histogramChart;
         }
 
-        if (table.Columns[0].Field.Categories.Contains(Category.Categorical))
+        if (table[0].Field.Categories.Contains(Category.Categorical))
         {
             Chart histogramChart = new Chart();
             histogramChart.ChartType = ChartType.Histogram;
             Dictionary<object, int> cnt =  new Dictionary<object, int>();
-            foreach (Value value in table.Columns[0].Values)
-            {
-                if (value.ValueCasted == null) continue;
-                if (cnt.ContainsKey(value.ValueCasted)) cnt[value.ValueCasted] += 1;
-                else cnt[value.ValueCasted] = 1;
-            }
-        
+            Index(cnt, table[0]);
             histogramChart.X = cnt.Select(kv => kv.Key).ToList();
+            if (histogramChart.X.Count > 20) return null;
             LabelData labelData = new LabelData();
-            labelData.Label = "count";
+            labelData.Label = $"Count of \"{table[0].Field.Name}\"";
             labelData.Data = cnt.Select(kv => kv.Value).Cast<object>().ToList();
             histogramChart.Y.Add(labelData);
             
@@ -298,139 +283,221 @@ public class AutoChartService : IAutoChartService
         return null;
     }
 
-    private Chart? DetectScatter(Table table)
+    private Chart? DetectScatter(List<FieldValues> table)
     {
-        if (table.Columns.Count != 2 ||
-            !table.Columns[0].Field.Categories.Contains(Category.Numeric) ||
-            !table.Columns[1].Field.Categories.Contains(Category.Numeric)) return null;
-        
         Chart scatterChart = new Chart();
         scatterChart.ChartType = ChartType.Scatter;
         LabelData labelData = new LabelData();
-        labelData.Label = (table.Columns[0].Field.Name + " vs " + table.Columns[1].Field.Name);
-        for (int i = 0; i < table.Columns[0].Values.Count; i++)
+        labelData.Label = $"Relationship between \"{table[0].Field.Name}\" and \"{table[1].Field.Name}\"";
+        for (int i = 0; i < table[0].Values.Count; i++)
         {
-            if (table.Columns[0].Values[i].ValueCasted == null ||
-                table.Columns[1].Values[i].ValueCasted == null) continue;
-            labelData.Data.Add(new {x = table.Columns[0].Values[i].ValueCasted, 
-                                y = table.Columns[1].Values[i].ValueCasted});
+            if (table[0].Values[i].ValueCasted == null ||
+                table[1].Values[i].ValueCasted == null) continue;
+            labelData.Data.Add(new {x = table[0].Values[i].ValueCasted, 
+                                y = table[1].Values[i].ValueCasted});
         }
         scatterChart.Y.Add(labelData);
         return scatterChart;
     }
 
-    private Chart? DetectSideBar(Table table)
+    private Chart? DetectSideBar(List<FieldValues> table)
     {
-        bool isBar = false;
-        for (int i = 0; i < table.Columns.Count; i++)
-        {
-            if (table.Columns[i].Field.Categories.Contains(Category.Categorical) || table.Columns[i].Field.Categories.Contains(Category.Identifier))
-            {
-                FieldValues temp = table.Columns[i];
-                table.Columns[i] = table.Columns[0];
-                table.Columns[0] = temp;
-                isBar = true;
-                break;
-            }
-        }
-        if (!isBar) return null;
-        if (table.Columns.Count == 1)
+        if (table.Count == 1)
         {
             Chart sideBarChart = new Chart();
             sideBarChart.ChartType = ChartType.SideBar;
             Dictionary<object, int> cnt =  new Dictionary<object, int>();
-            foreach (Value value in table.Columns[0].Values)
-            {
-                if (value.ValueCasted == null) continue;
-                if (cnt.ContainsKey(value.ValueCasted)) cnt[value.ValueCasted] += 1;
-                else cnt[value.ValueStringFormatted] = 1;
-            }
-
+            Index(cnt, table[0]);
             var showData = cnt.OrderByDescending(kv => kv.Value).Take(20).ToList();
             sideBarChart.X = showData.Select(kv => kv.Key).ToList();
             LabelData labelData = new LabelData();
-            labelData.Label = "count";
+            labelData.Label = $"Count of \"{table[0].Field.Name}\"";
             labelData.Data = showData.Select(kv => kv.Value).Cast<object>().ToList();
             sideBarChart.Y.Add(labelData);
             return sideBarChart;
         }
 
-        if (table.Columns.Count == 2 &&
-            table.Columns[1].Field.Categories.Contains(Category.Numeric))
+        if (table.Count == 2 &&
+            table[1].Field.Categories.Contains(Category.Numeric))
         {
             Chart sideBarChart = new Chart();
             sideBarChart.ChartType = ChartType.SideBar;
             Dictionary<object, (double sum, int cnt)> avg = new Dictionary<object, (double sum, int cnt)>();
-            for (int i = 0; i < table.RowCount; i++)
+            for (int i = 0; i < table[0].Values.Count; i++)
             {
-                var key = table.Columns[0].Values[i].ValueCasted;
-                var val = table.Columns[1].Values[i].ValueCasted;
-                if (key == null || val == null) continue;
-
-                if (avg.TryGetValue(key, out var sc)) avg[key] = (sc.sum + Convert.ToDouble(val), sc.cnt + 1);
-                else avg[key] = (Convert.ToDouble(val), 1);
+                var val = table[1].Values[i].ValueCasted;
+                if (val == null) continue;
+                if (table[0].Values[i].ValueCasted == null) continue;
+                if (table[0].Field.Type == typeof(List<String>))
+                {
+                    foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
+                    {
+                        if (f == null) continue; 
+                        avg[f] = avg.TryGetValue(f, out var n) ? (n.sum + Convert.ToDouble(val), n.cnt + 1) : (Convert.ToDouble(val), 1);
+                    }
+                }
+                else
+                {
+                    var key = table[0].Values[i].ValueCasted;
+                    if (key == null) continue;
+                    if (avg.TryGetValue(key, out var sc)) avg[key] = (sc.sum + Convert.ToDouble(val), sc.cnt + 1);
+                    else avg[key] = (Convert.ToDouble(val), 1);
+                }
             }
-
-            var top20 = avg
-                .Select(kv => new { Key = kv.Key, Val = kv.Value.sum / (1.0 * kv.Value.cnt) })
-                .OrderByDescending(x => x.Val)
-                .Take(20)
-                .ToList();
             
-            sideBarChart.X = top20.Select(kv => kv.Key).ToList();
+            var data = avg.Select(kv => new { Key = kv.Key, Val = kv.Value.sum / (1.0 * kv.Value.cnt) })
+                .OrderBy(x => x.Key)
+                .ToList();
             LabelData labelData = new LabelData();
-            labelData.Label = "mean of " + table.Columns[1].Field.Name;
-            labelData.Data = top20.Select(kv => kv.Val).Cast<object>().ToList();
+            labelData.Label = $"Mean of \"{table[1].Field.Name}\" by \"{table[0].Field.Name}\"";
+            labelData.Data = data.Select(kv => kv.Val).Cast<object>().ToList();
             sideBarChart.Y.Add(labelData);
-            return sideBarChart;
+            
         }
         return null;
     }
 
-    public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes)
+    private (double med, double IQR) GetScaleInfo(List<Value> values)
+    {
+        List<double> valueList =  new List<double>();
+        foreach (Value value in values)
+        {
+            if (value.ValueCasted == null) continue;
+            valueList.Add(Convert.ToDouble(value.ValueCasted));
+        }
+        valueList.Sort();
+        double q1 = valueList[Math.Max((valueList.Count + 1) / 4 - 1, 0)];
+        double q3 = valueList[valueList.Count - 1 - (valueList.Count + 1) / 4];
+        double iqr = q3 - q1;
+        return (valueList.Count % 2 != 0 ? valueList[valueList.Count / 2] : (valueList[valueList.Count / 2] + valueList[valueList.Count / 2 - 1]) / 2,
+                iqr);
+    }
+
+    public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
     {
         Table tempTable = _lqDbService.GetTable(csvfileid, fieldindexes);
+        int minimumRelationship = 0;
+        List<Chart?> res = new List<Chart>();
         
-        List<Chart> res = new List<Chart>();
-        
+        List<FieldValues> identifier = new List<FieldValues>();
+        List<FieldValues> categorical = new List<FieldValues>();
+        List<List<FieldValues>> numeric = new List<List<FieldValues>>();
+        List<(double med, double IQR)> scaleInfo = new List<(double med, double IQR)>(); 
+        foreach (FieldValues fv in tempTable.Columns)
+        {
+            // === Cancellation ===
+            cancellationToken.ThrowIfCancellationRequested();
+            // ====================
+            if (fv.Field.Categories.Contains(Category.Identifier))
+                identifier.Add(fv);
+            if (fv.Field.Categories.Contains(Category.Categorical))
+                categorical.Add(fv);
+            if (fv.Field.Categories.Contains(Category.Numeric))
+            {
+                (double med, double IQR) fvInfo = GetScaleInfo(fv.Values);
+                bool found = false;
+                for (int i = 0; i < numeric.Count; i++)
+                {
+                    (double med, double IQR) curInfo = scaleInfo[i];
+                    if (Math.Abs(curInfo.med - fvInfo.med) / Math.Max(fvInfo.IQR, curInfo.IQR) <= 0.5 &&
+                        Math.Max(curInfo.IQR, fvInfo.IQR) / Math.Min(curInfo.IQR, fvInfo.IQR) <= 2)
+                    {
+                        found = true;
+                        numeric[i].Add(fv);
+                        List<Value> newList = new List<Value>();
+                        foreach (FieldValues fvi in numeric[i])
+                            foreach(Value val in fvi.Values) newList.Add(val);
+                        scaleInfo[i] = GetScaleInfo(newList);
+                    }
+                }
+                if (!found)
+                {
+                    numeric.Add(new List<FieldValues> {fv});
+                    scaleInfo.Add(fvInfo);
+                }
+            }
+        }
         // var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        // while (dir != null && !dir.GetFiles("*.csproj").Any())
+        // while (dir != null && !dir.GetFiles("*.Tests.csproj").Any())
         // {
         //     dir = dir.Parent;
         // }
         // var logPath = Path.Combine(dir!.FullName, "test.log");
-        // foreach(FieldValues fv in tempTable.Columns)
+        // for(int i = 0; i < numeric.Count; i++)
         // {
-        //     File.AppendAllText(logPath, JsonSerializer.Serialize(new {
-        //         name = fv.Field.Name,
-        //         categories = fv.Field.Categories,
-        //         values = (from f in fv.Values select f.ValueCasted).ToList(),
-        //         types = fv.Field.TypeName
-        //     }) + "\n"
-        //     );
+        //     File.AppendAllText(logPath, "start\n");
+        //     File.AppendAllText(logPath, $"{scaleInfo[i].med}, {scaleInfo[i].IQR}\n");
+        //     foreach (FieldValues fv in numeric[i])
+        //     {
+        //         File.AppendAllText(logPath, JsonSerializer.Serialize(new
+        //             {
+        //                 name = fv.Field.Name,
+        //                 categories = fv.Field.Categories,
+        //                 values = (from f in fv.Values select f.ValueCasted).ToList(),
+        //                 types = fv.Field.TypeName
+        //             }) + "\n"
+        //         );
+        //     }
+        //     File.AppendAllText(logPath, "end\n");
         // }
-        
-        // // Bar chart
-        Chart? barResult = DetectBarChart(tempTable);
-        if (barResult != null) res.Add(barResult);
-        // // Pie chart
-        Chart? pieResult = DetectPieChart(tempTable);
-        if (pieResult != null) res.Add(pieResult);
-        // // Line chart
-        Chart? lineResult = DetectLineChart(tempTable);
-        if (lineResult != null) res.Add(lineResult);
-        // // Polar Area
-        Chart? polarAreaResult = DetectPolarAreaChart(tempTable);
-        if (polarAreaResult != null) res.Add(polarAreaResult);
-        // // Histogram
-        Chart? histogramResult = DetectHistogram(tempTable);
-        if (histogramResult != null) res.Add(histogramResult);
-        // // Scatter
-        Chart? scatterResult = DetectScatter(tempTable);
-        if (scatterResult != null) res.Add(scatterResult);
-        // // Side Bar
-        Chart? sideBarResult = DetectSideBar(tempTable);
-        if (sideBarResult != null) res.Add(sideBarResult);
-        return res;
+        foreach (FieldValues categoricalFV in categorical)
+        {
+            List<FieldValues> allNumeric = new List<FieldValues>();
+            allNumeric.Add(categoricalFV);
+            int maxLen = 0;
+            foreach (List<FieldValues> lfv in numeric)
+            {
+                List<FieldValues> sameNumeric = new List<FieldValues>();
+                sameNumeric.Add(categoricalFV);
+                foreach (FieldValues fv in lfv)
+                {
+                    if (fv != categoricalFV)
+                    {
+                        sameNumeric.Add(fv);
+                        allNumeric.Add(fv);
+                        // if(minimumRelationship == 2) 
+                        res.Add(DetectSideBar(new List<FieldValues> { categoricalFV, fv }));
+                    }
+                }
+                
+                if (sameNumeric.Count > Math.Max(1, minimumRelationship - 1) && categoricalFV.Field.Categories.Contains(Category.Numeric)) 
+                    res.Add(DetectLineChart(sameNumeric));
+                if (sameNumeric.Count > Math.Max(2, minimumRelationship - 1))
+                    res.Add(DetectBarChart(sameNumeric));
+                maxLen = Math.Max(maxLen, sameNumeric.Count - 1);
+                // File.AppendAllText(logPath, $"{cur.Count - 1}\n");
+            }
+            // File.AppendAllText(logPath, $"{ml}, {all.Count}\n");
+            if (minimumRelationship <= 1)
+            {
+                if (maxLen < allNumeric.Count - 1) res.Add(DetectBarChart(allNumeric));
+                if (maxLen < allNumeric.Count - 1) res.Add(DetectLineChart(allNumeric));
+                res.Add(DetectPieChart(new List<FieldValues> { categoricalFV }));
+                res.Add(DetectPolarAreaChart(new List<FieldValues> { categoricalFV }));
+                if(categoricalFV.Field.Categories.Contains(Category.Numeric)) 
+                    res.Add(DetectHistogram(new List<FieldValues> { categoricalFV }));
+                res.Add(DetectSideBar(new List<FieldValues> { categoricalFV }));
+            }
+        }
+
+        foreach (List<FieldValues> lfv in numeric)
+        {
+            foreach (FieldValues fv in lfv)
+            {
+                res.Add(DetectHistogram(new List<FieldValues> { fv }));
+                foreach (FieldValues ifv in identifier)
+                    if (ifv != fv) res.Add(DetectSideBar(new  List<FieldValues> { ifv, fv }));
+                    
+                foreach (List<FieldValues> lfvj in numeric)
+                    foreach (FieldValues fvj in lfvj) if (fvj != fv) 
+                        res.Add(DetectScatter(new  List<FieldValues> { fv, fvj }));
+            }
+        }
+        List<Chart> noNullRes = new List<Chart>();
+        foreach (Chart? chart in res) 
+        {
+            if (chart != null) noNullRes.Add(chart);
+        }
+        return noNullRes;
     }
 }

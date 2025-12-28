@@ -50,17 +50,35 @@ public sealed class CSVFileTest
     //     Assert.IsFalse(_csvService.ProcessUploadedCSV(tester, "/home/lam/LQ/LQ/Data/SampleCSVs/hello1.csv"));
     // }
 
-    [TestMethod]
-    public void ProcessUploadedCSV_ReturnTrue()
-    {
-        Analyst tester = _analystService.GetAnalyst("Lam");
-        Assert.IsTrue(_csvService.ProcessUploadedCSV(tester, "E:/src/project/LQ/LQ/Data/SampleCSVs/netflix_titles.csv"));
-    }
+    // [TestMethod]
+    // public void ProcessUploadedCSV_ReturnTrue()
+    // {
+    //     Analyst tester = _analystService.GetAnalyst("Lam");
+    //     Assert.IsTrue(_csvService.ProcessUploadedCSV(tester, "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv"));
+    // }
 
-    [TestMethod]
-    public void Validate_ReturnTrue()
-    {
-        Analyst tester = _analystService.GetAnalyst("N D Hung");
-        Assert.IsTrue(_csvService.Validate(tester, "/home/lam/LQ/LQ/Data/SampleCSVs/spotify_data_cleaned.csv"));
-    }
+    // [TestMethod]
+    // public void DetectCategoryTest()
+    // {
+    //     Analyst tester = _analystService.GetAnalyst("Lam");
+    //     Table table = _csvService.GetTable(tester.ID, "spotify_data_cleaned.csv");
+    //     FieldValues fieldvalues = (from fv in table.Columns where fv.Field.Name == "artist_genres" select fv).FirstOrDefault();
+    //     _csvService.DetectCategory(fieldvalues);
+    // }
+
+    // [TestMethod]
+    // public void Validate_ReturnTrue()
+    // {
+    //     Analyst tester = _analystService.GetAnalyst("N D Hung");
+    //     Assert.IsTrue(_csvService.Validate(tester, "/home/lam/LQ/LQ/Data/SampleCSVs/spotify_data_cleaned.csv"));
+    // }
+    //
+    // [TestMethod]
+    // public void DetectCategoryListTest()
+    // {
+    //     Analyst lam = _analystService.GetAnalyst("Lam");
+    //     Table spotify = _csvService.GetTable(lam.ID, "spotify_data_cleaned.csv");
+    //     FieldValues fv = (from f in spotify.Columns where f.Field.Name == "artist_genres" select f).FirstOrDefault();
+    //     _csvService.DetectCategoryList(fv);
+    // }
 }

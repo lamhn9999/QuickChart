@@ -25,6 +25,9 @@ public class Chart
     public List<object> X { get; set; } = new();
     public List<LabelData> Y { get; set; } = new();
     public List<LabelData> Z { get; set; } = new();
+    public int RelationshipCount  => ChartType is ChartType.Pie or ChartType.Histogram or ChartType.PolarArea
+        ? 1
+        : Y.Count() + Z.Count();
 
     public string ShowJson()
     {

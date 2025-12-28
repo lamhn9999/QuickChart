@@ -11,6 +11,8 @@ public class CSVService : ICSVService
 {
     private readonly ILQDbService _lqDbService;
     private readonly IAutoChartService _autoChartService;
+    private static char[] possibleOpen = new[] { '\"', '[' };
+    private static char[] possibleEnd = new[] { '\"', ']' };
     public CSVService(ILQDbService lqdbService, IAutoChartService autoChartService)
     {
         _lqDbService = lqdbService;
@@ -56,6 +58,42 @@ public class CSVService : ICSVService
     {
         return Validate(analyst, new StreamReader(file.OpenReadStream())) && 
                !_lqDbService.SearchFileByAnalyst(analyst, file.FileName);
+    }
+    
+    private void DetectCategory(FieldValues fieldValues)
+    {
+        List <Category> result =  new List<Category>();
+        List<string> valueStringlist = new List<string>();
+        
+        if(fieldValues.Field.Type != typeof(List<string>))
+        {
+            foreach (Value value in fieldValues.Values)
+            {
+                if (string.IsNullOrWhiteSpace(value.ValueString)) continue;
+                valueStringlist.Add(value.ValueString.Trim());
+            }   
+        }
+
+        double uniqPercentage = (1.0 * valueStringlist.Distinct().ToList().Count) / (fieldValues.Values.Count * 1.0);
+        
+        // Categorical
+        if ((uniqPercentage <= Field.CATEGORICAL_THRESHOLD &&
+            (fieldValues.Field.Type == typeof(string) || fieldValues.Field.Type == typeof(int)) ||
+            fieldValues.Field.Type == typeof(bool)) 
+            || fieldValues.Field.Type == typeof(List<string>)
+            || fieldValues.Field.Type == typeof(DateTime)) result.Add(Category.Categorical);
+        
+        // Identifier
+        if ((uniqPercentage >= Field.IDENTIFIER_THRESHOLD &&
+             (fieldValues.Field.Type == typeof(string) || 
+              fieldValues.Field.Type == typeof(int))) ||
+            (fieldValues.Field.Type == typeof(string) && !result.Contains(Category.Categorical))) result.Add(Category.Identifier);
+        
+        // Numeric
+        if ((fieldValues.Field.Type == typeof(int) || 
+             fieldValues.Field.Type == typeof(double))) result.Add(Category.Numeric);
+
+        fieldValues.Field.Categories = result;
     }
 
     private bool DetectDateTime(FieldValues fieldvalues)
@@ -106,6 +144,70 @@ public class CSVService : ICSVService
         }
         return false;
     }
+
+    private bool DetectCategoryList(FieldValues fieldvalues)
+    {
+        HashSet<string> parsedSet = new();
+        int parsedCount = 0;
+        HashSet<string> nonparsedSet = new();
+        int nonparsedCount = 0;
+        
+        foreach (Value v in fieldvalues.Values)
+        {
+            if (String.IsNullOrWhiteSpace(v.ValueString)) continue;
+            string[] splitted = v.ValueString
+                .Trim()
+                .TrimStart(possibleOpen)
+                .TrimEnd(possibleEnd)
+                .Split(',')
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToArray();
+            foreach (string f in splitted)
+            {
+                parsedSet.Add(f.Trim());
+                parsedCount++;
+            }
+        }
+
+        foreach (Value v in fieldvalues.Values)
+        {
+            if (v.ValueString is null) continue;
+            nonparsedSet.Add(v.ValueString.Trim());
+            nonparsedCount++;
+        }
+
+        double rate1 = (1.0 * nonparsedSet.Count) / (1.0 * nonparsedCount);
+        double rate2 = (1.0 * parsedSet.Count) / (1.0 * parsedCount);
+        if (rate2 <= Field.CATEGORICAL_THRESHOLD && rate2 < rate1) 
+        {
+            // fieldvalues.Field.Categories.Add(Category.Categorical);
+            foreach (var v in fieldvalues.Values)
+            {
+                if (string.IsNullOrWhiteSpace(v.ValueString))
+                {
+                    v.ValueStringFormatted = null;
+                    continue;
+                }
+
+                v.ValueStringFormatted = string.Join(',',
+                    v.ValueString
+                        .Trim()
+                        .TrimStart(possibleOpen)
+                        .TrimEnd(possibleEnd)
+                        .Split(',')
+                        .Select(s => s.Trim())
+                        .Where(s => !string.IsNullOrEmpty(s))
+                );
+                // Debug.WriteLine(v.ValueStringFormatted);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+    
     private Type DetectType(FieldValues fieldvalues)
     {
         if (DetectDateTime(fieldvalues)) return typeof(DateTime);
@@ -169,16 +271,15 @@ public class CSVService : ICSVService
             }
             return typeof(double);
         }
+
+        if (DetectCategoryList(fieldvalues))
+        {
+            return typeof(List<string>);
+        }
         
         foreach (Value value in fieldvalues.Values)
         {
-            if (String.IsNullOrWhiteSpace(value.ValueString))
-            {
-                value.ValueStringFormatted = null;
-                continue;
-            }
-
-            value.ValueStringFormatted = value.ValueString;
+            value.ValueStringFormatted = String.IsNullOrWhiteSpace(value.ValueString) ? null : value.ValueString;
         }
         return typeof(string);
     }
@@ -267,7 +368,7 @@ public class CSVService : ICSVService
         }
         foreach (FieldValues fv in newTable.Columns)
         {
-            _autoChartService.DetectCategory(fv);
+            DetectCategory(fv);
         }
         _lqDbService.InsertTable(newTable);
         return true;    
@@ -285,7 +386,7 @@ public class CSVService : ICSVService
         }
         foreach (FieldValues fv in newTable.Columns)
         {
-            _autoChartService.DetectCategory(fv);
+            DetectCategory(fv);
         }
         _lqDbService.InsertTable(newTable);
         return true;  
