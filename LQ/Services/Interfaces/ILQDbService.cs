@@ -9,6 +9,7 @@ public interface ILQDbService
     public Analyst? GetAnalyst(string name);
     public Analyst? GetAnalyst(int id);
     public void InsertTable(Table table);
+    public Task InsertTableAsync(Table table);
     public Table? GetTable(CSVFile csvFile);
     public Table? GetTable(int analystid, string filename);
     public Table? GetTable(int csvfileid);
@@ -23,5 +24,6 @@ public interface ILQDbService
     public void InsertField(Field field);
     public void InsertValue(Value value);
     public void InsertValues(List<Value> values);
+    public Task InsertValuesAsync(List<Value> values);
     public bool SearchFileByAnalyst(Analyst analyst,  string fileName);
 }

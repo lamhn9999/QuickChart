@@ -60,7 +60,7 @@ public class HomeController : Controller
 
     [HttpPost]
     [IgnoreAntiforgeryToken]
-    public IActionResult Upload(IFormFile file)
+    public async Task<IActionResult> Upload(IFormFile file)
     {
         string? json = HttpContext.Session.GetString("AnalystDTO");
         if (json is null) return NotFound();
@@ -68,7 +68,7 @@ public class HomeController : Controller
         if (analystdto is null) return NotFound();
         Analyst? analyst = _analystService.GetAnalyst(analystdto.ID);
         if (analyst is null) return NotFound();
-        return _csvService.ProcessUploadedCSV(analyst, file) 
+        return await _csvService.ProcessUploadedCSV(analyst, file) 
             ? Json(new { received = $"{file.FileName}" })
             : Json(new { badcsv = $"{file.FileName}"});
     }

@@ -1,0 +1,1 @@
+﻿delete from "CSVFile" where "CSVFile"."ID" = 24

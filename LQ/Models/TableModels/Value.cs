@@ -14,7 +14,7 @@ public class Value
 
     public int RowIndex { get; set; }
     public bool Existance { get; set; } = true;
-    public int FieldID { get; private set; }
+    public int FieldID { get; set; }
     public required Field Field { get; set; }
 
     private object? CastValue(string? value)
@@ -25,7 +25,10 @@ public class Value
         if (Field.Type == typeof(double)) return double.Parse(value);
         if (Field.Type == typeof(string)) return value;
         if (Field.Type == typeof(bool)) return bool.Parse(value);
-        if (Field.Type == typeof(DateTime)) return DateTime.Parse(value, CultureInfo.InvariantCulture);
+        if (Field.Type == typeof(DateTime)) 
+            return DateTime.Parse(value, CultureInfo.InvariantCulture).ToUniversalTime().Year;
+        if (Field.Type == typeof(List<string>))
+            return ValueStringFormatted is null ? null : ValueStringFormatted.Split(',').ToList();
         return null;
     }
 }

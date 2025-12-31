@@ -1,3 +1,4 @@
+using EFCore.BulkExtensions;
 using LQ.Data.Database;
 using LQ.Models.AnalystModels;
 using LQ.Models.TableModels;
@@ -38,10 +39,31 @@ public class LQDbService : ILQDbService
             InsertValues(fieldvalues.Values);
         }
     }
+
+    public async Task InsertTableAsync(Table table)
+    {
+        InsertCSVFile(table.CSVFile);
+        foreach (FieldValues fieldvalues in table.Columns)
+        {
+            InsertField(fieldvalues.Field);
+        }
+        await _lqdbContext.SaveChangesAsync();
+        List<Field> addedFields = (from F in _lqdbContext.Fields where F.CSVFile == table.CSVFile orderby F.Index select F).ToList();
+        for (int i = 0; i < addedFields.Count; i++)
+        {
+            foreach (Value V in table.Columns[i].Values)
+            {
+                V.FieldID = addedFields[i].ID;
+            }
+
+            await InsertValuesAsync(table.Columns[i].Values);
+        }
+    }
+    
     public Table? GetTable(CSVFile csvFile)
     {
         Table returnTable = new Table(csvFile);
-        List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile select f).ToList();
+        List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
         foreach (Field f in fields)
         {
             List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).ToList();
@@ -142,6 +164,18 @@ public class LQDbService : ILQDbService
         _lqdbContext.Values.AddRange(values);
         _lqdbContext.SaveChanges();
     }
+    public async Task InsertValuesAsync(List<Value> values)
+    {
+        if (values.Count == 0) return;
+
+        await _lqdbContext.BulkInsertAsync(values, new BulkConfig
+        {
+            BatchSize = 10_000,
+            PreserveInsertOrder = true,
+            SetOutputIdentity = true
+        });
+    }
+
 
     public bool SearchFileByAnalyst(Analyst analyst, string fileName)
     {
