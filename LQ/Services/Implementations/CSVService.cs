@@ -96,7 +96,7 @@ public class CSVService : ICSVService
         fieldValues.Field.Categories = result;
     }
 
-    private bool DetectDateTime(FieldValues fieldvalues)
+    public bool DetectDateTime(FieldValues fieldvalues)
     {
         // string[] testformats = { "dd/MM/yyyy"};
         string[] formats = {"M/d/yyyy", "MM/dd/yyyy",                                    
@@ -125,6 +125,13 @@ public class CSVService : ICSVService
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
                     out DateTime dateRes);
+                if (dateTimeFormat == "MM/dd/yyyy" && fieldvalues.Field.Name == "Date" && !DateTime.TryParseExact(value.ValueString.Trim(), dateTimeFormat,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime dateRes2))
+                {
+                    Debug.WriteLine(value.ValueString.Trim());
+                }
             }
 
             if (trueFormat)
@@ -356,7 +363,7 @@ public class CSVService : ICSVService
         return newTable;
     }
 
-    public bool ProcessUploadedCSV(Analyst analyst, string path)
+    public async Task<bool> ProcessUploadedCSV(Analyst analyst, string path)
     {
         if (!Validate(analyst, path)) 
             return false;
@@ -370,11 +377,12 @@ public class CSVService : ICSVService
         {
             DetectCategory(fv);
         }
-        _lqDbService.InsertTable(newTable);
+        
+        await _lqDbService.InsertTableAsync(newTable);
         return true;    
     }
 
-    public bool ProcessUploadedCSV(Analyst analyst, IFormFile file)
+    public async Task<bool> ProcessUploadedCSV(Analyst analyst, IFormFile file)
     {
         if (!Validate(analyst, file)) 
             return false;
@@ -388,7 +396,8 @@ public class CSVService : ICSVService
         {
             DetectCategory(fv);
         }
-        _lqDbService.InsertTable(newTable);
+
+        await _lqDbService.InsertTableAsync(newTable);
         return true;  
     }
 

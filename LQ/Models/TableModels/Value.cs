@@ -14,7 +14,7 @@ public class Value
 
     public int RowIndex { get; set; }
     public bool Existance { get; set; } = true;
-    public int FieldID { get; private set; }
+    public int FieldID { get; set; }
     public required Field Field { get; set; }
 
     private object? CastValue(string? value)

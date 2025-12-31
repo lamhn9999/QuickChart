@@ -10,11 +10,18 @@
     --color-red-500: oklch(63.7% 0.237 25.331);
     --color-red-600: oklch(57.7% 0.245 27.325);
     --color-gray-500: oklch(55.1% 0.027 264.364);
+    --color-zinc-800: oklch(27.4% 0.006 286.033);
+    --color-zinc-900: oklch(21% 0.006 285.885);
+    --color-zinc-950: oklch(14.1% 0.005 285.823);
     --color-black: #000;
     --color-white: #fff;
     --spacing: 0.25rem;
     --text-lg: 1.125rem;
     --text-lg--line-height: calc(1.75 / 1.125);
+    --text-xl: 1.25rem;
+    --text-xl--line-height: calc(1.75 / 1.25);
+    --text-2xl: 1.5rem;
+    --text-2xl--line-height: calc(2 / 1.5);
     --text-3xl: 1.875rem;
     --text-3xl--line-height: calc(2.25 / 1.875);
     --text-4xl: 2.25rem;
@@ -194,6 +201,9 @@
   .flex {
     display: flex;
   }
+  .grid {
+    display: grid;
+  }
   .hidden {
     display: none;
   }
@@ -215,8 +225,20 @@
   .w-1 {
     width: calc(var(--spacing) * 1);
   }
+  .w-1\/5 {
+    width: calc(1/5 * 100%);
+  }
   .w-full {
     width: 100%;
+  }
+  .max-w-1\/5 {
+    max-width: calc(1/5 * 100%);
+  }
+  .max-w-full {
+    max-width: 100%;
+  }
+  .min-w-0 {
+    min-width: calc(var(--spacing) * 0);
   }
   .flex-1 {
     flex: 1;
@@ -247,6 +269,9 @@
   .overflow-auto {
     overflow: auto;
   }
+  .overflow-hidden {
+    overflow: hidden;
+  }
   .rounded-full {
     border-radius: calc(infinity * 1px);
   }
@@ -268,14 +293,20 @@
   .border-red-600 {
     border-color: var(--color-red-600);
   }
-  .bg-black {
-    background-color: var(--color-black);
-  }
   .bg-gray-500 {
     background-color: var(--color-gray-500);
   }
   .bg-white {
     background-color: var(--color-white);
+  }
+  .bg-zinc-800 {
+    background-color: var(--color-zinc-800);
+  }
+  .bg-zinc-900 {
+    background-color: var(--color-zinc-900);
+  }
+  .bg-zinc-950 {
+    background-color: var(--color-zinc-950);
   }
   .p-5 {
     padding: calc(var(--spacing) * 5);
@@ -288,6 +319,10 @@
   }
   .align-middle {
     vertical-align: middle;
+  }
+  .text-2xl {
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
   }
   .text-3xl {
     font-size: var(--text-3xl);
@@ -304,6 +339,10 @@
   .text-lg {
     font-size: var(--text-lg);
     line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+  .text-xl {
+    font-size: var(--text-xl);
+    line-height: var(--tw-leading, var(--text-xl--line-height));
   }
   .font-bold {
     --tw-font-weight: var(--font-weight-bold);
@@ -331,6 +370,13 @@
   .placeholder\:text-black {
     &::placeholder {
       color: var(--color-black);
+    }
+  }
+  .hover\:cursor-pointer {
+    &:hover {
+      @media (hover: hover) {
+        cursor: pointer;
+      }
     }
   }
   .sm\:w-full {
@@ -372,11 +418,19 @@
 :root {
   font-size: medium;
 }
+.logo {
+  display: block;
+  font-weight: bolder;
+}
+.logo::after {
+  content: "明";
+}
 table {
   table-layout: fixed;
   width: 100%;
 }
 thead {
+  position: sticky;
   border: 3px solid green;
   background-color: black;
 }
@@ -467,12 +521,14 @@ td, th {
   border-top-color: transparent;
   border-right-color: transparent;
   width: 1rem;
-  margin-right: 1rem;
+  margin-right: 0.5rem;
 }
 .listelement:hover {
   background-color: darksalmon;
   color: black;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .listelement:active {
   background-color: darksalmon;

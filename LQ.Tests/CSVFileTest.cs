@@ -14,6 +14,7 @@ namespace LQ.Tests;
 [TestClass]
 public sealed class CSVFileTest
 {
+    private ILQDbService? _lqDbService;
     private ICSVService? _csvService;
     private IAnalystService? _analystService;
     private IAutoChartService? _autoChartService;
@@ -31,6 +32,7 @@ public sealed class CSVFileTest
         services.AddScoped<ICSVService, CSVService>();
         services.AddScoped<IAutoChartService, AutoChartService>();
         var provider = services.BuildServiceProvider();
+        _lqDbService = provider.GetService<ILQDbService>();
         _analystService = provider.GetService<IAnalystService>();
         _csvService = provider.GetService<ICSVService>();
         _autoChartService = provider.GetService<IAutoChartService>();
@@ -43,12 +45,14 @@ public sealed class CSVFileTest
         Assert.IsNotNull(_csvService);
     }
 
-    // [TestMethod]
-    // public void ProcessUploadedCSV_ReturnFalse()
-    // {
-    //     Analyst tester = _analystService.GetAnalyst("Tester");
-    //     Assert.IsFalse(_csvService.ProcessUploadedCSV(tester, "/home/lam/LQ/LQ/Data/SampleCSVs/hello1.csv"));
-    // }
+    [TestMethod]
+    public void DetectDateTime()
+    {
+        Analyst Hung = _analystService.GetAnalyst("N D Hung");
+        Table earthquake = _csvService.GetTable(Hung.ID, "Earthquake.csv");
+        _csvService.DetectDateTime(earthquake.Columns[0]);
+
+    }
 
     // [TestMethod]
     // public void ProcessUploadedCSV_ReturnTrue()

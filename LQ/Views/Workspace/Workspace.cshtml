@@ -8,13 +8,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="~/style_tw.css"/>
     <script src="/node_modules/chart.js/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0"></script>
     <script defer>
         let chartInstances = [];
         const listIndexes = new Set();
-        const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar'];
-        // pie, vertical bar, line, histogram, scatter, polarArea, horizontal bar
+        const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix'];
+        // pie, vertical bar, line, histogram, scatter, polarArea, horizontal bar, mixed, matrix
         let controller;
-        
+
+        function buildHeatmapData(xLabels, ySeries) {
+            return ySeries.flatMap(row =>
+                row.data.map((value, colIndex) => ({
+                    x: xLabels[colIndex],
+                    y: row.label,
+                    v: value? value : 0,
+                }))
+            );
+        }
+
+        function buildMatrixDataset(sample) {
+            const heatmapData = buildHeatmapData(sample.x, sample.y);
+
+            const values = heatmapData.map(d => d.v);
+            // const minVal = Math.min(...values);
+            const minVal = 0;
+            const maxVal = Math.max(...values);
+
+            const xCount = new Set(heatmapData.map(d => d.x)).size;
+            const yCount = new Set(heatmapData.map(d => d.y)).size;
+
+            return [{
+                type: 'matrix',
+                label: sample.title ?? 'Heatmap',
+                data: heatmapData,
+                borderColor: '#fff',
+                borderWidth: 1,
+
+                backgroundColor(ctx) {
+                    const v = ctx.raw.v;
+                    const t = (v - minVal) / (maxVal - minVal || 1);
+                    return `rgba(0,123,255,${t})`;
+                },
+
+                width({ chart }) {
+                    const a = chart.chartArea;
+                    return a ? (a.right - a.left) / xCount - 2 : 0;
+                },
+
+                height({ chart }) {
+                    const a = chart.chartArea;
+                    return a ? (a.bottom - a.top) / yCount - 2 : 0;
+                }
+            }];
+        }
+
         async function autoChart()
         {
             if(listIndexes.size === 0)
@@ -47,25 +94,87 @@
                 result.forEach(sample => {
                     const ctx = document.createElement("canvas");
                     panel.appendChild(ctx);
+
+                    const isMatrix = chartArray[sample.chartType] === 'matrix';
+
+                    const datasets = isMatrix
+                        ? buildMatrixDataset(sample)
+                        : [
+                            ...sample.y.map(ds => ({
+                                type: chartArray[sample.chartType],
+                                label: ds.label,
+                                data: ds.data,
+                                yAxisID: 'y',
+                            }))
+                        ];
+
+                    if (!isMatrix && sample.z?.length > 0) {
+                        datasets.push(
+                            ...sample.z.map(ds => ({
+                                type: chartArray[sample.chartType],
+                                label: ds.label,
+                                data: ds.data,
+                                yAxisID: 'z',
+                            }))
+                        );
+                    }
+
                     const cfg = {
                         type: chartArray[sample.chartType],
                         data: {
-                            labels: sample.x,
-                            datasets: sample.y.map(ds => ({
-                                label: ds.label,
-                                data: ds.data
-                            }))
+                            datasets,
+                            ...(isMatrix ? {} : { labels: sample.x })
                         },
                         options: {
                             responsive: true,
+                            scales: isMatrix
+                                ? {
+                                    x: {
+                                        type: 'category',
+                                        labels: sample.x,
+                                        offset: true
+                                    },
+                                    y: {
+                                        type: 'category',
+                                        labels: sample.y.map(r => r.label),
+                                        offset: true
+                                    }
+                                }
+                                : {
+                                    y: { position: 'left' }
+                                },
                         }
                     };
-                    if(sample.chartType === 6) {
-                        cfg.options['indexAxis'] = 'y';
+
+                    if (isMatrix) {
+                        cfg.options.plugins = cfg.options.plugins || {};
+                        cfg.options.plugins.tooltip = cfg.options.plugins.tooltip || {};
+                        cfg.options.plugins.tooltip.callbacks =
+                            cfg.options.plugins.tooltip.callbacks || {};
+
+                        cfg.options.plugins.tooltip.callbacks.title = (items) => {
+                            const d = items[0].raw;
+                            return `${d.y} / ${d.x}`;
+                        };
+
+                        cfg.options.plugins.tooltip.callbacks.label = (ctx) => {
+                            const d = ctx.raw;
+                            return `Value: ${d.v}`;
+                        };
                     }
+
+                    if (!isMatrix && sample.z?.length > 0) {
+                        cfg.options.scales.z = { position: 'right' };
+                    }
+
+                    if (sample.chartType === 6) {
+                        cfg.options.indexAxis = 'y';
+                    }
+
                     const chartInstance = new Chart(ctx, cfg);
                     chartInstances.push(chartInstance);
                 });
+
 
                 if(chartInstances.length === 0)
                 {
@@ -80,7 +189,7 @@
         }
     </script>
 </head>
-<body class="bg-black text-white">
+<body class="bg-zinc-950 text-white">
 <div class="flex flex-col h-screen max-h-screen">
     <header class="flex shrink-0">
         <p class = "text-4xl font-bold italic text-" style="color:darksalmon">@Model.CSVFile.Name</p>

@@ -11,10 +11,13 @@ public enum ChartType
     Scatter,
     PolarArea,
     SideBar,
+    Mixed,
+    Matrix,
 }
 
 public class LabelData
 {
+    public ChartType? ChartType { get; set; }
     public string Label { get; set; } = "";
     public List<object> Data { get; set; } = new();
 }

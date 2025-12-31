@@ -6,7 +6,7 @@
     &lt;TestId&gt;VsTest::D686DE24-F940-43EE-AE4B-8C78E2A2D97E::net9.0::executor://mstestadapter/v4#LQ.Tests.CSVFileTest&lt;/TestId&gt;
   &lt;/TestAncestor&gt;
 &lt;/SessionState&gt;</s:String>
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=2d88ec62_002D7204_002D46a8_002Da025_002Db46fc9a54375/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="NumericTest" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=2d88ec62_002D7204_002D46a8_002Da025_002Db46fc9a54375/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="NumericTest" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
     &lt;TestId&gt;VsTest::D686DE24-F940-43EE-AE4B-8C78E2A2D97E::net9.0::executor://mstestadapter/v4#LQ.Tests.AutoChartTest.NumericTest&lt;/TestId&gt;
     &lt;TestId&gt;VsTest::D686DE24-F940-43EE-AE4B-8C78E2A2D97E::net9.0::executor://mstestadapter/v4#LQ.Tests.CSVFileTest&lt;/TestId&gt;
@@ -29,7 +29,7 @@
     &lt;TestId&gt;VsTest::D686DE24-F940-43EE-AE4B-8C78E2A2D97E::net9.0::executor://mstestadapter/v4#LQ.Tests.CSVFileTest.ProcessUploadedCSV_ReturnTrue&lt;/TestId&gt;
   &lt;/TestAncestor&gt;
 &lt;/SessionState&gt;</s:String>
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=a58da0f2_002De044_002D4ac7_002D9459_002D1b102be9a1de/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="ProcessUploadedCSV_ReturnTrue" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=a58da0f2_002De044_002D4ac7_002D9459_002D1b102be9a1de/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="ProcessUploadedCSV_ReturnTrue" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
     &lt;TestId&gt;VsTest::D686DE24-F940-43EE-AE4B-8C78E2A2D97E::net9.0::executor://mstestadapter/v4#LQ.Tests.CSVFileTest.ProcessUploadedCSV_ReturnTrue&lt;/TestId&gt;
     &lt;TestId&gt;VsTest::D686DE24-F940-43EE-AE4B-8C78E2A2D97E::net9.0::executor://mstestadapter/v4#LQ.Tests.AutoChartTest.DetectChartTest&lt;/TestId&gt;

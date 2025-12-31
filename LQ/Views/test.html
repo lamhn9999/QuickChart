@@ -1,13 +1,97 @@
 <!DOCTYPE html>
-<html lang = "en_US">
+<html lang="en">
 <head>
-    <meta charset = "UTF-8">
-    <title>LQ UI Test</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="/home/lam/LQ/LQ/wwwroot/node_modules/chart.js/dist/chart.umd.min.js"></script>
-    <link href="/home/lam/LQ/LQ/wwwroot/output.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <title>Heatmap with Chartjs Matrix Plugin</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 24px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f5f5f5;
+        }
+        canvas {
+            width: 800px;
+            height: 400px;
+        }
+    </style>
 </head>
 <body>
+
+<canvas id="incomeHeatmap"></canvas>
+
+<script>
+    const heatmapData = [
+        { x: "Married", y: "Car", v: 1800 },
+        { x: "Married", y: "House", v: 2100 },
+        { x: "Separated", y: "Car", v: 1400 },
+        { x: "Separated", y: "House", v: 1600 },
+        { x: "Alone", y: "Car", v: 1100 },
+        { x: "Alone", y: "House", v: 1300 }
+    ];
+
+    const allValues = heatmapData.map(d => d.v);
+    const minVal = Math.min(...allValues);
+    const maxVal = Math.max(...allValues);
+
+    new Chart(document.getElementById("incomeHeatmap"), {
+        type: "matrix",
+        data: {
+            datasets: [{
+                label: "Mean Income",
+                data: heatmapData,
+                borderColor: "#fff",
+                borderWidth: 1,
+                backgroundColor(ctx) {
+                    const val = ctx.dataset.data[ctx.dataIndex].v;
+                    const t = (val - minVal) / (maxVal - minVal);
+                    return `rgba(0, 123, 255, ${t})`;
+                },
+                width({chart}) {
+                    const area = chart.chartArea;
+                    return area ? (area.right - area.left) / 3 - 2 : 0;
+                },
+                height({chart}) {
+                    const area = chart.chartArea;
+                    return area ? (area.bottom - area.top) / 2 - 2 : 0;
+                }
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: "Mean Income Heatmap by Family Status & Asset"
+                },
+                tooltip: {
+                    callbacks: {
+                        label(ctx) {
+                            const d = ctx.raw;
+                            return `${d.y} / ${d.x}: ${d.v}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: "category",
+                    labels: ["Married", "Separated", "Alone"],
+                    grid: { display: false },
+                    offset: true
+                },
+                y: {
+                    type: "category",
+                    labels: ["Car", "House"],
+                    grid: { display: false },
+                    offset: true
+                }
+            }
+        }
+    });
+</script>
 
 </body>
 </html>

@@ -2,12 +2,22 @@
 :root {
     font-size: medium;
 }
+
+/*--- LOGO ---*/
+.logo {
+    display: block;
+    font-weight: bolder;
+}
+.logo::after {
+    content: "明";
+}
 /*--- TABLE ---*/
 table {
     table-layout: fixed;
     width: 100%;
 }
 thead {
+    @apply sticky;
     border: 3px solid green;
     background-color: black;
 }
@@ -106,19 +116,21 @@ td, th {
     border-top-color: transparent;
     border-right-color: transparent;
     width: 1rem;
-    margin-right: 1rem;
+    margin-right: 0.5rem;
 }
 .listelement:hover {
     background-color: darksalmon;
     color: black;
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .listelement:active {
     background-color: darksalmon;
     color: black;
 }
 
-/*--- Glossy ---*/
+/*--- GLOSSY ---*/
 .glossy {
     font-weight: bold;
     color: transparent;
