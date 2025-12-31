@@ -876,7 +876,7 @@ public class AutoChartService : IAutoChartService
         // X
         foreach (FieldValues categoricalFv in categorical)
         {
-            if (CountDistinctValues(categoricalFv.Values))
+            if (CountDistinctValues(categoricalFv) <= 20)
                 res.Add(DetectPieChart(new List<FieldValues> { categoricalFv }));
             else res.Add(DetectSideBar(new List<FieldValues> { categoricalFv }));
         }
