@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="LQDb@localhost" uuid="1a97089a-a327-4788-be3c-13c43fa3b402">
+    <data-source source="LOCAL" name="LQDb@localhost" uuid="915db640-28c6-4986-8855-c61f4e61ba1f">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
       <configured-by-url>true</configured-by-url>
       <jdbc-driver>org.postgresql.Driver</jdbc-driver>
-      <jdbc-url>jdbc:postgresql://localhost:5432/LQDb?password=123456789&amp;user=lam</jdbc-url>
+      <jdbc-url>jdbc:postgresql://localhost:5432/LQDb?password=1234&amp;user=postgres</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>

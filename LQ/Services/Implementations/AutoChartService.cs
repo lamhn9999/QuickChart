@@ -871,6 +871,17 @@ public class AutoChartService : IAutoChartService
                 }
             }
             // X Categorical, Y Numeric
+            foreach (List<FieldValues> lfv in numeric)
+                foreach (FieldValues numericfv in lfv)
+                    if (numericfv != categoricalFv)
+                    {
+                        if (CountDistinctValues(categoricalFv) <= 20)
+                        {
+                            res.Add(DetectBarChart(new List<FieldValues>() {categoricalFv, numericfv}));
+                            res.Add(DetectLineChart(new List<FieldValues>() {categoricalFv, numericfv}));
+                        }
+                        else res.Add(DetectSideBar(new List<FieldValues>() {categoricalFv, numericfv}));
+                    }
         }
 
         // X
@@ -880,6 +891,12 @@ public class AutoChartService : IAutoChartService
                 res.Add(DetectPieChart(new List<FieldValues> { categoricalFv }));
             else res.Add(DetectSideBar(new List<FieldValues> { categoricalFv }));
         }
+        // X identifier
+        foreach (FieldValues identifierFv in identifier)
+        {
+            res.Add(DetectSideBar(new List<FieldValues> { identifierFv }));
+        }
+        
         List<Chart> noNullRes = new List<Chart>();
         foreach (Chart? chart in res) 
         {
