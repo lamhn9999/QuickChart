@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="~/style_tw.css"/>
     <script src="/node_modules/chart.js/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0"></script>
-    <script defer>
+    <script>
         let chartInstances = [];
         const listIndexes = new Set();
         const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix'];
@@ -96,12 +96,15 @@
                     panel.appendChild(ctx);
 
                     const isMatrix = chartArray[sample.chartType] === 'matrix';
+                    const isMixed = chartArray[sample.chartType] === 'mixed';
 
                     const datasets = isMatrix
                         ? buildMatrixDataset(sample)
                         : [
                             ...sample.y.map(ds => ({
-                                type: chartArray[sample.chartType],
+                                ...(isMixed && {
+                                    type: chartArray[ds.chartType]
+                                }),
                                 label: ds.label,
                                 data: ds.data,
                                 yAxisID: 'y',
@@ -111,7 +114,9 @@
                     if (!isMatrix && sample.z?.length > 0) {
                         datasets.push(
                             ...sample.z.map(ds => ({
-                                type: chartArray[sample.chartType],
+                                ...(isMixed && {
+                                    type: chartArray[ds.chartType]
+                                }),
                                 label: ds.label,
                                 data: ds.data,
                                 yAxisID: 'z',
@@ -120,10 +125,12 @@
                     }
 
                     const cfg = {
-                        type: chartArray[sample.chartType],
+                        ...(!isMixed && {
+                            type: chartArray[sample.chartType]
+                        }),
                         data: {
+                            ...(isMatrix ? {} : { labels: sample.x }),
                             datasets,
-                            ...(isMatrix ? {} : { labels: sample.x })
                         },
                         options: {
                             responsive: true,
@@ -136,7 +143,7 @@
                                     },
                                     y: {
                                         type: 'category',
-                                        // labels: sample.y.map(r => r.label),
+                                        labels: sample.y.map(r => r.label),
                                         offset: true
                                     }
                                 }
@@ -145,6 +152,7 @@
                                 },
                         }
                     };
+                    console.log(cfg);
 
                     if (isMatrix) {
                         cfg.options.plugins = cfg.options.plugins || {};

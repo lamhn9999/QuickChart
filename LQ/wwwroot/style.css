@@ -76,11 +76,9 @@ td, th {
 /*--- SIGN BUTTON ---*/
 .signinbutton, .signoutbutton{
     background: none;
-    border: none;
+    border: 1px dashed darksalmon;
     cursor: pointer;
-    display: inline-block;
     color: darksalmon;
-    text-shadow: -4px 4px 1px goldenrod, 4px -4px 1px green;
     animation: shuffle 0.5s infinite linear;
 }
 .signinbutton:hover, .signoutbutton:hover {
@@ -88,12 +86,8 @@ td, th {
 }
 .signinbutton:active, .signoutbutton:active {
     animation: none;
-    text-shadow: 5px -5px 10px goldenrod, -5px 5px 10px green;
 }
 @keyframes shuffle {
-     0% { text-shadow: -4px 4px 1px goldenrod, 4px -4px 1px green; }
-     50% { text-shadow: -4px 4px 1px green, 4px -4px 1px goldenrod; }
-     100% { text-shadow: -4px 4px 1px goldenrod, 4px -4px 1px green; }
  }
 
 /*--- FILE LIST ---*/

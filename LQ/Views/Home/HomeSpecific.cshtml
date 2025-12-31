@@ -52,6 +52,10 @@
                     ? document.createElement("thead")
                     : document.createElement("tr");
 
+                if (i === 0) {
+                    tr.classList.add("sticky", "top-0", "z-10", "bg-white");
+                }
+
                 row.forEach(cell => {
                     const el = document.createElement(i === 0 ? "th" : "td");
                     el.textContent = cell;
@@ -77,61 +81,151 @@
         }
     </script>
 </head>
-<body class="bg-zinc-800 text-white p-5">
-<div class="flex flex-col h-screen">
-<header class="glossy text-5xl mb-5 text-center">
-    <p>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</p>
-</header>
-<div class="flex sm:flex-col md:flex-row flex-1">
-    <div class="md:w-1/2 sm:w-full">
-        <div class="text-4xl">
-            <p class="font-bold">At your convenience, please select the CSV you would like to proceed with.</p>
-            <div class="mb-5">
+<body class="bg-zinc-800 text-white">
+<div class="flex h-screen">
+    <div class="flex flex-col h-screen w-1/7 max-w-1/7 min-w-0 bg-zinc-900 p-5">
+        <div class="flex text-4xl glossy">
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+        </div>
+        <div class="listelement text-xl font-bold" id="doc">
+            <button>Documentation</button>
+        </div>
+        <div class="mb-5 max-w-full min-w-0 overflow-hidden">
+            <p class="text-xl font-bold">Sample files</p>
+            <div class="text-xl min-w-0">
                 @{
                     int id = 0;
                     foreach (string file in Model)
                     {
-                        <div class="listelement ml-10" id="listelement@id" onclick="select('@file');">
+                        <div class="listelement min-w-0" id="listelement@id" onclick="select('@file');">
                             <div class="listline"></div>
-                            <div class="listfile">@file</div>
+                            <div class="listfile overflow-hidden text-ellipsis">@file</div>
                         </div>
                         id++;
                     }
                 }
             </div>
-            <div class="flex">
-                <p class="font-bold">You could upload a CSV. Gently click the round orange button
-                    <span>
-                        <button class="addbutton" style = "color: darksalmon; border-color: darksalmon;" onclick="document.getElementById('fileInput').click()"></button>
-                        <form method = "post" 
-                              enctype="multipart/form-data"
-                              id="uploadForm">
-                            <input type="file"
-                                   name="file"
-                                   accept=".csv"
-                                   id="fileInput"
-                                   style="display:none;"
-                                   onchange="upload()"></form>
-                    </span>
-                </p>
-            </div>
-            <p class="font-bold">Has the job been finalized?</p>
-            <button class="signoutbutton font-extrabold" id = "signoutbutton">HAPPY NEW YEAR</button>
+        </div>
+        
+        <div class="text-2xl flex flex-col mb-5">
+            <button class="signinbutton font-extrabold" id="signinbutton1">SIGN IN</button>
+            <input class="text-black bg-white placeholder:text-black font-extrabold" type="text" autocomplete="off" id="nameinput1"/>
+        </div>
+        
+        <div class="text-2xl">
+            <p class="font-bold">Upload here
+                <span>
+                    <button class="addbutton" style = "color: darksalmon; border-color: darksalmon;" onclick="document.getElementById('fileInput').click()"></button>
+                    <form method = "post" 
+                          enctype="multipart/form-data"
+                          id="uploadForm">
+                        <input type="file"
+                               name="file"
+                               accept=".csv"
+                               id="fileInput"
+                               style="display:none;"
+                               onchange="upload()"></form>
+                </span>
+            </p>
+        </div>
+        
+        <div class = "flex flex-col text-2xl">
+            <p>Sign out?</p>
+            <button class="signoutbutton font-extrabold" id="signoutbutton">HAPPY NEW YEAR</button>
+        </div>
+        
+        <div class="flex flex-1"></div>
+        <div class="flex text-4xl glossy">
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
         </div>
     </div>
-    <div class="flex flex-col flex-1 text-4xl md:w-1/2 sm:w-full max-h-200">
-        <div class="flex font-bold justify-between">
-            <p class="italic">Preview</p>
-            <button class="signinbutton font-extrabold" id="workspaceButton" style="display: none">Enter Workspace /></button>
-        </div>
-        <div class="overflow-auto border-solid border-gray-500 border-2 flex-1 content-center align-middle">
-            <table class="text-lg" id="dataTable" hidden></table>
-            <div id="noPreview" class="text-center">
-                <p class="text-gray-500 font-bold">No preview available</p>
+    <div class="flex flex-1 flex-col h-screen p-5 min-w-0">
+        <header class=" text-4xl mb-5 text-center font-extrabold">
+            <p>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</p>
+        </header>
+        <div class="flex flex-col flex-1 text-4xl min-h-0">
+            <div class="flex font-bold justify-between">
+                <p class="italic">Preview</p>
+                <button class="signinbutton font-extrabold" id="workspaceButton" style="display: none">Enter Workspace /></button>
+            </div>
+            <div class="min-w-0 min-h-0 overflow-auto border-solid border-gray-500 border-2 flex-1 content-center align-middle">
+                <table class="text-lg border-separate border-spacing-0 bg-zinc-950" id="dataTable" hidden></table>
+                <div id="noPreview" class="text-center">
+                    <p class="text-gray-500 font-bold">No preview available</p>
+                </div>
             </div>
         </div>
     </div>
-</div>
+    <div class="flex flex-col h-screen w-1/7 max-w-1/7 min-w-0 bg-zinc-900 p-5">
+        <div class="flex text-4xl glossy">
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+        </div>
+        <div class="flex flex-1 flex-col justify-center text-center text-4xl font-extrabold
+            bg-clip-text text-transparent
+            bg-linear-to-r from-amber-300 to-red-300">
+            <p class="mb-5 text-shadow-lg">*</p>
+            <p class="mb-5 text-shadow-lg">CUNG</p>
+            <p class="mb-5 text-shadow-lg">CHÚC</p>
+            <p class="mb-5 text-shadow-lg">TÂN</p>
+            <p class="mb-5 text-shadow-lg">XUÂN</p>
+            <p class="mb-5 text-shadow-lg">*</p>
+        </div>
+        <div class="flex text-4xl glossy">
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+            <button class="logo hover:cursor-pointer"></button>
+            
+        </div>
+    </div>
 </div>
 </body>
 </html>

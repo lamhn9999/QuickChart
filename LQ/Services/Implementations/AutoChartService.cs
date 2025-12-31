@@ -154,7 +154,7 @@ public class AutoChartService : IAutoChartService
                         }
                     }
                 }
-                var data = avg.Select(kv => new { Key = kv.Key, Val = (kv.Value.cnt == 0 ? 0 : kv.Value.sum / (1.0 * kv.Value.cnt)) })
+                var data = avg.Select(kv => new { Key = kv.Key, Val = (kv.Value.cnt == 0 ? 0.0 : kv.Value.sum / (1.0 * kv.Value.cnt)) })
                     .OrderBy(x => x.Key)
                     .ToList();
                 LabelData labelData = new LabelData();
@@ -305,7 +305,7 @@ public class AutoChartService : IAutoChartService
                         }
                     }
 
-                    var data = avg.Select(kv => new { Key = kv.Key, Val = (kv.Value.cnt == 0 ? 0 : kv.Value.sum / (1.0 * kv.Value.cnt)) })
+                    var data = avg.Select(kv => new { Key = kv.Key, Val = (kv.Value.cnt == 0 ? 0.0 : kv.Value.sum / (1.0 * kv.Value.cnt)) })
                         .OrderBy(x => x.Key)
                         .ToList();
                     LabelData labelData = new LabelData();
@@ -699,7 +699,7 @@ public class AutoChartService : IAutoChartService
         Chart Matrix = new Chart();
         Matrix.ChartType = ChartType.Matrix;
         
-        Dictionary<(object x, object y), int> dict2C = new();
+        Dictionary<(object x, object y), double> dict2C = new();
         // Setup, Count
         for (int i = 0; i < table[0].Values.Count; i++)
         {
@@ -710,24 +710,21 @@ public class AutoChartService : IAutoChartService
                 foreach (string? f in (List<string?>)table[0].Values[i].ValueCasted)
                 {
                     if (f == null) continue;
-                    if (table[1].Field.Categories.Contains(Category.Categorical))
+                    if (table[1].Field.Type == typeof(List<string>))
                     {
-                        if (table[1].Field.Type == typeof(List<string>))
+                        foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
                         {
-                            foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
-                            {
-                                if (f1 is null) continue;
-                                if (!dict2C.TryGetValue((f, f1), out var cnt)) dict2C[(f, f1)] = 1;
-                                else dict2C[(f, f1)]++;
-                            }
-                        }
-                        else
-                        {
-                            var f1 = table[1].Values[i].ValueCasted;
                             if (f1 is null) continue;
                             if (!dict2C.TryGetValue((f, f1), out var cnt)) dict2C[(f, f1)] = 1;
                             else dict2C[(f, f1)]++;
                         }
+                    }
+                    else
+                    {
+                        var f1 = table[1].Values[i].ValueCasted;
+                        if (f1 is null) continue;
+                        if (!dict2C.TryGetValue((f, f1), out var cnt)) dict2C[(f, f1)] = 1;
+                        else dict2C[(f, f1)]++;
                     }
                 }
             }
@@ -828,63 +825,100 @@ public class AutoChartService : IAutoChartService
         }
 
         // X, Y, Z
-        foreach (FieldValues categoricalFv in categorical)
+        foreach (var num in numeric)
+        {
+            foreach (var fv in num)
+            {
+                System.Console.Write($"{fv.Field.Name},");
+            }
+
+            System.Console.WriteLine();
+        }
+        
+        for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
         {
             // X Categorical, Y Categorical, Z Categorical
             // X Categorical, Y Categorical, Z Numeric
-            foreach (FieldValues categoricalSubFv in categorical)
+            for(int categoricalSubIndex = categoricalIndex + 1; categoricalSubIndex < categorical.Count; categoricalSubIndex++)
             {
-                if (categoricalSubFv != categoricalFv)
+                foreach (List<FieldValues> sameNumerics in numeric)
                 {
-                    foreach (List<FieldValues> lfv in numeric)
+                    foreach (FieldValues numericFv in sameNumerics)
                     {
-                        foreach (FieldValues numericfv in lfv)
+                        if (numericFv != categorical[categoricalIndex] && numericFv != categorical[categoricalSubIndex])
                         {
-                            if (numericfv != categoricalFv && numericfv != categoricalSubFv)
-                            {
-                                res.Add(DetectLineChart(new List<FieldValues>{categoricalFv, categoricalSubFv, numericfv}));
-                            }
-                        }
+                            if(categorical[categoricalIndex].Field.Type != typeof(DateTime))
+                                res.Add(DetectMatrix(new List<FieldValues>
+                                    {
+                                        categorical[categoricalIndex],
+                                        categorical[categoricalSubIndex],
+                                        numericFv,
+                                    }));
+                        }   
                     }
                 }
             }
             // X Categorical, Y Numeric, Z Numeric
-            
         }
         // X, Y
-        foreach (FieldValues categoricalFv in categorical)
+        for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
         {
             // X Categorical, Y Categorical
-            foreach (FieldValues categoricalSubFv in categorical)
+            for(int categoricalSubIndex = categoricalIndex + 1; categoricalSubIndex < categorical.Count; categoricalSubIndex++)
             {
-                if (categoricalSubFv != categoricalFv && categoricalSubFv.Field.Type != typeof(DateTime))
+                if (categorical[categoricalIndex].Field.Type == typeof(DateTime))
                 {
-                    if (categoricalFv.Field.Type == typeof(DateTime))
-                    {
-                        res.Add(DetectLineChart(new List<FieldValues>{categoricalFv, categoricalSubFv}));
-                    }
-                    else
-                    {
-                        res.Add(DetectBarChart(new List<FieldValues>{categoricalFv, categoricalSubFv}));
-                        res.Add(DetectMatrix(new List<FieldValues>{categoricalFv, categoricalSubFv}));
-                    }
+                    if (categorical[categoricalSubIndex].Field.Type != typeof(DateTime))
+                        res.Add(DetectLineChart(new List<FieldValues>
+                        {
+                            categorical[categoricalIndex],
+                            categorical[categoricalSubIndex]
+                        }));
+                }
+                else
+                {
+                    if (categorical[categoricalSubIndex].Field.Type == typeof(DateTime))
+                        res.Add(DetectLineChart(new List<FieldValues>
+                        {
+                            categorical[categoricalSubIndex],
+                            categorical[categoricalIndex]
+                        }));
+                    else 
+                        res.Add(DetectMatrix(new List<FieldValues>
+                        {
+                            categorical[categoricalIndex],
+                            categorical[categoricalSubIndex]
+                        }));
                 }
             }
             // X Categorical, Y Numeric
             foreach (List<FieldValues> lfv in numeric)
-                foreach (FieldValues numericfv in lfv)
-                    if (numericfv != categoricalFv)
+            {
+                foreach (FieldValues numericfv in lfv) 
+                {
+                    if (numericfv != categorical[categoricalIndex])
                     {
-                        if (CountDistinctValues(categoricalFv) <= 20)
+                        if (categorical[categoricalIndex].Field.Type == typeof(DateTime) || categorical[categoricalIndex].Field.Categories.Contains(Category.Numeric))
                         {
-                            res.Add(DetectBarChart(new List<FieldValues>() {categoricalFv, numericfv}));
-                            res.Add(DetectLineChart(new List<FieldValues>() {categoricalFv, numericfv}));
+                            res.Add(DetectLineChart(new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                numericfv
+                            }));
                         }
-                        else res.Add(DetectSideBar(new List<FieldValues>() {categoricalFv, numericfv}));
+                        else
+                        {
+                            res.Add(CountDistinctValues(categorical[categoricalIndex]) <= 20
+                                ? DetectBarChart(new List<FieldValues>{categorical[categoricalIndex], numericfv})
+                                : DetectSideBar(new List<FieldValues>{categorical[categoricalIndex], numericfv})
+                            );
+                        }
                     }
+                }
+            }
         }
 
-        // X
+        // X categorical
         foreach (FieldValues categoricalFv in categorical)
         {
             if (CountDistinctValues(categoricalFv) <= 20)
@@ -895,6 +929,11 @@ public class AutoChartService : IAutoChartService
         foreach (FieldValues identifierFv in identifier)
         {
             res.Add(DetectSideBar(new List<FieldValues> { identifierFv }));
+        }
+        // X numeric
+        foreach (List<FieldValues> lfv in numeric)
+        {
+            foreach (FieldValues numericfv in lfv) res.Add(DetectHistogram(new List<FieldValues> {numericfv}));
         }
         
         List<Chart> noNullRes = new List<Chart>();
