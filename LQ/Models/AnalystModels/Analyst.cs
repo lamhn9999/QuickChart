@@ -1,4 +1,5 @@
 using LQ.Models.TableModels;
+using Microsoft.AspNetCore.Identity;
 
 namespace LQ.Models.AnalystModels;
 

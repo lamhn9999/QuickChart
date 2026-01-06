@@ -13,6 +13,7 @@ public enum ChartType
     SideBar,
     Mixed,
     Matrix,
+    MixedBar,
 }
 
 public class LabelData

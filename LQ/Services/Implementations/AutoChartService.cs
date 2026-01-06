@@ -551,7 +551,7 @@ public class AutoChartService : IAutoChartService
         }
         return null;
     }
-
+    
     private (double med, double IQR) GetScaleInfo(List<Value> values)
     {
         List<double> valueList =  new List<double>();
@@ -784,6 +784,64 @@ public class AutoChartService : IAutoChartService
         return Matrix;
     }
 
+    private Chart? DetectMixedBarChart(List<FieldValues> table)
+    {
+        Chart mixedBarChart = new Chart();
+        mixedBarChart.ChartType = ChartType.MixedBar;
+        Dictionary<object, (double sum, int cnt)> avg = new Dictionary<object, (double sum, int cnt)>();
+        Dictionary<object, HashSet<object>> cntIdentifier = new Dictionary<object, HashSet<object>>();
+        for (int i = 0; i < table[0].Values.Count; i++)
+        {
+            var val = table[1].Values[i].ValueCasted;
+            var val2 = table[2].Values[i].ValueCasted;
+            if (val == null || val2 == null) continue;
+            if (table[0].Values[i].ValueCasted == null) continue;
+            if (table[0].Field.Type == typeof(List<String>))
+            {
+                foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
+                {
+                    if (f == null) continue; 
+                    avg[f] = avg.TryGetValue(f, out var n) ? (n.sum + Convert.ToDouble(val), n.cnt + 1) : (Convert.ToDouble(val), 1);
+                    if (!cntIdentifier.TryGetValue(f, out var resId)) 
+                        cntIdentifier[f] = resId = new HashSet<object>();
+                    resId.Add(val2);
+                }
+            }
+            else
+            {
+                var key = table[0].Values[i].ValueCasted;
+                if (key == null) continue;
+                if (avg.TryGetValue(key, out var sc)) avg[key] = (sc.sum + Convert.ToDouble(val), sc.cnt + 1);
+                else avg[key] = (Convert.ToDouble(val), 1);
+                if (!cntIdentifier.TryGetValue(key, out var resId)) 
+                    cntIdentifier[key] = resId = new HashSet<object>();
+                resId.Add(val2);
+            }
+        }
+            
+        var data = avg
+            .Where(kv => kv.Value.cnt > 0)
+            .Select(kv => new { 
+                Key = kv.Key, 
+                Val = kv.Value.sum / (1.0 * kv.Value.cnt), 
+                distinctIdentifier = cntIdentifier.TryGetValue(kv.Key, out var res) ? res.Count : 0})
+            .OrderByDescending(x => x.Val)
+            .Take(20)
+            .ToList();
+        mixedBarChart.X = data.Select(kv =>  kv.Key).ToList();
+        LabelData labelDataY = new LabelData();
+        labelDataY.Label = $"Mean of \"{table[1].Field.Name}\" by \"{table[0].Field.Name}\"";
+        labelDataY.Data = data.Select(kv => kv.Val).Cast<object>().ToList();
+        labelDataY.ChartType = ChartType.Bar;
+        mixedBarChart.Y.Add(labelDataY);
+        LabelData labelDataZ = new LabelData();
+        labelDataZ.Label = $"Count of \"{table[2].Field.Name}\" by \"{table[0].Field.Name}\"";
+        labelDataZ.Data = data.Select(kv => kv.distinctIdentifier).Cast<object>().ToList();
+        labelDataZ.ChartType = ChartType.Bar;
+        mixedBarChart.Z.Add(labelDataZ);
+        return mixedBarChart;
+    }
+
     public List<Chart> DetectChart2(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
     {
         Table tempTable = _lqDbService.GetTable(csvfileid, fieldindexes);
@@ -852,7 +910,9 @@ public class AutoChartService : IAutoChartService
                         if (numericFv != categorical[categoricalIndex] && numericFv != categorical[categoricalSubIndex])
                         {
                             if (categorical[categoricalIndex].Field.Type != typeof(DateTime) && 
-                                categorical[categoricalSubIndex].Field.Type != typeof(DateTime))
+                                categorical[categoricalSubIndex].Field.Type != typeof(DateTime) &&
+                                CountDistinctValues(categorical[categoricalIndex]) <= 20 &&
+                                CountDistinctValues(categorical[categoricalSubIndex]) <= 20)
                                 res.Add(DetectMatrix(new List<FieldValues>
                                 {
                                     categorical[categoricalIndex],
@@ -870,7 +930,21 @@ public class AutoChartService : IAutoChartService
                     }
                 }
             }
-            // X Categorical, Y Numeric, Z Numeric
+            // X Categorical, Y Numeric, Z Identifier
+            foreach (FieldValues numericFv in numericList)
+            {
+                if (categorical[categoricalIndex] == numericFv) continue;
+                    foreach (FieldValues identifierFv in identifier)
+                    {
+                        if (identifierFv == numericFv || identifierFv == categorical[categoricalIndex]) continue;
+                        res.Add(DetectMixedBarChart(new List<FieldValues>
+                        {
+                            categorical[categoricalIndex],
+                            numericFv,
+                            identifierFv
+                        }));
+                    }
+            }
         }
         // X, Y
         for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
@@ -895,12 +969,22 @@ public class AutoChartService : IAutoChartService
                             categorical[categoricalSubIndex],
                             categorical[categoricalIndex]
                         }));
-                    else 
-                        res.Add(DetectMatrix(new List<FieldValues>
-                        {
-                            categorical[categoricalIndex],
-                            categorical[categoricalSubIndex]
-                        }));
+                    else
+                    {
+                        if (CountDistinctValues(categorical[categoricalIndex]) <= 20 &&
+                            CountDistinctValues(categorical[categoricalSubIndex]) <= 20)
+                            res.Add(DetectMatrix(new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                categorical[categoricalSubIndex]
+                            }));
+                        // else
+                        //     res.Add(DetectSideBar(new List<FieldValues>
+                        //     {
+                        //         categorical[categoricalIndex],
+                        //         categorical[categoricalSubIndex]
+                        //     }));
+                    }
                 }
             }
             // X Categorical, Y Numeric

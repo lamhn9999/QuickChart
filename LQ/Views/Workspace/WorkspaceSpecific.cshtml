@@ -3,7 +3,6 @@
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
-    @* HÌNH NHƯ CÓ BUG Ở ĐÂY, REQUEST KHÔNG ĐẾN SERVER  *@
     <title>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,8 +12,8 @@
     <script>
         let chartInstances = [];
         const listIndexes = new Set();
-        const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix'];
-        // pie, vertical bar, line, histogram, scatter, polarArea, horizontal bar, mixed, matrix
+        const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixed'];
+        // pie, vertical bar, line, histogram, scatter, polarArea, horizontal bar, mixed, matrix, mixedBar
         let controller;
 
         function buildHeatmapData(xLabels, ySeries) {
@@ -97,13 +96,14 @@
                     panel.appendChild(ctx);
 
                     const isMatrix = chartArray[sample.chartType] === 'matrix';
-                    const isMixed = chartArray[sample.chartType] === 'mixed';
+                    const isMixed = sample.chartType === 7;
+                    const isMixed_notStacked = sample.chartType === 9;
 
                     const datasets = isMatrix
                         ? buildMatrixDataset(sample)
                         : [
                             ...sample.y.map(ds => ({
-                                ...(isMixed && {
+                                ...((isMixed || isMixed_notStacked) && {
                                     type: chartArray[ds.chartType]
                                 }),
                                 label: ds.label,
@@ -115,7 +115,7 @@
                     if (!isMatrix && sample.z?.length > 0) {
                         datasets.push(
                             ...sample.z.map(ds => ({
-                                ...(isMixed && {
+                                ...((isMixed || isMixed_notStacked) && {
                                     type: chartArray[ds.chartType]
                                 }),
                                 label: ds.label,
@@ -126,7 +126,7 @@
                     }
 
                     const cfg = {
-                        ...(!isMixed && {
+                        ...(!(isMixed || isMixed_notStacked) && {
                             type: chartArray[sample.chartType]
                         }),
                         data: {

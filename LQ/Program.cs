@@ -4,6 +4,7 @@ using LQ.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
 // AddControllers
 builder.Services.AddControllers();
 builder.Services.AddControllersWithViews();
@@ -18,11 +19,18 @@ builder.Services.AddScoped<IAutoChartService, AutoChartService>();
 // AddSession
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession();
+// Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 app.MapControllers();
 app.UseStaticFiles();
 app.UseSession();
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
 app.Run("http://0.0.0.0:5000");
 
 // using (var scope = app.Services.CreateScope())
