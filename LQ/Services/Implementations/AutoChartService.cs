@@ -539,13 +539,15 @@ public class AutoChartService : IAutoChartService
             }
             
             var data = avg.Select(kv => new { Key = kv.Key, Val = kv.Value.sum / (1.0 * kv.Value.cnt) })
-                .OrderBy(x => x.Key)
+                .OrderByDescending(x => x.Val)
+                .Take(20)
                 .ToList();
+            sideBarChart.X = data.Select(kv =>  kv.Key).ToList();
             LabelData labelData = new LabelData();
             labelData.Label = $"Mean of \"{table[1].Field.Name}\" by \"{table[0].Field.Name}\"";
             labelData.Data = data.Select(kv => kv.Val).Cast<object>().ToList();
             sideBarChart.Y.Add(labelData);
-            
+            return sideBarChart;
         }
         return null;
     }
@@ -791,6 +793,7 @@ public class AutoChartService : IAutoChartService
         List<FieldValues> identifier = new List<FieldValues>();
         List<FieldValues> categorical = new List<FieldValues>();
         List<List<FieldValues>> numeric = new List<List<FieldValues>>();
+        List<FieldValues> numericList = new List<FieldValues>();
         List<(double med, double IQR)> scaleInfo = new List<(double med, double IQR)>(); 
         foreach (FieldValues fv in tempTable.Columns)
         {
@@ -800,6 +803,7 @@ public class AutoChartService : IAutoChartService
                 categorical.Add(fv);
             if (fv.Field.Categories.Contains(Category.Numeric))
             {
+                numericList.Add(fv);
                 (double med, double IQR) fvInfo = GetScaleInfo(fv.Values);
                 bool found = false;
                 for (int i = 0; i < numeric.Count; i++)
@@ -847,13 +851,21 @@ public class AutoChartService : IAutoChartService
                     {
                         if (numericFv != categorical[categoricalIndex] && numericFv != categorical[categoricalSubIndex])
                         {
-                            if(categorical[categoricalIndex].Field.Type != typeof(DateTime))
+                            if (categorical[categoricalIndex].Field.Type != typeof(DateTime) && 
+                                categorical[categoricalSubIndex].Field.Type != typeof(DateTime))
                                 res.Add(DetectMatrix(new List<FieldValues>
-                                    {
-                                        categorical[categoricalIndex],
-                                        categorical[categoricalSubIndex],
-                                        numericFv,
-                                    }));
+                                {
+                                    categorical[categoricalIndex],
+                                    categorical[categoricalSubIndex],
+                                    numericFv,
+                                }));
+                            else
+                                res.Add(DetectLineChart(new List<FieldValues>
+                                {
+                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime) ? categorical[categoricalIndex] : categorical[categoricalSubIndex]),
+                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime) ? categorical[categoricalSubIndex] : categorical[categoricalIndex]),
+                                    numericFv,
+                                }));
                         }   
                     }
                 }
@@ -916,6 +928,27 @@ public class AutoChartService : IAutoChartService
                     }
                 }
             }
+        }
+        // X numeric, Y numeric
+            for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
+            {
+                for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
+                {
+                    res.Add(DetectScatter(new List<FieldValues>
+                    {
+                        numericList[numericIndex],
+                        numericList[numericSubIndex]
+                    }));
+                }
+            }
+        // X identifier, Y numeric
+        foreach (FieldValues identifierFv in identifier)
+        foreach (FieldValues numericFv in numericList) if (identifierFv != numericFv) {
+            res.Add(DetectSideBar(new List<FieldValues>()
+            {
+                identifierFv,
+                numericFv
+            }));
         }
 
         // X categorical

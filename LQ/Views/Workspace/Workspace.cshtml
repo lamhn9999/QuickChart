@@ -147,9 +147,14 @@
                                         offset: true
                                     }
                                 }
-                                : {
-                                    y: { position: 'left' }
-                                },
+                                : isMixed 
+                                    ? {
+                                        y: { position: 'left', stacked: true }
+                                    }
+                                    : {
+                                        y: { position: 'left' }
+                                    }
+                                ,
                         }
                     };
                     console.log(cfg);

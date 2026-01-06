@@ -148,9 +148,15 @@
                                         offset: true
                                     }
                                 }
-                                : {
-                                    y: { position: 'left' }
-                                },
+                                : isMixed
+                                    ? {
+                                        x: { stacked: true },
+                                        y: { position: 'left', stacked: true }
+                                    }
+                                    : {
+                                        y: { position: 'left' }
+                                    }
+                                ,
                         }
                     };
                     console.log(cfg);
