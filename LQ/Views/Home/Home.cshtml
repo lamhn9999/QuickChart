@@ -21,13 +21,17 @@
         }
         async function signIn()
         {
-            const yourname = document.getElementById("nameinput1").value;
+            const yourname = document.getElementById("nameinput").value;
+            const yourpw = document.getElementById("pwinput").value;
             const response = await fetch("@Url.Action("SignIn", "Auth")", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded"
                 },
-                body: `aname=${encodeURIComponent(yourname)}`
+                body: new URLSearchParams({
+                    aname: yourname,
+                    apassword: yourpw,
+                }),
             });
             console.log(response);
             const result = await response.json();
@@ -114,7 +118,8 @@
         </div>
         <div class="text-2xl flex flex-col mb-5">
             <button class="signinbutton font-extrabold" id="signinbutton1">SIGN IN</button>
-            <input class="text-black bg-white placeholder:text-black font-extrabold" type="text" autocomplete="off" id="nameinput1"/>
+            <input class="text-black bg-white placeholder:text-black font-extrabold" type="text" id="nameinput"/>
+            <input class="text-black bg-white placeholder:text-black font-extrabold" type="password" id="pwinput"/>
         </div>
         <div class="flex flex-1"></div>
         <div class="flex text-4xl glossy">

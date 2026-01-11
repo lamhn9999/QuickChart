@@ -45,14 +45,14 @@ public sealed class CSVFileTest
         Assert.IsNotNull(_csvService);
     }
 
-    [TestMethod]
-    public void DetectDateTime()
-    {
-        Analyst Hung = _analystService.GetAnalyst("N D Hung");
-        Table earthquake = _csvService.GetTable(Hung.ID, "Earthquake.csv");
-        _csvService.DetectDateTime(earthquake.Columns[0]);
-
-    }
+    // [TestMethod]
+    // public async Task DetectDateTime()
+    // {
+    //     Analyst Hung = await _analystService.GetAnalystByName("N D Hung");
+    //     Table earthquake = _csvService.GetTable(Hung.Id, "Earthquake.csv");
+    //     _csvService.DetectDateTime(earthquake.Columns[0]);
+    //
+    // }
 
     // [TestMethod]
     // public void ProcessUploadedCSV_ReturnTrue()

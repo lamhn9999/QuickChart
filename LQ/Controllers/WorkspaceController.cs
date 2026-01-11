@@ -51,6 +51,6 @@ public class WorkspaceController : Controller
         if (json is null) return NotFound();
         TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
         if (tabledto is null) return NotFound();
-        return Json(_autoChartService.DetectChart2(tabledto.CSVFileID, fieldindexes));
+        return Json(_autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes));
     }
 }

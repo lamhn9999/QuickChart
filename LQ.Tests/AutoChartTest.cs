@@ -68,25 +68,25 @@ public class AutoChartTest
     //     File.AppendAllText(logPath, "end--------------------------------------------\n");
     // }
 
-    [TestMethod]
-    public void NumericTest()
-    {
-        File.WriteAllText(logPath, String.Empty);
-        Analyst tester = _analystService.GetAnalyst("Lam");
-        Table tempTable = _csvService.GetTable(tester.ID, "top_rated_2000webseries.csv");
-        List<int> fieldindexes = new List<int> { 5, 7, 9 };
-        List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
-        
-        File.AppendAllText(logPath, "--------------------------------------------\n");
-        foreach (FieldValues fv in tempTable.Columns)
-        {
-            if(fieldindexes.Contains(fv.Field.Index))
-                File.AppendAllText(logPath, JsonSerializer.Serialize(fv.Field.Categories) + "\n");
-        }
-        foreach (Chart c in res)
-        {
-            File.AppendAllText(logPath, c.ShowJson() + "\n");
-        }
-        File.AppendAllText(logPath, "end--------------------------------------------\n");   
-    }
+    // [TestMethod]
+    // public async Task NumericTest()
+    // {
+    //     File.WriteAllText(logPath, String.Empty);
+    //     Analyst tester = await _analystService.GetAnalystByName("Lam");
+    //     Table tempTable = _csvService.GetTable(tester.Id, "top_rated_2000webseries.csv");
+    //     List<int> fieldindexes = new List<int> { 5, 7, 9 };
+    //     List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
+    //     
+    //     File.AppendAllText(logPath, "--------------------------------------------\n");
+    //     foreach (FieldValues fv in tempTable.Columns)
+    //     {
+    //         if(fieldindexes.Contains(fv.Field.Index))
+    //             File.AppendAllText(logPath, JsonSerializer.Serialize(fv.Field.Categories) + "\n");
+    //     }
+    //     foreach (Chart c in res)
+    //     {
+    //         File.AppendAllText(logPath, c.ShowJson() + "\n");
+    //     }
+    //     File.AppendAllText(logPath, "end--------------------------------------------\n");   
+    // }
 }

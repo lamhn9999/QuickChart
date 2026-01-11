@@ -66,7 +66,7 @@ public class HomeController : Controller
         if (json is null) return NotFound();
         AnalystDTO? analystdto = JsonSerializer.Deserialize<AnalystDTO>(json);
         if (analystdto is null) return NotFound();
-        Analyst? analyst = _analystService.GetAnalyst(analystdto.ID);
+        Analyst? analyst = await _analystService.FindAnalystById(analystdto.ID);
         if (analyst is null) return NotFound();
         return await _csvService.ProcessUploadedCSV(analyst, file) 
             ? Json(new { received = $"{file.FileName}" })

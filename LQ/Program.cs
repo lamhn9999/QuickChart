@@ -1,7 +1,10 @@
 using LQ.Data.Database;
+using LQ.Models.AnalystModels;
 using LQ.Services.Implementations;
 using LQ.Services.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,10 +14,17 @@ builder.Services.AddControllersWithViews();
 // AddDbContext
 builder.Services.AddDbContext<LQDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddIdentityCore<Analyst>()
+    .AddEntityFrameworkStores<LQDbContext>()
+    .AddSignInManager();
+// Authen, Author
+builder.Services.AddAuthorization();
+builder.Services.AddAuthentication();
 // DI
 builder.Services.AddScoped<ILQDbService, LQDbService>();
-builder.Services.AddScoped<ICSVService, CSVService>();
+builder.Services.AddScoped<ILQIdentityDbService, LQIdentityDbService>();
 builder.Services.AddScoped<IAnalystService, AnalystService>();
+builder.Services.AddScoped<ICSVService, CSVService>();
 builder.Services.AddScoped<IAutoChartService, AutoChartService>();
 // AddSession
 builder.Services.AddDistributedMemoryCache();

@@ -1,35 +1,27 @@
+using System.Diagnostics;
+using LQ.Data.Database;
 using LQ.Services.Interfaces;
 using LQ.Models.AnalystModels;
 using LQ.Models.TableModels;
+using Microsoft.AspNetCore.Identity;
 
 namespace LQ.Services.Implementations;
 
-public class AnalystService : IAnalystService
+public class AnalystService : LQIdentityDbService, IAnalystService
 {
-    private readonly ILQDbService _lqdbService;
+    private readonly ILQDbService _lqDbService;
 
-    public AnalystService(ILQDbService lqdbService)
+    public AnalystService(ILQDbService lqDbService, 
+        LQDbContext lqDbContext, 
+        UserManager<Analyst> analystManager, 
+        SignInManager<Analyst> analystSignInManager)
+        : base(lqDbContext, analystManager, analystSignInManager)
     {
-        _lqdbService = lqdbService;
+        _lqDbService = lqDbService;
     }
 
-    public Analyst? GetAnalyst(string name)
+    public List<CSVFile> GetCSVFiles(string analystid)
     {
-        return _lqdbService.GetAnalyst(name);
-    }
-
-    public Analyst? GetAnalyst(int id)
-    {
-        return _lqdbService.GetAnalyst(id);
-    }
-
-    public bool InsertAnalyst(Analyst analyst)
-    {
-        return _lqdbService.InsertAnalyst(analyst);
-    }
-
-    public List<CSVFile> GetCSVFiles(int analystid)
-    {
-        return _lqdbService.GetCSVFiles(analystid);
+        return _lqDbService.GetCSVFiles(analystid);
     }
 }

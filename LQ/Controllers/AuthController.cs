@@ -18,15 +18,25 @@ public class AuthController : Controller
 
     [HttpPost("in")]
     [IgnoreAntiforgeryToken]
-    public IActionResult SignIn(string aname)
+    public async Task<IActionResult> SignIn(string aname, string apassword)
     {
-        Analyst? analyst = _analystService.GetAnalyst(aname);
+        Console.WriteLine("---------------------------------------------------------");
+        Analyst? analyst = await _analystService.FindAnalystByName(aname);
+        Console.WriteLine(aname);
+        Console.WriteLine(apassword);
         if (analyst is null)
         {
             return Json(new { error = "We do not recognize you!" });
         }
-        HttpContext.Session.SetString("AnalystDTO", JsonSerializer.Serialize(new AnalystDTO{ID = analyst.ID, Name = analyst.Name}));
-        return Json(new { redirect = Url.Action("Show", "Home") });
+
+        var signInResult = await _analystService.CheckPasswordSignIn(analyst, apassword);
+        Console.WriteLine(analyst.ToString() + signInResult.Succeeded);
+        if (signInResult.Succeeded)
+        {
+            HttpContext.Session.SetString("AnalystDTO", JsonSerializer.Serialize(new AnalystDTO{ID = analyst.Id, Name = analyst.UserName}));
+            return Json(new { redirect = Url.Action("Show", "Home") });
+        }
+        return Json(new { error = "We do not recognize you!" });
     }
 
     [HttpPost("out")]
@@ -36,4 +46,5 @@ public class AuthController : Controller
         HttpContext.Session.Clear();
         return Json(new { redirect = Url.Action("Show", "Home") });
     }
+    
 }

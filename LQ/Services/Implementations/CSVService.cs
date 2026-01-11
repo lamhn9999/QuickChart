@@ -367,7 +367,7 @@ public class CSVService : ICSVService
     {
         if (!Validate(analyst, path)) 
             return false;
-        CSVFile newCSVFile = new CSVFile(analyst, Path.GetFileName(path));
+        CSVFile newCSVFile = new CSVFile(analyst.Id, Path.GetFileName(path));
         Table? newTable = Interpret(newCSVFile, new StreamReader(path));
         if (newTable is null)
         {
@@ -386,7 +386,7 @@ public class CSVService : ICSVService
     {
         if (!Validate(analyst, file)) 
             return false;
-        CSVFile newCSVFile = new CSVFile(analyst, file.FileName);
+        CSVFile newCSVFile = new CSVFile(analyst.Id, file.FileName);
         Table newTable = Interpret(newCSVFile, new StreamReader(file.OpenReadStream()));
         if (newTable is null)
         {
@@ -401,12 +401,12 @@ public class CSVService : ICSVService
         return true;  
     }
 
-    public Table? GetTable(int analystid, string filename)
+    public Table? GetTable(string analystid, string filename)
     {
         return _lqDbService.GetTable(analystid, filename);
     }
 
-    public Table? GetTable(int analystId, int csvFileId)
+    public Table? GetTable(string analystId, int csvFileId)
     {
         return _lqDbService.GetTable(analystId, csvFileId);
     }

@@ -9,27 +9,14 @@ namespace LQ.Services.Implementations;
 public class LQDbService : ILQDbService
 {
     private readonly LQDbContext _lqdbContext;
+    private readonly ILQIdentityDbService _lqIdentityDbService;
 
-    public LQDbService(LQDbContext lqdbContext)
+    public LQDbService(LQDbContext lqdbContext, ILQIdentityDbService lqIdentityDbService)
     {
         _lqdbContext = lqdbContext;
+        _lqIdentityDbService = lqIdentityDbService;
     }
     
-    public bool InsertAnalyst(Analyst analyst)
-    {
-        if (GetAnalyst(analyst.Name) is not null) return false;
-        _lqdbContext.Add(analyst);
-        _lqdbContext.SaveChanges();
-        return true;
-    }
-    public Analyst? GetAnalyst(string name)
-    {
-        return (from a in _lqdbContext.Analysts where a.Name == name select a).FirstOrDefault();
-    }
-    public Analyst? GetAnalyst(int id)
-    {
-        return (from a in _lqdbContext.Analysts where a.ID == id select a).FirstOrDefault();
-    }
     public void InsertTable(Table table)
     {
         InsertCSVFile(table.CSVFile);
@@ -73,7 +60,7 @@ public class LQDbService : ILQDbService
         return returnTable;
     }
 
-    public Table? GetTable(int analystid, string filename)
+    public Table? GetTable(string analystid, string filename)
     {
         CSVFile? csvfile = GetCSVFile(analystid, filename);
         return csvfile is null
@@ -86,10 +73,10 @@ public class LQDbService : ILQDbService
         return GetTable(GetCSVFile(csvfileid));
     }
 
-    public Table? GetTable(int analystid, int csvfileid)
+    public Table? GetTable(string analystid, int csvfileid)
     {
         CSVFile? csvFile = (from f in _lqdbContext.CSVFiles 
-            where f.ID == csvfileid && f.Analyst.ID == analystid 
+            where f.ID == csvfileid && f.AnalystID == analystid 
             select f).FirstOrDefault();
         return csvFile is null
             ? null
@@ -119,13 +106,13 @@ public class LQDbService : ILQDbService
     }
     public CSVFile? GetCSVFile(Analyst analyst, string filename)
     {
-        return GetCSVFile(analyst.ID, filename);
+        return GetCSVFile(analyst.Id, filename);
     }
 
-    public CSVFile? GetCSVFile(int analystid, string filename)
+    public CSVFile? GetCSVFile(string analystid, string filename)
     {
         return (from f in _lqdbContext.CSVFiles
-                where f.Analyst.ID == analystid && f.Name == filename 
+                where f.AnalystID == analystid && f.Name == filename 
                 select f)
             .FirstOrDefault();
     }
@@ -139,13 +126,13 @@ public class LQDbService : ILQDbService
 
     public List<CSVFile> GetCSVFiles(Analyst analyst)
     {
-        return GetCSVFiles(analyst.ID);
+        return GetCSVFiles(analyst.Id);
     }
 
-    public List<CSVFile> GetCSVFiles(int analystid)
+    public List<CSVFile> GetCSVFiles(string analystid)
     {
         return (from f in _lqdbContext.CSVFiles
-                where f.Analyst.ID == analystid
+                where f.AnalystID == analystid
                 select f)
             .ToList();
     }
@@ -180,6 +167,6 @@ public class LQDbService : ILQDbService
     public bool SearchFileByAnalyst(Analyst analyst, string fileName)
     {
         return (from a in _lqdbContext.CSVFiles 
-            where a.Analyst.ID == analyst.ID && a.Name == fileName select a).Any();
+            where a.AnalystID == analyst.Id && a.Name == fileName select a).Any();
     }
 }

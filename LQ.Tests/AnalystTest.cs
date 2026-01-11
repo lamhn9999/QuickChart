@@ -1,8 +1,10 @@
-﻿using LQ.Models.AnalystModels;
+﻿using System.Diagnostics;
+using LQ.Models.AnalystModels;
 using LQ.Services.Implementations;
 using Microsoft.Extensions.DependencyInjection;
 using LQ.Services.Interfaces;
 using LQ.Data.Database;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -21,10 +23,18 @@ public sealed class AnalystTest
             .Build();
         var services = new ServiceCollection();
         services.AddDbContext<LQDbContext>(options => options.UseNpgsql(config.GetConnectionString("DefaultConnection")));
+
+        services.AddAuthentication();
+        services.AddIdentityCore<Analyst>()
+            .AddEntityFrameworkStores<LQDbContext>()
+            .AddSignInManager();
+
         services.AddScoped<ILQDbService, LQDbService>();
+        services.AddScoped<ILQIdentityDbService, LQIdentityDbService>();
         services.AddScoped<IAnalystService, AnalystService>();
+        
         var provider = services.BuildServiceProvider();
-        _analystService = provider.GetService<IAnalystService>();
+        _analystService = provider.GetRequiredService<IAnalystService>();
     }
     
     [TestMethod]
@@ -37,6 +47,7 @@ public sealed class AnalystTest
     [DataRow("\n\n\n\r\t")]
     public void GiveBirth_ReturnNull(string value)
     {
+        Debug.WriteLine(value);
         Assert.IsNull(Analyst.GiveBirth(value));
     }
 
@@ -53,11 +64,24 @@ public sealed class AnalystTest
         Assert.IsNotNull(_analystService);
     }
     
-    // [TestMethod]
-    // [DataRow("Tester")]
-    // public void InsertAnalyst_ReturntTrue(string value)
-    // {
-    //     Analyst analyst = Analyst.GiveBirth(value);
-    //     Assert.IsTrue(_analystService.InsertAnalyst(analyst));
-    // }
+    [TestMethod]
+    [DataRow("Lam.H.N")]
+    public async Task InsertAnalyst_ReturntTrue(string value)
+    {
+        Analyst analyst = Analyst.GiveBirth(value);
+        analyst.Email = "hongoclamm@gmail.com";
+        IdentityResult res = await _analystService.AddAnalyst(analyst, "Lam@123");
+        Debug.WriteLine(res.ToString());
+        Assert.IsTrue(res.Succeeded);
+    }
+
+    [TestMethod]
+    [DataRow("Tung.T.H")]
+    public async Task FindAnalyst_ReturnNotNull(string value)
+    {
+        Analyst? analyst = await _analystService.FindAnalystByName(value);
+        Assert.IsNotNull(analyst);
+        if(analyst is not null) 
+            Debug.WriteLine(analyst.Id);
+    }
 }

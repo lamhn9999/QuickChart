@@ -17,26 +17,61 @@ namespace LQ.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.1")
+                .HasAnnotation("ProductVersion", "9.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("LQ.Models.AnalystModels.Analyst", b =>
                 {
-                    b.Property<int>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ID"));
-
-                    b.Property<string>("Name")
-                        .IsRequired()
+                    b.Property<string>("Id")
                         .HasColumnType("text");
 
-                    b.HasKey("ID");
+                    b.Property<int>("AccessFailedCount")
+                        .HasColumnType("integer");
 
-                    b.ToTable("Analyst", (string)null);
+                    b.Property<string>("ConcurrencyStamp")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("LockoutEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NormalizedEmail")
+                        .HasColumnType("text");
+
+                    b.Property<string>("NormalizedUserName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("PhoneNumberConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("TwoFactorEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("UserName")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Analyst", "analyst");
                 });
 
             modelBuilder.Entity("LQ.Models.TableModels.CSVFile", b =>
@@ -47,8 +82,9 @@ namespace LQ.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ID"));
 
-                    b.Property<int>("AnalystID")
-                        .HasColumnType("integer");
+                    b.Property<string>("AnalystID")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedTime")
                         .HasColumnType("timestamp with time zone");
@@ -64,7 +100,7 @@ namespace LQ.Migrations
 
                     b.HasIndex("AnalystID");
 
-                    b.ToTable("CSVFile", (string)null);
+                    b.ToTable("CSVFile", "app");
                 });
 
             modelBuilder.Entity("LQ.Models.TableModels.Field", b =>
@@ -95,7 +131,7 @@ namespace LQ.Migrations
 
                     b.HasIndex("CSVFileID");
 
-                    b.ToTable("Field", (string)null);
+                    b.ToTable("Field", "app");
                 });
 
             modelBuilder.Entity("LQ.Models.TableModels.Value", b =>
@@ -119,13 +155,13 @@ namespace LQ.Migrations
 
                     b.HasKey("FieldID", "RowIndex");
 
-                    b.ToTable("Value", (string)null);
+                    b.ToTable("Value", "app");
                 });
 
             modelBuilder.Entity("LQ.Models.TableModels.CSVFile", b =>
                 {
                     b.HasOne("LQ.Models.AnalystModels.Analyst", "Analyst")
-                        .WithMany()
+                        .WithMany("CSVFiles")
                         .HasForeignKey("AnalystID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -153,6 +189,11 @@ namespace LQ.Migrations
                         .IsRequired();
 
                     b.Navigation("Field");
+                });
+
+            modelBuilder.Entity("LQ.Models.AnalystModels.Analyst", b =>
+                {
+                    b.Navigation("CSVFiles");
                 });
 #pragma warning restore 612, 618
         }

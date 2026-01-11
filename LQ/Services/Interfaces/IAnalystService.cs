@@ -1,12 +1,10 @@
 using LQ.Models.AnalystModels;
 using LQ.Models.TableModels;
+using Microsoft.AspNetCore.Identity;
 
 namespace LQ.Services.Interfaces;
 
-public interface IAnalystService
+public interface IAnalystService : ILQIdentityDbService
 {
-    public Analyst? GetAnalyst(string name);
-    public Analyst? GetAnalyst(int id);
-    public bool InsertAnalyst(Analyst analyst);
-    public List<CSVFile> GetCSVFiles(int analystid);
+    public List<CSVFile> GetCSVFiles(string analystid);
 }

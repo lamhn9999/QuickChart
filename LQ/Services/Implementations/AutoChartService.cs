@@ -568,134 +568,6 @@ public class AutoChartService : IAutoChartService
                 iqr);
     }
 
-    public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
-    {
-        Table tempTable = _lqDbService.GetTable(csvfileid, fieldindexes);
-        int minimumRelationship = 0;
-        List<Chart?> res = new List<Chart>();
-        
-        List<FieldValues> identifier = new List<FieldValues>();
-        List<FieldValues> categorical = new List<FieldValues>();
-        List<List<FieldValues>> numeric = new List<List<FieldValues>>();
-        List<(double med, double IQR)> scaleInfo = new List<(double med, double IQR)>(); 
-        foreach (FieldValues fv in tempTable.Columns)
-        {
-            // === Cancellation ===
-            cancellationToken.ThrowIfCancellationRequested();
-            // ====================
-            if (fv.Field.Categories.Contains(Category.Identifier))
-                identifier.Add(fv);
-            if (fv.Field.Categories.Contains(Category.Categorical))
-                categorical.Add(fv);
-            if (fv.Field.Categories.Contains(Category.Numeric))
-            {
-                (double med, double IQR) fvInfo = GetScaleInfo(fv.Values);
-                bool found = false;
-                for (int i = 0; i < numeric.Count; i++)
-                {
-                    (double med, double IQR) curInfo = scaleInfo[i];
-                    if (Math.Abs(curInfo.med - fvInfo.med) / Math.Max(fvInfo.IQR, curInfo.IQR) <= 0.5 &&
-                        Math.Max(curInfo.IQR, fvInfo.IQR) / Math.Min(curInfo.IQR, fvInfo.IQR) <= 2)
-                    {
-                        found = true;
-                        numeric[i].Add(fv);
-                        List<Value> newList = new List<Value>();
-                        foreach (FieldValues fvi in numeric[i])
-                            foreach(Value val in fvi.Values) newList.Add(val);
-                        scaleInfo[i] = GetScaleInfo(newList);
-                    }
-                }
-                if (!found)
-                {
-                    numeric.Add(new List<FieldValues> {fv});
-                    scaleInfo.Add(fvInfo);
-                }
-            }
-        }
-        // var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        // while (dir != null && !dir.GetFiles("*.Tests.csproj").Any())
-        // {
-        //     dir = dir.Parent;
-        // }
-        // var logPath = Path.Combine(dir!.FullName, "test.log");
-        // for(int i = 0; i < numeric.Count; i++)
-        // {
-        //     File.AppendAllText(logPath, "start\n");
-        //     File.AppendAllText(logPath, $"{scaleInfo[i].med}, {scaleInfo[i].IQR}\n");
-        //     foreach (FieldValues fv in numeric[i])
-        //     {
-        //         File.AppendAllText(logPath, JsonSerializer.Serialize(new
-        //             {
-        //                 name = fv.Field.Name,
-        //                 categories = fv.Field.Categories,
-        //                 values = (from f in fv.Values select f.ValueCasted).ToList(),
-        //                 types = fv.Field.TypeName
-        //             }) + "\n"
-        //         );
-        //     }
-        //     File.AppendAllText(logPath, "end\n");
-        // }
-        foreach (FieldValues categoricalFV in categorical)
-        {
-            List<FieldValues> allNumeric = new List<FieldValues>();
-            allNumeric.Add(categoricalFV);
-            int maxLen = 0;
-            foreach (List<FieldValues> lfv in numeric)
-            {
-                List<FieldValues> sameNumeric = new List<FieldValues>();
-                sameNumeric.Add(categoricalFV);
-                foreach (FieldValues fv in lfv)
-                {
-                    if (fv != categoricalFV)
-                    {
-                        sameNumeric.Add(fv);
-                        allNumeric.Add(fv);
-                        // if(minimumRelationship == 2) 
-                        res.Add(DetectSideBar(new List<FieldValues> { categoricalFV, fv }));
-                    }
-                }
-                
-                if (sameNumeric.Count > Math.Max(1, minimumRelationship - 1) && categoricalFV.Field.Categories.Contains(Category.Numeric)) 
-                    res.Add(DetectLineChart(sameNumeric));
-                if (sameNumeric.Count > Math.Max(2, minimumRelationship - 1))
-                    res.Add(DetectBarChart(sameNumeric));
-                maxLen = Math.Max(maxLen, sameNumeric.Count - 1);
-                // File.AppendAllText(logPath, $"{cur.Count - 1}\n");
-            }
-            // File.AppendAllText(logPath, $"{ml}, {all.Count}\n");
-            if (minimumRelationship <= 1)
-            {
-                if (maxLen < allNumeric.Count - 1) res.Add(DetectBarChart(allNumeric));
-                if (maxLen < allNumeric.Count - 1) res.Add(DetectLineChart(allNumeric));
-                res.Add(DetectPieChart(new List<FieldValues> { categoricalFV }));
-                res.Add(DetectPolarAreaChart(new List<FieldValues> { categoricalFV }));
-                if(categoricalFV.Field.Categories.Contains(Category.Numeric)) 
-                    res.Add(DetectHistogram(new List<FieldValues> { categoricalFV }));
-                res.Add(DetectSideBar(new List<FieldValues> { categoricalFV }));
-            }
-        }
-
-        foreach (List<FieldValues> lfv in numeric)
-        {
-            foreach (FieldValues fv in lfv)
-            {
-                res.Add(DetectHistogram(new List<FieldValues> { fv }));
-                foreach (FieldValues ifv in identifier)
-                    if (ifv != fv) res.Add(DetectSideBar(new  List<FieldValues> { ifv, fv }));
-                    
-                foreach (List<FieldValues> lfvj in numeric)
-                    foreach (FieldValues fvj in lfvj) if (fvj != fv) 
-                        res.Add(DetectScatter(new  List<FieldValues> { fv, fvj }));
-            }
-        }
-        List<Chart> noNullRes = new List<Chart>();
-        foreach (Chart? chart in res) 
-        {
-            if (chart != null) noNullRes.Add(chart);
-        }
-        return noNullRes;
-    }
-
     private Chart DetectMatrix(List<FieldValues> table)
     {
         Chart Matrix = new Chart();
@@ -825,7 +697,18 @@ public class AutoChartService : IAutoChartService
                 Key = kv.Key, 
                 Val = kv.Value.sum / (1.0 * kv.Value.cnt), 
                 distinctIdentifier = cntIdentifier.TryGetValue(kv.Key, out var res) ? res.Count : 0})
-            .OrderByDescending(x => x.Val)
+            .ToList();
+
+        double meanVal = data.Select(kv => kv.Val).Average();
+        double sdVal = double.Sqrt(data.Select(kv => (kv.Val - meanVal) * (kv.Val - meanVal)).Average());
+        
+        double meanCnt = data.Select(kv => kv.distinctIdentifier).Average();
+        double sdCnt = double.Sqrt(data.Select(kv => (kv.distinctIdentifier - meanCnt) * (kv.distinctIdentifier - meanCnt)).Average());
+
+        data = data
+            .OrderByDescending(kv =>
+                (sdCnt == 0 ? 0 : (kv.distinctIdentifier - meanCnt) / sdCnt) +
+                (sdVal == 0 ? 0 : (kv.Val - meanVal) / sdVal))
             .Take(20)
             .ToList();
         mixedBarChart.X = data.Select(kv =>  kv.Key).ToList();
@@ -842,7 +725,7 @@ public class AutoChartService : IAutoChartService
         return mixedBarChart;
     }
 
-    public List<Chart> DetectChart2(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
+    public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
     {
         Table tempTable = _lqDbService.GetTable(csvfileid, fieldindexes);
         int minimumRelationship = 0;
@@ -867,7 +750,7 @@ public class AutoChartService : IAutoChartService
                 for (int i = 0; i < numeric.Count; i++)
                 {
                     (double med, double IQR) curInfo = scaleInfo[i];
-                    if (Math.Abs(curInfo.med - fvInfo.med) / Math.Max(fvInfo.IQR, curInfo.IQR) <= 0.5 &&
+                    if (Math.Abs(curInfo.med - fvInfo.med) / Math.Max(fvInfo.IQR, curInfo.IQR) <= 1 &&
                         Math.Max(curInfo.IQR, fvInfo.IQR) / Math.Min(curInfo.IQR, fvInfo.IQR) <= 2)
                     {
                         found = true;
@@ -978,12 +861,12 @@ public class AutoChartService : IAutoChartService
                                 categorical[categoricalIndex],
                                 categorical[categoricalSubIndex]
                             }));
-                        // else
-                        //     res.Add(DetectSideBar(new List<FieldValues>
-                        //     {
-                        //         categorical[categoricalIndex],
-                        //         categorical[categoricalSubIndex]
-                        //     }));
+                        else
+                            res.Add(DetectLineChart(new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                categorical[categoricalSubIndex]
+                            }));
                     }
                 }
             }
@@ -1011,6 +894,14 @@ public class AutoChartService : IAutoChartService
                         }
                     }
                 }
+            }
+            // X Categorical, Y list<Numeric>
+            foreach (List<FieldValues> lfv in numeric)
+            {
+                List<FieldValues> sameScale = new List<FieldValues>();
+                foreach (FieldValues nfv in lfv) if (nfv != categorical[categoricalIndex]) sameScale.Add(nfv);
+                sameScale.Insert(0, categorical[categoricalIndex]);
+                res.Add(DetectBarChart(sameScale));
             }
         }
         // X numeric, Y numeric

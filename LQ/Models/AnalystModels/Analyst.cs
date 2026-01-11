@@ -3,24 +3,26 @@ using Microsoft.AspNetCore.Identity;
 
 namespace LQ.Models.AnalystModels;
 
-public class Analyst
+public class Analyst : IdentityUser
 {
-    public int ID { get; private set; }
-    public string Name { get; private set; }
-
     public const int NameLowerBound = 1;
     public const int NameUpperBound = 100;
 
-    private ICollection<CSVFile> CSVFiles { get; } = new HashSet<CSVFile>();
+    public ICollection<CSVFile> CSVFiles { get; } = new HashSet<CSVFile>();
 
-    protected Analyst() { } // for EF-Core
+    private Analyst() { } // for EF-Core
 
-    private Analyst(string name)
+    public static Analyst? GiveBirth(string? name)
     {
-        Name = name;
+        if (!ValidateName(name))
+            return null;
+        return new Analyst
+        {
+            UserName = name.Trim()
+        };
     }
 
-    private static bool Validate(string? name)
+    private static bool ValidateName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return false;
@@ -30,13 +32,6 @@ public class Analyst
         if (name.Length is < NameLowerBound or > NameUpperBound)
             return false;
 
-        return name.All(c => char.IsLetterOrDigit(c) || c == '_' || c == ' ');
-    }
-
-    public static Analyst? GiveBirth(string? name)
-    {
-        return Validate(name)
-            ? new Analyst(name)
-            : null;
+        return name.All(c => char.IsLetterOrDigit(c) || c == '_' || c == '.');
     }
 }
