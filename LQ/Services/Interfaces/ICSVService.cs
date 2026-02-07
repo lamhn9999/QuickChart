@@ -11,4 +11,6 @@ public interface ICSVService
     public Table? GetTable(string analystId, string filename);
     public Table? GetTable(string analystId, int csvFileId);
     public bool DetectDateTime(FieldValues fieldValues);
+    public void RemoveCSVFile(string analystId, string fileName);
+    public void RenameCSVFile(string analystId, string fileName, string newFileName);
 }

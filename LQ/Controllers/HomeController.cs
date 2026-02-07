@@ -34,6 +34,37 @@ public class HomeController : Controller
             : View("HomeSpecific", sampleCsvs);
     }
 
+    [HttpDelete("remove")]
+    [IgnoreAntiforgeryToken]
+    public IActionResult Remove(string filename)
+    {
+        var json = HttpContext.Session.GetString("AnalystDTO");
+        var analystdto = json is null
+            ? null
+            : JsonSerializer.Deserialize<AnalystDTO>(json);
+        try
+        {
+            _csvService.RemoveCSVFile(analystdto.ID, filename);
+            return Json("OK");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return Json("NG");
+        }
+    }
+
+    // [HttpPut("renamefile")]
+    // [IgnoreAntiforgeryToken]
+    // public IActionResult RenameFile(string filename)
+    // {
+    //     var json = HttpContext.Session.GetString("AnalystDTO");
+    //     var analystdto = json is null
+    //         ? null
+    //         : JsonSerializer.Deserialize<AnalystDTO>(json);
+    //     
+    // }
+
     [HttpPost("table")]
     [IgnoreAntiforgeryToken]
     public IActionResult Select(string filename)

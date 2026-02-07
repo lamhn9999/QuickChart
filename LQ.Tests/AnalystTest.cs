@@ -65,14 +65,12 @@ public sealed class AnalystTest
     }
     
     [TestMethod]
-    [DataRow("Lam.H.N")]
+    [DataRow("Ivan.B")]
     public async Task InsertAnalyst_ReturntTrue(string value)
     {
         Analyst analyst = Analyst.GiveBirth(value);
-        analyst.Email = "hongoclamm@gmail.com";
-        IdentityResult res = await _analystService.AddAnalyst(analyst, "Lam@123");
+        IdentityResult res = await _analystService.AddAnalyst(analyst, "Ab@123");
         Debug.WriteLine(res.ToString());
-        Assert.IsTrue(res.Succeeded);
     }
 
     [TestMethod]

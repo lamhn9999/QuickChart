@@ -6,6 +6,7 @@ using LQ.Models.DTOs;
 using LQ.Models.TableModels;
 using LQ.Services.Implementations;
 using LQ.Services.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,15 +29,23 @@ public class AutoChartTest
             .Build();
         var services = new ServiceCollection();
         services.AddDbContext<LQDbContext>(options => options.UseNpgsql(config.GetConnectionString("DefaultConnection")));
+        
+        services.AddAuthentication();
+        services.AddIdentityCore<Analyst>()
+            .AddEntityFrameworkStores<LQDbContext>()
+            .AddSignInManager();
+        
         services.AddScoped<ILQDbService, LQDbService>();
+        services.AddScoped<ILQIdentityDbService, LQIdentityDbService>();
         services.AddScoped<IAnalystService, AnalystService>();
         services.AddScoped<ICSVService, CSVService>();
         services.AddScoped<IAutoChartService, AutoChartService>();
-        var provider = services.BuildServiceProvider();
-        _analystService = provider.GetService<IAnalystService>();
-        _csvService = provider.GetService<ICSVService>();
-        _autoChartService = provider.GetService<IAutoChartService>();
         
+        
+        var provider = services.BuildServiceProvider();
+        _analystService = provider.GetRequiredService<IAnalystService>();
+        _csvService = provider.GetRequiredService<ICSVService>();
+        _autoChartService = provider.GetRequiredService<IAutoChartService>();
         
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !dir.GetFiles("*.csproj").Any())
@@ -68,25 +77,25 @@ public class AutoChartTest
     //     File.AppendAllText(logPath, "end--------------------------------------------\n");
     // }
 
-    // [TestMethod]
-    // public async Task NumericTest()
-    // {
-    //     File.WriteAllText(logPath, String.Empty);
-    //     Analyst tester = await _analystService.GetAnalystByName("Lam");
-    //     Table tempTable = _csvService.GetTable(tester.Id, "top_rated_2000webseries.csv");
-    //     List<int> fieldindexes = new List<int> { 5, 7, 9 };
-    //     List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
-    //     
-    //     File.AppendAllText(logPath, "--------------------------------------------\n");
-    //     foreach (FieldValues fv in tempTable.Columns)
-    //     {
-    //         if(fieldindexes.Contains(fv.Field.Index))
-    //             File.AppendAllText(logPath, JsonSerializer.Serialize(fv.Field.Categories) + "\n");
-    //     }
-    //     foreach (Chart c in res)
-    //     {
-    //         File.AppendAllText(logPath, c.ShowJson() + "\n");
-    //     }
-    //     File.AppendAllText(logPath, "end--------------------------------------------\n");   
-    // }
+    [TestMethod]
+    public async Task NumericTest()
+    {
+        File.WriteAllText(logPath, String.Empty);
+        Analyst tester = await _analystService.FindAnalystByName("Lam.H.N");
+        Table tempTable = _csvService.GetTable(tester.Id, "top_rated_2000webseries.csv");
+        List<int> fieldindexes = new List<int> { 5, 6, 7 };
+        List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
+        
+        File.AppendAllText(logPath, "--------------------------------------------\n");
+        foreach (FieldValues fv in tempTable.Columns)
+        {
+            if(fieldindexes.Contains(fv.Field.Index))
+                File.AppendAllText(logPath, JsonSerializer.Serialize(fv.Field.Categories) + "\n");
+        }
+        foreach (Chart c in res)
+        {
+            File.AppendAllText(logPath, c.ShowJson() + "\n");
+        }
+        File.AppendAllText(logPath, "end--------------------------------------------\n");   
+    }
 }

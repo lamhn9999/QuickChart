@@ -31,13 +31,22 @@ public class AuthController : Controller
 
         var signInResult = await _analystService.CheckPasswordSignIn(analyst, apassword);
         Console.WriteLine(analyst.ToString() + signInResult.Succeeded);
-        if (signInResult.Succeeded)
+        if (signInResult.Succeeded && analyst.Id != BaseDTO.DefaultAnalystID)
         {
+            Console.WriteLine(analyst.Id);
+            Console.WriteLine(BaseDTO.DefaultAnalystID);
             HttpContext.Session.SetString("AnalystDTO", JsonSerializer.Serialize(new AnalystDTO{ID = analyst.Id, Name = analyst.UserName}));
             return Json(new { redirect = Url.Action("Show", "Home") });
         }
         return Json(new { error = "We do not recognize you!" });
     }
+
+    // [HttpPost("register")]
+    // [IgnoreAntiforgeryToken]
+    // public async Task<IActionResult> Register()
+    // {
+    //     
+    // }
 
     [HttpPost("out")]
     [IgnoreAntiforgeryToken]

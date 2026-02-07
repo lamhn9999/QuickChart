@@ -4,7 +4,9 @@ using LQ.Services.Implementations;
 using Microsoft.Extensions.DependencyInjection;
 using LQ.Services.Interfaces;
 using LQ.Data.Database;
+using LQ.Models.DTOs;
 using LQ.Models.TableModels;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -27,21 +29,37 @@ public sealed class CSVFileTest
             .Build();
         var services = new ServiceCollection();
         services.AddDbContext<LQDbContext>(options => options.UseNpgsql(config.GetConnectionString("DefaultConnection")));
+        
+        services.AddAuthentication();
+        services.AddIdentityCore<Analyst>()
+            .AddEntityFrameworkStores<LQDbContext>()
+            .AddSignInManager();
+        
         services.AddScoped<ILQDbService, LQDbService>();
+        services.AddScoped<ILQIdentityDbService, LQIdentityDbService>();
         services.AddScoped<IAnalystService, AnalystService>();
         services.AddScoped<ICSVService, CSVService>();
         services.AddScoped<IAutoChartService, AutoChartService>();
+        
+        
         var provider = services.BuildServiceProvider();
-        _lqDbService = provider.GetService<ILQDbService>();
-        _analystService = provider.GetService<IAnalystService>();
-        _csvService = provider.GetService<ICSVService>();
-        _autoChartService = provider.GetService<IAutoChartService>();
-        // Analyst _tester = _analystService.GetAnalyst("Tester");
+        _lqDbService = provider.GetRequiredService<ILQDbService>();
+        _analystService = provider.GetRequiredService<IAnalystService>();
+        _csvService = provider.GetRequiredService<ICSVService>();
+        _autoChartService = provider.GetRequiredService<IAutoChartService>();
+        
+        // var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        // while (dir != null && !dir.GetFiles("*.csproj").Any())
+        // {
+        //     dir = dir.Parent;
+        // }
+        // logPath = Path.Combine(dir!.FullName, "test.log");
     }
     
     [TestMethod]
     public void InjectDependency_ReturnNotNull()
     {
+        Assert.IsNotNull(_lqDbService);
         Assert.IsNotNull(_csvService);
     }
 
@@ -85,4 +103,35 @@ public sealed class CSVFileTest
     //     FieldValues fv = (from f in spotify.Columns where f.Field.Name == "artist_genres" select f).FirstOrDefault();
     //     _csvService.DetectCategoryList(fv);
     // }
+
+    [TestMethod]
+    public async Task RemoveTest()
+    {
+        Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
+        // bool temp = await _csvService.ProcessUploadedCSV(tester,
+        //     "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv");
+        // Assert.IsTrue(temp);
+        Debug.WriteLine(tester);
+        var list = _lqDbService.GetCSVFiles(tester);
+        foreach(var l in list)
+        {
+            Debug.WriteLine(l.Name);
+        }
+        Debug.WriteLine(_lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv"));
+        int newid = _lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv").ID;
+        _lqDbService.RemoveCSVFile(newid);
+        // Assert(_lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv") == null);
+    }
+
+    [TestMethod]
+    public async Task RenameTest()
+    {
+        Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
+        bool temp = await _csvService.ProcessUploadedCSV(tester,
+            "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv");
+        Assert.IsTrue(temp);
+        int newid = _lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv").ID;
+        _lqDbService.RenameCSVFile(newid, "top_rated_movies.csv");
+        Assert.IsNotNull(_lqDbService.GetCSVFile(tester, "top_rated_movies.csv"));
+    }
 }

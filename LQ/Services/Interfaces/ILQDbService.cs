@@ -23,4 +23,6 @@ public interface ILQDbService
     public void InsertValues(List<Value> values);
     public Task InsertValuesAsync(List<Value> values);
     public bool SearchFileByAnalyst(Analyst analyst,  string fileName);
+    public void RemoveCSVFile(int CSVFileID);
+    public void RenameCSVFile(int CSVFileID, string newName);
 }

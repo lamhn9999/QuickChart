@@ -3,6 +3,7 @@ using LQ.Data.Database;
 using LQ.Models.AnalystModels;
 using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace LQ.Services.Implementations;
 
@@ -168,5 +169,19 @@ public class LQDbService : ILQDbService
     {
         return (from a in _lqdbContext.CSVFiles 
             where a.AnalystID == analyst.Id && a.Name == fileName select a).Any();
+    }
+
+    public void RemoveCSVFile(int CSVFileID)
+    {
+        _lqdbContext.CSVFiles.Where(f => f.ID == CSVFileID).
+            ExecuteDeleteAsync();
+        _lqdbContext.SaveChanges();
+    }
+
+    public void RenameCSVFile(int CSVFileID, string newName)
+    {
+        _lqdbContext.CSVFiles.Where(f => f.ID == CSVFileID).
+            ExecuteUpdateAsync(setters => setters.SetProperty(f => f.Name, newName));
+        _lqdbContext.SaveChanges();
     }
 }

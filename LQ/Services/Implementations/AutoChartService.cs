@@ -230,6 +230,7 @@ public class AutoChartService : IAutoChartService
                     {
                         if (table[1].Field.Type == typeof(List<string>))
                         {
+                            if (table[1].Values[i].ValueCasted == null) continue;
                             foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
                             {
                                 if (f1 is null) continue;
@@ -280,7 +281,7 @@ public class AutoChartService : IAutoChartService
             for (int j = 1; j < table.Count; j++)
             {
                 if (table[j].Field.Categories.Contains(Category.Numeric))
-                {
+                {   
                     Dictionary<object, (double sum, int cnt)> avg = new Dictionary<object, (double sum, int cnt)>(prep);
                     for (int i = 0; i < table[0].Values.Count; i++)
                     {
@@ -335,13 +336,34 @@ public class AutoChartService : IAutoChartService
                 .ToList()
         );
         foreach (var y in ys)
-        {
+        {   
             for (int j = 2; j < table.Count; j++)
             {
                 Dictionary<object, (double sum, int cnt)> avg = new Dictionary<object, (double sum, int cnt)>(prep);
                 for (int i = 0; i < table[0].Values.Count; i++)
                 {
-                    if (!Equals(table[1].Values[i].ValueCasted, y)) continue;
+                    // if (!Equals(table[1].Values[i].ValueCasted, y)) continue;
+                    // if (Values[i].value!y.Equals(table[1].Values[i].ValueCasted)) continue;
+                    if (table[1].Field.Type == typeof(List<string>))
+                    {
+                        if (table[1].Values[i].ValueCasted == null) continue;
+                        bool exist = false;
+                        foreach (var f in (List<string>)table[1].Values[i].ValueCasted)
+                        {
+                            if (f == null) continue;
+                            if (y.Equals(f))
+                            {
+                                exist = true;
+                                break;
+                            }
+                        }
+
+                        if (!exist) continue;
+                    }
+                    else
+                    {
+                        if (!y.Equals(table[1].Values[i].ValueCasted)) continue;
+                    }
                     var val = table[j].Values[i].ValueCasted;
                     if (table[0].Values[i].ValueCasted == null) continue;
                     if (val != null)
@@ -900,6 +922,7 @@ public class AutoChartService : IAutoChartService
             {
                 List<FieldValues> sameScale = new List<FieldValues>();
                 foreach (FieldValues nfv in lfv) if (nfv != categorical[categoricalIndex]) sameScale.Add(nfv);
+                if (sameScale.Count == 1) continue;
                 sameScale.Insert(0, categorical[categoricalIndex]);
                 res.Add(DetectBarChart(sameScale));
             }

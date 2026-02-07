@@ -384,6 +384,7 @@ public class CSVService : ICSVService
 
     public async Task<bool> ProcessUploadedCSV(Analyst analyst, IFormFile file)
     {
+        Console.WriteLine(file is null);
         if (!Validate(analyst, file)) 
             return false;
         CSVFile newCSVFile = new CSVFile(analyst.Id, file.FileName);
@@ -409,5 +410,17 @@ public class CSVService : ICSVService
     public Table? GetTable(string analystId, int csvFileId)
     {
         return _lqDbService.GetTable(analystId, csvFileId);
+    }
+
+    public void RemoveCSVFile(string analystId, string fileName)
+    {
+        int csvFileId = _lqDbService.GetCSVFile(analystId, fileName).ID;
+        _lqDbService.RemoveCSVFile(csvFileId);
+    }
+
+    public void RenameCSVFile(string analystId, string fileName, string newFileName)
+    {
+        int csvFileId = _lqDbService.GetCSVFile(analystId, fileName).ID;
+        _lqDbService.RenameCSVFile(csvFileId, newFileName);
     }
 }
