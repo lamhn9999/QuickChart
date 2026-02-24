@@ -41,6 +41,12 @@
         }
         
         async function select(filename) {
+            document.getElementById("previewFilename").textContent = " - " + filename;
+            document.getElementById("dataTable").hidden = true;
+            document.getElementById("loader").hidden = false;
+            document.getElementById("noPreview").style.display = "none";
+            document.getElementById("workspaceButton").style.display = "none";
+
             const response = await fetch("@Url.Action("Select","Home")", {
                 method: "POST",
                 headers: {
@@ -50,6 +56,7 @@
             });
             
             const data = await response.json();
+            document.getElementById("loader").hidden = true;
             const table = document.getElementById("dataTable");
             table.innerHTML = "";
             table.hidden = false;
@@ -116,13 +123,23 @@
         </header>
         <div class="flex flex-col flex-1 text-4xl min-h-0">
             <div class="flex font-bold justify-between">
-                <p class="italic">Preview</p>
+                <p class="italic">Preview<span id="previewFilename" style="color: darksalmon;"></span></p>
                 <button class="signinbutton font-extrabold" id="workspaceButton" style="display: none">Enter Workspace /></button>
             </div>
             <div class="min-w-0 min-h-0 overflow-auto border-solid border-gray-500 border-2 flex-1 content-center align-middle">
                 <table class="text-lg border-separate border-spacing-0 bg-zinc-950" id="dataTable" hidden></table>
                 <div id="noPreview" class="text-center">
                     <p class="text-gray-500 font-bold">No preview available</p>
+                </div>
+                <div hidden class="flex-1 content-center" id="loader">
+                    <div class="loader">
+                        <div class="loader__bar"></div>
+                        <div class="loader__bar"></div>
+                        <div class="loader__bar"></div>
+                        <div class="loader__bar"></div>
+                        <div class="loader__bar"></div>
+                        <div class="loader__ball"></div>
+                    </div>
                 </div>
             </div>
         </div>

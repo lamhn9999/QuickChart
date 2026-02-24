@@ -18,9 +18,29 @@ public class CSVFile
         Name = filename;
         AnalystID = analystid;
     }
+    
     [SetsRequiredMembers]
     public CSVFile(string analystid, string filename, DateTime createdTime) : this(analystid, filename)
     {
         CreatedTime = createdTime;
+    }
+
+    public bool NameCheck(string filename)
+    {
+        if (string.IsNullOrWhiteSpace(filename))
+            return false;
+
+        char[] invalidChars = Path.GetInvalidFileNameChars();
+        if (filename.IndexOfAny(invalidChars) >= 0)
+            return false;
+
+        if (!filename.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string nameWithoutExtension = Path.GetFileNameWithoutExtension(filename);
+        if (string.IsNullOrWhiteSpace(nameWithoutExtension))
+            return false;
+
+        return true;
     }
 }

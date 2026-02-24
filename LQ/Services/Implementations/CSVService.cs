@@ -420,7 +420,14 @@ public class CSVService : ICSVService
 
     public void RenameCSVFile(string analystId, string fileName, string newFileName)
     {
+        Console.WriteLine(analystId + " - " + fileName + " - " + newFileName);
+        Console.WriteLine(_lqDbService.GetCSVFile(analystId, fileName));
         int csvFileId = _lqDbService.GetCSVFile(analystId, fileName).ID;
         _lqDbService.RenameCSVFile(csvFileId, newFileName);
+    }
+
+    public CSVFile? GetCSVFile(string analystid, string filename)
+    {
+        return _lqDbService.GetCSVFile(analystid, filename);
     }
 }

@@ -54,16 +54,27 @@ public class HomeController : Controller
         }
     }
 
-    // [HttpPut("renamefile")]
-    // [IgnoreAntiforgeryToken]
-    // public IActionResult RenameFile(string filename)
-    // {
-    //     var json = HttpContext.Session.GetString("AnalystDTO");
-    //     var analystdto = json is null
-    //         ? null
-    //         : JsonSerializer.Deserialize<AnalystDTO>(json);
-    //     
-    // }
+    [HttpPut("renamefile")]
+    [IgnoreAntiforgeryToken]
+    public IActionResult RenameFile(string oldFileName, string newFileName)
+    {
+        var json = HttpContext.Session.GetString("AnalystDTO");
+        var analystdto = json is null
+            ? null
+            : JsonSerializer.Deserialize<AnalystDTO>(json);
+        if (analystdto is null) return Json("Cannot perform action: analyst not signed in");
+        
+        try
+        {
+            _csvService.RenameCSVFile(analystdto.ID, oldFileName, newFileName);
+            return Json("OK");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return Json("NG");
+        }
+    }
 
     [HttpPost("table")]
     [IgnoreAntiforgeryToken]

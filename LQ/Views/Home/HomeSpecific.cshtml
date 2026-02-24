@@ -14,9 +14,25 @@
             document
                 .getElementById("workspaceButton")
                 .addEventListener("click", enterWorkspace);
+            
+            document.addEventListener("click", () => {
+                document.querySelectorAll('.dropdown-menu').forEach(el => el.classList.add('hidden'));
+            });
         });
 
-        async function remove(filename, elementid) {
+        function toggleDropdown(btn, event) {
+            event.stopPropagation();
+            const dropdown = btn.nextElementSibling;
+            const isHidden = dropdown.classList.contains('hidden');
+            
+            document.querySelectorAll('.dropdown-menu').forEach(el => el.classList.add('hidden'));
+            
+            if (isHidden) {
+                dropdown.classList.remove('hidden');
+            }
+        }
+
+        async function remove(filename, listgodid) {
             const response = await fetch("@Url.Action("Remove", "Home")", {
                 method: "DELETE",
                 headers: {
@@ -27,8 +43,74 @@
             const result = await response.json();
             if(result === "OK")
             {
-                console.log(elementid);
-                document.getElementById(elementid).remove();
+                console.log(listgodid);
+                document.getElementById(listgodid).remove();
+            }
+        }
+
+        function renameaction(listelementid, listgodid) {
+            const element = document.getElementById(listgodid);
+            const fileDiv = element.querySelector(".listfile");
+
+            const oldName = fileDiv.textContent;
+
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = oldName;
+            input.className = "listfile w-full bg-transparent outline-none";
+
+            fileDiv.replaceWith(input);
+            input.focus();
+            input.select();
+
+            let isRenaming = false;
+
+            input.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") {
+                    finishRename();
+                }
+            });
+
+            input.addEventListener("blur", finishRename);
+
+            function finishRename() {
+                if (isRenaming) return;
+                isRenaming = true;
+                const newName = input.value.trim();
+                
+                input.replaceWith(fileDiv);
+
+                if (!newName || newName === oldName) {
+                    return;
+                }
+
+                rename(oldName, newName, listgodid);
+            }
+        }
+
+        async function rename(filename, newfilename, listgodid) {
+            console.log(filename, newfilename);
+            const response = await fetch("@Url.Action("RenameFile","Home")", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: `oldfilename=${encodeURIComponent(filename)}&newfilename=${encodeURIComponent(newfilename)}`
+            });
+
+            const result = await response.json();
+
+            if (result === "OK") {
+                const wrapper = document.getElementById(listgodid);
+                const fileDiv = wrapper.getElementsByClassName("listfile")[0];
+
+                fileDiv.textContent = newfilename;
+
+                const listelement = wrapper.querySelector('.listelement');
+                if (listelement) listelement.setAttribute('onclick', `select('${newfilename}')`);
+
+                const removeBtn = wrapper.querySelector('button.text-red-600');
+                if (removeBtn) removeBtn.setAttribute('onclick', `remove('${newfilename}', '${listgodid}')`);
             }
         }
         
@@ -45,6 +127,12 @@
             location.reload();
         }
         async function select(filename) {
+            document.getElementById("previewFilename").textContent = " - " + filename;
+            document.getElementById("dataTable").hidden = true;
+            document.getElementById("loader").hidden = false;
+            document.getElementById("noPreview").style.display = "none";
+            document.getElementById("workspaceButton").style.display = "none";
+
             const response = await fetch("@Url.Action("Select","Home")", {
                 method: "POST",
                 headers: {
@@ -54,6 +142,7 @@
             });
 
             const data = await response.json();
+            document.getElementById("loader").hidden = true;
             const table = document.getElementById("dataTable");
             table.hidden = false;
             table.innerHTML = "";
@@ -112,23 +201,24 @@
                     int id = 0;
                     foreach (string file in Model)
                     {
-                        string listgodid = "listgod" + id.ToString();
-                        string listelementid = "listelement" + id.ToString();
+                        string listgodid = "listgod" + id;
+                        string listelementid = "listelement" + id;
                         <div class="flex justify-between" id = @listgodid>
-                            <div class="listelement min-w-0" id=@listelementid onclick="select('@file')">
+                            <div class="listelement min-w-0 flex-1" id=@listelementid onclick="select('@file')">
                                 <div class="listline"></div>
                                 <div class="listfile overflow-hidden text-ellipsis">@file</div>
                             </div>
                             
                             <div class="relative flex">
                                 <button
-                                    onclick="this.nextElementSibling.classList.toggle('hidden')"
+                                    onclick="toggleDropdown(this, event)"
                                     class="rounded-md w-5 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:cursor-pointer"
                                 >
                                     ...
                                 </button>
-                                <div class="absolute top-full mt-1 w-44 rounded-md border bg-zinc-700 z-[60] hidden">
-                                    <button class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                                <div class="dropdown-menu absolute top-full mt-1 w-44 rounded-md border bg-zinc-700 z-[60] hidden">
+                                    <button class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                            onclick="this.closest('.relative').querySelector('.absolute').classList.add('hidden'); renameaction('@listelementid','@listgodid')">
                                         Rename
                                     </button>
 
@@ -176,13 +266,23 @@
         </header>
         <div class="flex flex-col flex-1 text-4xl min-h-0">
             <div class="flex font-bold justify-between">
-                <p class="italic">Preview</p>
+                <p class="italic">Preview<span id="previewFilename" style="color: darksalmon;"></span></p>
                 <button class="signinbutton font-extrabold" id="workspaceButton" style="display: none">Enter Workspace /></button>
             </div>
             <div class="min-w-0 min-h-0 overflow-auto border-solid border-gray-500 border-2 flex-1 content-center align-middle">
                 <table class="text-lg border-separate border-spacing-0 bg-zinc-950" id="dataTable" hidden></table>
                 <div id="noPreview" class="text-center">
                     <p class="text-gray-500 font-bold">No preview available</p>
+                </div>
+                <div hidden class="flex-1 content-center" id="loader">
+                    <div class="loader">
+                        <div class="loader__bar"></div>
+                        <div class="loader__bar"></div>
+                        <div class="loader__bar"></div>
+                        <div class="loader__bar"></div>
+                        <div class="loader__bar"></div>
+                        <div class="loader__ball"></div>
+                    </div>
                 </div>
             </div>
         </div>

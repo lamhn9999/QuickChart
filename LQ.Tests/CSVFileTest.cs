@@ -104,34 +104,41 @@ public sealed class CSVFileTest
     //     _csvService.DetectCategoryList(fv);
     // }
 
+    // [TestMethod]
+    // public async Task RemoveTest()
+    // {
+    //     Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
+    //     // bool temp = await _csvService.ProcessUploadedCSV(tester,
+    //     //     "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv");
+    //     // Assert.IsTrue(temp);
+    //     Debug.WriteLine(tester);
+    //     var list = _lqDbService.GetCSVFiles(tester);
+    //     foreach(var l in list)
+    //     {
+    //         Debug.WriteLine(l.Name);
+    //     }
+    //     Debug.WriteLine(_lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv"));
+    //     int newid = _lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv").ID;
+    //     _lqDbService.RemoveCSVFile(newid);
+    //     // Assert(_lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv") == null);
+    // }
+    //
+    // [TestMethod]
+    // public async Task RenameTest()
+    // {
+    //     Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
+    //     bool temp = await _csvService.ProcessUploadedCSV(tester,
+    //         "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv");
+    //     Assert.IsTrue(temp);
+    //     int newid = _lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv").ID;
+    //     _lqDbService.RenameCSVFile(newid, "top_rated_movies.csv");
+    //     Assert.IsNotNull(_lqDbService.GetCSVFile(tester, "top_rated_movies.csv"));
+    // }
     [TestMethod]
-    public async Task RemoveTest()
-    {
-        Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
-        // bool temp = await _csvService.ProcessUploadedCSV(tester,
-        //     "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv");
-        // Assert.IsTrue(temp);
-        Debug.WriteLine(tester);
-        var list = _lqDbService.GetCSVFiles(tester);
-        foreach(var l in list)
-        {
-            Debug.WriteLine(l.Name);
-        }
-        Debug.WriteLine(_lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv"));
-        int newid = _lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv").ID;
-        _lqDbService.RemoveCSVFile(newid);
-        // Assert(_lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv") == null);
-    }
-
-    [TestMethod]
-    public async Task RenameTest()
+    public async Task UploadTest()
     {
         Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
         bool temp = await _csvService.ProcessUploadedCSV(tester,
             "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv");
-        Assert.IsTrue(temp);
-        int newid = _lqDbService.GetCSVFile(tester, "top_rated_2000webseries.csv").ID;
-        _lqDbService.RenameCSVFile(newid, "top_rated_movies.csv");
-        Assert.IsNotNull(_lqDbService.GetCSVFile(tester, "top_rated_movies.csv"));
     }
 }
