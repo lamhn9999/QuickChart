@@ -5,7 +5,7 @@ namespace LQ.Models.AnalystModels;
 
 public class Analyst : IdentityUser
 {
-    public const int NameLowerBound = 1;
+    public const int NameLowerBound = 3;
     public const int NameUpperBound = 100;
 
     public ICollection<CSVFile> CSVFiles { get; } = new HashSet<CSVFile>();

@@ -11,12 +11,34 @@ var builder = WebApplication.CreateBuilder(args);
 // AddControllers
 builder.Services.AddControllers();
 builder.Services.AddControllersWithViews();
+
 // AddDbContext
 builder.Services.AddDbContext<LQDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-builder.Services.AddIdentityCore<Analyst>()
+
+// AddIdentityCore
+builder.Services.AddIdentityCore<Analyst>(options =>
+    {
+        // Password constraints
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireNonAlphanumeric = true; // Requires at least one symbol (!, @, #)
+        options.Password.RequireUppercase = true;
+        options.Password.RequiredLength = 8;
+        options.Password.RequiredUniqueChars = 1;
+
+        // Email / User uniqueness constraints
+        options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.";
+        options.User.RequireUniqueEmail = true; 
+        
+        // Lockout settings (helps prevent Brute Force attacks)
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.AllowedForNewUsers = true;
+    })
     .AddEntityFrameworkStores<LQDbContext>()
     .AddSignInManager();
+
 // Authen, Author
 builder.Services.AddAuthorization();
 builder.Services.AddAuthentication();

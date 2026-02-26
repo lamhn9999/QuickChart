@@ -1,2 +1,7 @@
-hoàn thiện rename 
-tập trung sửa giao diện (tham khảo các tool của adobe)
+lỗi select liên tục khi preview cho ra kết quả sai
+
+Currently, your context class ( LQDbContext.cs ) inherits from  DbContext rather than Identity's native context (IdentityUserContext<Analyst>).
+While your setup manually maps modelBuilder.Entity<Analyst>().ToTable("Analyst", "analyst");, doing this will cause ASP.NET core to crash if you ever need 
+Identity's features like Roles, User Claims, or Login Tokens natively down the road, since those tables were not configured or generated.
+Recommendation: In the future, for a professional repository, you should consider updating LQDbContext : DbContext to LQDbContext : IdentityUserContext<Analyst>
+to natively support the entire EF Core schema lifecycle.

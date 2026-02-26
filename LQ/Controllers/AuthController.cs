@@ -20,10 +20,7 @@ public class AuthController : Controller
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> SignIn(string aname, string apassword)
     {
-        Console.WriteLine("---------------------------------------------------------");
         Analyst? analyst = await _analystService.FindAnalystByName(aname);
-        Console.WriteLine(aname);
-        Console.WriteLine(apassword);
         if (analyst is null)
         {
             return Json(new { error = "We do not recognize you!" });
@@ -41,12 +38,36 @@ public class AuthController : Controller
         return Json(new { error = "We do not recognize you!" });
     }
 
-    // [HttpPost("register")]
-    // [IgnoreAntiforgeryToken]
-    // public async Task<IActionResult> Register()
-    // {
-    //     
-    // }
+    [HttpPost("register")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> Register([FromForm] RegisterDTO model)
+    {
+        if (!ModelState.IsValid)
+        {
+            var validationErrors = ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage);
+            return Json(new { error = "Requirements not met!", details = validationErrors });
+        }
+
+        var newAnalyst = Analyst.GiveBirth(model.Name);
+        if (newAnalyst == null)
+        {
+            return Json(new { error = "Invalid user generation." });
+        }
+
+        newAnalyst.Email = model.Email;
+
+        var creationResult = await _analystService.AddAnalyst(newAnalyst, model.Password);
+        if (creationResult.Succeeded)
+        {
+            await _analystService.CheckPasswordSignIn(newAnalyst, model.Password);
+            HttpContext.Session.SetString("AnalystDTO", JsonSerializer.Serialize(new AnalystDTO { ID = newAnalyst.Id, Name = newAnalyst.UserName }));
+            return Json(new { redirect = Url.Action("Show", "Home") });
+        }
+        var identityErrors = creationResult.Errors.Select(e => e.Description);
+        return Json(new { error = "Registration failed.", details = identityErrors });
+    }
 
     [HttpPost("out")]
     [IgnoreAntiforgeryToken]
@@ -55,5 +76,4 @@ public class AuthController : Controller
         HttpContext.Session.Clear();
         return Json(new { redirect = Url.Action("Show", "Home") });
     }
-    
 }
