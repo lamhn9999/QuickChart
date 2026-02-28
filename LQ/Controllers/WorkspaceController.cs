@@ -29,15 +29,22 @@ public class WorkspaceController : Controller
         AnalystDTO? analystdto = json is null
             ? null
             : JsonSerializer.Deserialize<AnalystDTO>(json);
-
-        json = HttpContext.Session.GetString("TableDTO");
-        if (json is null) return NotFound();
-        TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
-        if (tabledto is null) return NotFound();
+    
+        // json = HttpContext.Session.GetString("TableDTO");
+        // if (json is null) return NotFound();
+        if (analystdto is null) return NotFound();
+        
         Table? table = analystdto is null
-            ? _csvService.GetTable(BaseDTO.DefaultAnalystID, tabledto.CSVFileID)
-            : _csvService.GetTable(analystdto.ID, tabledto.CSVFileID);
+            ? _csvService.GetTable(BaseDTO.DefaultAnalystID, analystdto.currentFileID ?? -1)
+            : _csvService.GetTable(analystdto.ID, analystdto.currentFileID ?? -1);
         if (table is null) return NotFound();
+        HttpContext.Session.SetString("TableDTO", JsonSerializer.Serialize(new TableDTO
+        {
+            FieldIDs = (from f in table.Columns
+                select f.Field.ID).ToList(),
+            RowCount = table.RowCount,
+            CSVFileID = table.CSVFile.ID
+        }));
         return analystdto is null
             ? View("Workspace", table)
             : View("WorkspaceSpecific", table);

@@ -1,4 +1,4 @@
-@model List<string>;
+@model List<LQ.Models.TableModels.CSVFile>;
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
@@ -7,20 +7,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="~/style_tw.css"/>
     <script>
+        let signinInputs;
+        let registerInputs;
+        
         document.addEventListener("DOMContentLoaded", () => {
-            document
-                .getElementById("signinbutton1")
-                .addEventListener("click", signIn);
+            const signinBtn = document.getElementById("signinbutton1");
+            signinBtn.addEventListener("click", signIn);
+            
             document
                 .getElementById("workspaceButton")
                 .addEventListener("click", enterWorkspace);
+
+            const registerBtn = document.getElementById("registerbutton1");
+            registerBtn.addEventListener("click", register);
+
+            signinInputs = [
+                document.getElementById("nameinput"),
+                document.getElementById("pwinput")
+            ];
+
+            registerInputs = [
+                document.getElementById("nameinputr"),
+                document.getElementById("pwinputr"),
+                document.getElementById("pwconfirminputr")
+            ];
         });
+
+        function showGroup(show, hide) {
+            hide.forEach(i => i.classList.remove("show"));
+            setTimeout(() => {
+                show.forEach(i => i.classList.add("show"));
+                show[0].focus();
+            }, 200);
+        }
+        
         function enterWorkspace()
         {
             window.location.href = '/workspace';
         }
+        
         async function signIn()
         {
+            showGroup(signinInputs, registerInputs);
             const yourname = document.getElementById("nameinput").value;
             const yourpw = document.getElementById("pwinput").value;
             const response = await fetch("@Url.Action("SignIn", "Auth")", {
@@ -38,6 +66,10 @@
             if (result.redirect) {
                 window.location.href = result.redirect;
             }
+        }
+        async function register()
+        {
+            showGroup(registerInputs, signinInputs);
         }
         
         async function select(filename) {
@@ -88,21 +120,21 @@
 </head>
 <body class="bg-zinc-800 text-white">
 <div class="flex h-screen">
-    <div class="flex flex-col h-screen w-1/7 max-w-1/7 min-w-0 bg-zinc-900 p-5">
-        <div class="listelement text-xl font-bold" id="doc">
+    <div class="flex flex-col h-screen min-w-0 p-4 border-r border-zinc-700" style="width: 15%; max-width: 200px;">
+        <div class="listelement text-lg font-bold mb-2" id="doc">
             <button>Documentation</button>
         </div>
         <div class="mb-5 max-w-full min-w-0">
-            <p class="text-xl font-bold">Sample files</p>
-            <div class="text-xl min-w-0">
+            <p class="text-lg font-bold">Sample files</p>
+            <div class="text-base min-w-0">
                 @{
                     int id = 0;
-                    foreach (string file in Model)
+                    foreach (var file in Model)
                     {
                         <div class="flex justify-between">
-                            <div class="listelement min-w-0" id="listelement@id" onclick="select('@file');">
+                            <div class="listelement min-w-0" id="listelement@id" onclick="select('@file.Name');">
                                 <div class="listline"></div>
-                                <div class="listfile overflow-hidden text-ellipsis">@file</div>
+                                <div class="listfile overflow-hidden text-ellipsis">@file.Name</div>
                             </div>
                         </div>
                         id++;
@@ -110,21 +142,25 @@
                 }
             </div>
         </div>
-        <div class="text-2xl flex flex-col mb-5">
+        <div class="text-lg flex flex-col mb-4">
             <button class="signinbutton font-extrabold" id="signinbutton1">SIGN IN</button>
-            <input class="text-black bg-white placeholder:text-black font-extrabold" type="text" id="nameinput"/>
-            <input class="text-black bg-white placeholder:text-black font-extrabold" type="password" id="pwinput"/>
+            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="text" id="nameinput"/>
+            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="password" id="pwinput"/>
         </div>
+        <div class="text-lg flex flex-col mb-4">
+            <button class="registerbutton font-extrabold" id="registerbutton1">REGISTER</button>
+            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="text" id="nameinputr"/>
+            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="password" id="pwinputr"/>
+            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="password" id="pwconfirminputr"/>
+        </div>
+
         <div class="flex flex-1"></div>
     </div>
     <div class="flex flex-1 flex-col h-screen p-5 min-w-0">
-        <header class=" text-4xl mb-5 text-center font-extrabold">
-            <p>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</p>
-        </header>
         <div class="flex flex-col flex-1 text-4xl min-h-0">
             <div class="flex font-bold justify-between">
                 <p class="italic">Preview<span id="previewFilename" style="color: darksalmon;"></span></p>
-                <button class="signinbutton font-extrabold" id="workspaceButton" style="display: none">Enter Workspace /></button>
+                <button class="enterbutton font-extrabold" id="workspaceButton" style="display: none">Enter Workspace /></button>
             </div>
             <div class="min-w-0 min-h-0 overflow-auto border-solid border-gray-500 border-2 flex-1 content-center align-middle">
                 <table class="text-lg border-separate border-spacing-0 bg-zinc-950" id="dataTable" hidden></table>
@@ -144,31 +180,7 @@
             </div>
         </div>
     </div>
-    <div class="
-          hidden md:flex h-screen shrink-0
-          w-1/7
-          min-w-[200px] max-w-[320px]
-          bg-zinc-900
-        ">
-        <div class="relative flex flex-1 overflow-hidden">
-    
-            <!-- Background image -->
-            <div
-                class="absolute inset-0 bg-cover bg-center scale-105"
-                style="background-image: url('/Screenshot_20260207_112111.png');"
-            ></div>
-
-            <!-- Overlay -->
-            <div class="absolute inset-0 bg-gradient-to-l from-black/70 via-black/40 to-transparent"></div>
-
-            <!-- Optional content -->
-            <div class="relative z-10 flex flex-1 items-end p-6">
-                <span class="text-lg font-extrabold tracking-wide text-zinc-200 uppercase">
-                    恭喜发财
-                </span>
-            </div>
-        </div>
-    </div>
+  
     
 </div>
 </body>

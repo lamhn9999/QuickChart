@@ -74,21 +74,36 @@ td, th {
  }
 
 /*--- SIGN BUTTON ---*/
-.signinbutton, .signoutbutton{
+.signinbutton, .signoutbutton, .registerbutton, .enterbutton{
     background: none;
     border: 1px dashed darksalmon;
     cursor: pointer;
     color: darksalmon;
     animation: shuffle 0.5s infinite linear;
 }
-.signinbutton:hover, .signoutbutton:hover {
+.signinbutton:hover, .signoutbutton:hover, .registerbutton:hover, .enterbutton:hover {
     animation-play-state: paused;
 }
-.signinbutton:active, .signoutbutton:active {
+.signinbutton:active, .signoutbutton:active, .registerbutton:active, .enterbutton:active {
     animation: none;
 }
 @keyframes shuffle {
  }
+
+/*--- INPUT ANIMATION ---*/
+.input-anim {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.35s ease;
+}
+
+.input-anim.show {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 60px;
+}
 
 /*--- FILE LIST ---*/
 .listelement {

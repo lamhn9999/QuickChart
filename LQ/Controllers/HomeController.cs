@@ -10,38 +10,51 @@ namespace LQ.Controllers;
 [Route("/")]
 public class HomeController : Controller
 {
-    private ICSVService _csvService;
-    private IAnalystService _analystService;
+    private readonly ICSVService _csvService;
+    private readonly IAnalystService _analystService;
+
     public HomeController(ICSVService csvService, IAnalystService analystService)
     {
         _csvService = csvService;
-        _analystService =  analystService;
+        _analystService = analystService;
+    }
+
+    private AnalystDTO? CurrentAnalyst
+    {
+        get
+        {
+            var json = HttpContext.Session.GetString("AnalystDTO");
+            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<AnalystDTO>(json);
+        }
     }
 
     [HttpGet]
     public IActionResult Show()
     {
         HttpContext.Session.Remove("TableDTO");
-        var json = HttpContext.Session.GetString("AnalystDTO");
-        var analystdto = json is null
-            ? null
-            : JsonSerializer.Deserialize<AnalystDTO>(json);
-        List<string> sampleCsvs = analystdto is null
-            ? _analystService.GetCSVFiles(BaseDTO.DefaultAnalystID).Select(x => x.Name.ToString()).ToList()
-            : _analystService.GetCSVFiles(analystdto.ID).Select(x => x.Name.ToString()).ToList();
-        return analystdto is null
-            ? View("Home", sampleCsvs)
-            : View("HomeSpecific", sampleCsvs);
+        
+        var analystdto = CurrentAnalyst;
+        var analystId = analystdto?.ID ?? BaseDTO.DefaultAnalystID;
+        
+        if (analystdto != null)
+        {
+            ViewBag.Username = analystdto.Name;
+        }
+        
+        List<CSVFile> sampleCsvs = _analystService.GetCSVFiles(analystId).ToList();
+        
+        return CurrentAnalyst is null ? 
+            View("Home", sampleCsvs) : 
+            View("NewHomeSpecific", sampleCsvs);
     }
 
     [HttpDelete("remove")]
     [IgnoreAntiforgeryToken]
     public IActionResult Remove(string filename)
     {
-        var json = HttpContext.Session.GetString("AnalystDTO");
-        var analystdto = json is null
-            ? null
-            : JsonSerializer.Deserialize<AnalystDTO>(json);
+        var analystdto = CurrentAnalyst;
+        if (analystdto is null) return Json("NG");
+
         try
         {
             _csvService.RemoveCSVFile(analystdto.ID, filename);
@@ -58,10 +71,7 @@ public class HomeController : Controller
     [IgnoreAntiforgeryToken]
     public IActionResult RenameFile(string oldFileName, string newFileName)
     {
-        var json = HttpContext.Session.GetString("AnalystDTO");
-        var analystdto = json is null
-            ? null
-            : JsonSerializer.Deserialize<AnalystDTO>(json);
+        var analystdto = CurrentAnalyst;
         if (analystdto is null) return Json("Cannot perform action: analyst not signed in");
         
         try
@@ -80,38 +90,36 @@ public class HomeController : Controller
     [IgnoreAntiforgeryToken]
     public IActionResult Select(string filename)
     {
-        var json = HttpContext.Session.GetString("AnalystDTO");
-        var analystdto = json is null
-            ? null
-            : JsonSerializer.Deserialize<AnalystDTO>(json);
-        Table? table = analystdto is null
-            ? _csvService.GetTable(BaseDTO.DefaultAnalystID, filename)
-            : _csvService.GetTable(analystdto.ID, filename);
-        if (table is null) return NotFound();
-        
-        HttpContext.Session.SetString("TableDTO", JsonSerializer.Serialize(new TableDTO
+        var analystdto = CurrentAnalyst;
+        var isGuest = analystdto is null;
+        var analystId = isGuest ? BaseDTO.DefaultAnalystID : analystdto!.ID;
+
+        CSVFile? selectedFile = _csvService.GetCSVFile(analystId, filename);
+        if (selectedFile is null)
+            return NotFound();
+
+
+        if (!isGuest)
         {
-            FieldIDs = (from f in table.Columns
-                select f.Field.ID).ToList(),
-            RowCount = table.RowCount,
-            CSVFileID = table.CSVFile.ID
-        }));
+            analystdto!.currentFileID = selectedFile.ID;
+            HttpContext.Session.SetString("AnalystDTO", JsonSerializer.Serialize(analystdto));
+        }
         
-        return Json(table.GetDisplay());
+        return Ok();
     }
 
     [HttpPost]
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> Upload(IFormFile file)
     {
-        string? json = HttpContext.Session.GetString("AnalystDTO");
-        if (json is null) return NotFound();
-        AnalystDTO? analystdto = JsonSerializer.Deserialize<AnalystDTO>(json);
-        if (analystdto is null) return NotFound();
+        var analystdto = CurrentAnalyst;
+        if (analystdto is null) return Unauthorized(new { error = "Sign in required to upload files" });
+
         Analyst? analyst = await _analystService.FindAnalystById(analystdto.ID);
-        if (analyst is null) return NotFound();
+        if (analyst is null) return NotFound(new { error = "Analyst not found" });
+
         return await _csvService.ProcessUploadedCSV(analyst, file) 
-            ? Json(new { received = $"{file.FileName}" })
-            : Json(new { badcsv = $"{file.FileName}"});
+            ? Json(new { received = file.FileName })
+            : Json(new { badcsv = file.FileName });
     }
 }

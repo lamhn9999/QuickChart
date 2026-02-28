@@ -31,7 +31,8 @@ public class AuthController : Controller
         if (signInResult.Succeeded && analyst.Id != BaseDTO.DefaultAnalystID)
         {
             Console.WriteLine(analyst.Id);
-            Console.WriteLine(BaseDTO.DefaultAnalystID);
+            
+            ViewBag.Username = analyst.UserName;
             HttpContext.Session.SetString("AnalystDTO", JsonSerializer.Serialize(new AnalystDTO{ID = analyst.Id, Name = analyst.UserName}));
             return Json(new { redirect = Url.Action("Show", "Home") });
         }
@@ -74,6 +75,7 @@ public class AuthController : Controller
     public new IActionResult SignOut()
     {
         HttpContext.Session.Clear();
+        ViewBag.Username = null;
         return Json(new { redirect = Url.Action("Show", "Home") });
     }
 }
