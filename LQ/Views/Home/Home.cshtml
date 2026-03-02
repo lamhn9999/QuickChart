@@ -1,3 +1,4 @@
+@using LQ.Models.DTOs
 @model List<LQ.Models.TableModels.CSVFile>;
 <!DOCTYPE html>
 <html lang="en-us">
@@ -79,7 +80,23 @@
         
         async function register()
         {
-            // Placeholder: Not fully implemented in old code either
+            const data = {
+                name : document.getElementById("nameinputr").value,
+                email : document.getElementById("emailinputr").value,
+                password : document.getElementById("pwinputr").value,
+                confirmpassword : document.getElementById("pwconfirminputr").value,
+            };
+            const response = await fetch("@Url.Action("Register", "Auth")", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data),
+            });
+            const result = await response.json();
+            if(result.redirect) {
+                window.location.href = result.redirect;
+            }
         }
         
         async function select(filename) {
@@ -156,12 +173,13 @@
                  
                  <div class="px-6 pb-6 w-full">
                      <div id="signin-group" class="flex flex-col gap-3">
-                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="text" id="nameinput" placeholder="Username"/>
+                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="text" id="nameinput" placeholder="Your Name or Email"/>
                          <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="password" id="pwinput" placeholder="Password"/>
                          <button class="font-bold hover:cursor-pointer bg-[darksalmon] text-white rounded p-2.5 w-full mt-2 hover:bg-[#E9967A] transition-all" id="signinbutton1">SIGN IN</button>
                      </div>
                      <div id="register-group" class="hidden flex flex-col gap-3">
-                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="text" id="nameinputr" placeholder="Username"/>
+                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="text" id="nameinputr" placeholder="Your name"/>
+                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="text" id="emailinputr" placeholder="Your Email"/>
                          <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="password" id="pwinputr" placeholder="Password"/>
                          <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="password" id="pwconfirminputr" placeholder="Confirm Password"/>
                          <button class="font-bold bg-[darksalmon] hover:cursor-pointer text-white rounded p-2.5 w-full mt-2 hover:bg-[#E9967A] transition-all" id="registerbutton1">REGISTER</button>

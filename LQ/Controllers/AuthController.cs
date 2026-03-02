@@ -47,7 +47,7 @@ public class AuthController : Controller
 
     [HttpPost("register")]
     [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> Register([FromForm] RegisterDTO model)
+    public async Task<IActionResult> Register([FromBody] RegisterDTO model)
     {
         if (!ModelState.IsValid)
         {
