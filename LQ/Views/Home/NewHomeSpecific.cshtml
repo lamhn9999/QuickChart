@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="~/style_tw.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="icon" href="01384a5a5e3c1ea5887b428641e12121.gif" type="image/x-icon">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Playfair Display', serif; }
@@ -55,7 +56,7 @@
             const input = document.createElement("input");
             input.type = "text";
             input.value = oldName;
-            input.className = "filename-input bg-zinc-800 text-white px-2 py-1 rounded outline-none border border-amber-500 flex-1";
+            input.className = "filename-input bg-zinc-800 text-white px-2 py-1 rounded outline-none border border-[#E9967A] flex-1";
             input.onclick = (e) => e.stopPropagation();
 
             fileText.replaceWith(input);
@@ -178,21 +179,24 @@
 </head>
 <body class="bg-zinc-950 text-slate-200 min-h-screen flex flex-col">
 
-    <nav class="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
-        <div class="flex items-center gap-3">
-            <h1 class="text-xl font-semibold tracking-tight text-white">Automatic CSV Plotting Tool for  <span class="text-amber-500">Data Analysts</span></h1>
-        </div>
-        <div class="flex items-center gap-4">
-            @if(ViewBag.Username != null)
-            {
-                <span class="text-zinc-300 text-sm font-medium pr-2 border-r border-zinc-700">Hello, <span class="text-amber-500">@ViewBag.Username</span></span>
-            }
-            <button id="signoutbutton" class="hover:cursor-pointer text-sm font-medium text-zinc-400 hover:text-white transition-colors flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                Sign Out
-            </button>
-        </div>
-    </nav>
+<nav class="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center sticky top-0">
+    <div class="flex items-center gap-3">
+        <span>
+            <img src = "01384a5a5e3c1ea5887b428641e12121.gif" alt="cunghyphattai" class="w-5 h-auto scale-x-[-1]">
+            </span>
+        <h1 class="text-xl font-semibold tracking-tight text-white">Automatic CSV Plotting Tool for <span class="text-[#E9967A]">Data Analysts</span></h1>
+    </div>
+    <div class="flex items-center gap-4">
+        @if (ViewBag.Username != null)
+        {
+            <span class="text-zinc-300 text-sm font-medium pr-2 border-r border-zinc-700">Hello, <span class="text-[#E9967A]">@ViewBag.Username</span></span>
+        }
+        <button id="signoutbutton" class="hover:cursor-pointer text-sm font-medium text-zinc-400 hover:text-white transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            Sign Out
+        </button>
+    </div>
+</nav>
 
     <!-- Main Content -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-8 flex flex-col gap-6">
@@ -205,9 +209,9 @@
             <form method="post" enctype="multipart/form-data" id="uploadForm">
                 <input type="file" name="file" accept=".csv" id="fileInput" style="display:none;" onchange="upload()">
             </form>
-            <button onclick="document.getElementById('fileInput').click()" class="hover:cursor-pointer bg-amber-600 hover:bg-amber-500 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm font-semibold transition-all active:scale-95">
+            <button onclick="document.getElementById('fileInput').click()" class="hover:cursor-pointer bg-[darksalmon] hover:bg-[#E9967A] text-white px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm font-semibold transition-all active:scale-95">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                Upload CSV
+                Upload a CSV
             </button>
         </header>
 
@@ -227,7 +231,7 @@
                         string containerId = "fileCard_" + id;
                         <div id="@containerId" class="file-row flex items-center border-b border-zinc-800/50 hover:bg-zinc-800/50 transition-colors group cursor-pointer" onclick="select('@file.Name')">
                             <div class="flex-1 p-4 flex items-center gap-3" data-sort="@file.Name">
-                                <div class="p-2 bg-zinc-800 rounded-md text-emerald-400">
+                                <div class="p-2 bg-zinc-800 rounded-md text-white">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                 </div>
                                 <div class="flex flex-col flex-1">
@@ -281,7 +285,7 @@
                 <div class="loader__bar"></div>
                 <div class="loader__ball"></div>
             </div>
-        <p class="mt-6 text-amber-500 font-medium tracking-widest text-sm animate-pulse">PREPARING WORKSPACE...</p>
+        <p class="mt-6 text-[#E9967A] font-medium tracking-widest text-sm animate-pulse">PREPARING WORKSPACE...</p>
     </div>
 
 </body>

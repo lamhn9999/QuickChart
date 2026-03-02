@@ -12,6 +12,7 @@ public interface ILQDbService
     public Table? GetTable(int csvfileid);
     public Table? GetTable(string analystid, int csvfileid);
     public Table? GetTable(int csvfileid, List<int> fieldindexes);
+    public Table? GetTableLimited(int csvfileid, int numRowLimited);
     public void InsertCSVFile(CSVFile csvFile);
     public CSVFile? GetCSVFile(Analyst analyst, string filename);
     public CSVFile? GetCSVFile(string analystid, string filename);

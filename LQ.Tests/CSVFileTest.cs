@@ -139,6 +139,6 @@ public sealed class CSVFileTest
     {
         Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
         bool temp = await _csvService.ProcessUploadedCSV(tester,
-            "/home/lam/LQ/LQ/Data/SampleCSVs/top_rated_2000webseries.csv");
+            "/home/lam/LQ/LQ/Data/SampleCSVs/player_stats_2023.csv");
     }
 }

@@ -22,21 +22,29 @@ public class WorkspaceController : Controller
         _autoChartService = autoChartService;
     }
     
+    private AnalystDTO? CurrentAnalyst
+    {
+        get
+        {
+            var json = HttpContext.Session.GetString("AnalystDTO");
+            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<AnalystDTO>(json);
+        }
+    }
+
+    private CSVFileDTO? CurrentCSVFile
+    {
+        get
+        {
+            var json = HttpContext.Session.GetString("CSVFileDTO");
+            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CSVFileDTO>(json);
+        }
+    }
+    
     [HttpGet]
     public IActionResult EnterWorkspace()
     {
-        string? json = HttpContext.Session.GetString("AnalystDTO");
-        AnalystDTO? analystdto = json is null
-            ? null
-            : JsonSerializer.Deserialize<AnalystDTO>(json);
-    
-        // json = HttpContext.Session.GetString("TableDTO");
-        // if (json is null) return NotFound();
-        if (analystdto is null) return NotFound();
-        
-        Table? table = analystdto is null
-            ? _csvService.GetTable(BaseDTO.DefaultAnalystID, analystdto.currentFileID ?? -1)
-            : _csvService.GetTable(analystdto.ID, analystdto.currentFileID ?? -1);
+        if (CurrentCSVFile is null) return NotFound();
+        var table = _csvService.GetTableLimited(CurrentCSVFile.currentFileID, 200);
         if (table is null) return NotFound();
         HttpContext.Session.SetString("TableDTO", JsonSerializer.Serialize(new TableDTO
         {
@@ -45,7 +53,7 @@ public class WorkspaceController : Controller
             RowCount = table.RowCount,
             CSVFileID = table.CSVFile.ID
         }));
-        return analystdto is null
+        return CurrentAnalyst is null
             ? View("Workspace", table)
             : View("WorkspaceSpecific", table);
     }

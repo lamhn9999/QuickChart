@@ -99,7 +99,29 @@ public class LQDbService : ILQDbService
         returnTable.SetRowCount();
         return returnTable;
     }
-    
+
+    public Table? GetTableLimited(int csvfileid, int numRowLimited)
+    {
+        try
+        {
+            Table returnTable;
+            CSVFile? csvFile = GetCSVFile(csvfileid);
+            returnTable = new Table(GetCSVFile(csvfileid));
+            List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
+            foreach (Field f in fields)
+            {
+                List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).Take(numRowLimited).ToList();
+                returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
+            }
+            returnTable.SetRowCount();
+            return returnTable;
+        }
+        catch 
+        {
+            return null;
+        }
+    }
+
     public void InsertCSVFile(CSVFile csvFile)
     {
         _lqdbContext.CSVFiles.Add(csvFile);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using LQ.Models.ChartModels;
@@ -215,6 +216,7 @@ public class AutoChartService : IAutoChartService
 
         Dictionary<(object x, object y), int> dict2C = new();
         Dictionary<object, (double sum, int cnt)> prep = new Dictionary<object, (double sum, int cnt)>();
+        Dictionary<object, HashSet<int>> ysPos = new Dictionary<object, HashSet<int>>();
         // Setup
         for (int i = 0; i < table[0].Values.Count; i++)
         {
@@ -236,6 +238,12 @@ public class AutoChartService : IAutoChartService
                                 if (f1 is null) continue;
                                 if (!dict2C.TryGetValue((f, f1), out var cnt)) dict2C[(f, f1)] = 1;
                                 else dict2C[(f, f1)]++;
+                                if (!ysPos.TryGetValue(f1, out var set))
+                                {
+                                    set = new HashSet<int>();
+                                    ysPos[f1] = set;
+                                }
+                                set.Add(i);
                             }
                         }
                         else
@@ -244,6 +252,12 @@ public class AutoChartService : IAutoChartService
                             if (f1 is null) continue;
                             if (!dict2C.TryGetValue((f, f1), out var cnt)) dict2C[(f, f1)] = 1;
                             else dict2C[(f, f1)]++;
+                            if (!ysPos.TryGetValue(f1, out var set))
+                            {
+                                set = new HashSet<int>();
+                                ysPos[f1] = set;
+                            }
+                            set.Add(i);
                         }
                     }
                 }
@@ -262,6 +276,12 @@ public class AutoChartService : IAutoChartService
                             if (f1 is null) continue;
                             if (!dict2C.TryGetValue((key, f1), out var cnt)) dict2C[(key, f1)] = 1;
                             else dict2C[(key, f1)]++;
+                            if (!ysPos.TryGetValue(f1, out var set))
+                            {
+                                set = new HashSet<int>();
+                                ysPos[f1] = set;
+                            }
+                            set.Add(i);
                         }
                     }
                     else
@@ -270,6 +290,12 @@ public class AutoChartService : IAutoChartService
                         if (f1 is null) continue;
                         if (!dict2C.TryGetValue((key, f1), out var cnt)) dict2C[(key, f1)] = 1;
                         else dict2C[(key, f1)]++;
+                        if (!ysPos.TryGetValue(f1, out var set))
+                        {
+                            set = new HashSet<int>();
+                            ysPos[f1] = set;
+                        }
+                        set.Add(i);
                     }
                 }
             }
@@ -336,34 +362,15 @@ public class AutoChartService : IAutoChartService
                 .ToList()
         );
         foreach (var y in ys)
-        {   
+        {
+            if (!ysPos.TryGetValue(y, out var posSet)) continue;
             for (int j = 2; j < table.Count; j++)
             {
                 Dictionary<object, (double sum, int cnt)> avg = new Dictionary<object, (double sum, int cnt)>(prep);
-                for (int i = 0; i < table[0].Values.Count; i++)
+                foreach(int i in posSet)
                 {
                     // if (!Equals(table[1].Values[i].ValueCasted, y)) continue;
                     // if (Values[i].value!y.Equals(table[1].Values[i].ValueCasted)) continue;
-                    if (table[1].Field.Type == typeof(List<string>))
-                    {
-                        if (table[1].Values[i].ValueCasted == null) continue;
-                        bool exist = false;
-                        foreach (var f in (List<string>)table[1].Values[i].ValueCasted)
-                        {
-                            if (f == null) continue;
-                            if (y.Equals(f))
-                            {
-                                exist = true;
-                                break;
-                            }
-                        }
-
-                        if (!exist) continue;
-                    }
-                    else
-                    {
-                        if (!y.Equals(table[1].Values[i].ValueCasted)) continue;
-                    }
                     var val = table[j].Values[i].ValueCasted;
                     if (table[0].Values[i].ValueCasted == null) continue;
                     if (val != null)
@@ -384,7 +391,7 @@ public class AutoChartService : IAutoChartService
                         }
                     }
                 }
-
+        
                 var data = avg.Select(kv => new { Key = kv.Key, Val = (kv.Value.cnt == 0 ? 0.0 : kv.Value.sum / (1.0 * kv.Value.cnt)) })
                     .OrderBy(x => x.Key)
                     .ToList();
@@ -395,6 +402,7 @@ public class AutoChartService : IAutoChartService
                 LineChart.Z.Add(labelData);
             }
         }
+       
 
         if (LineChart.Z.Count != 0) LineChart.ChartType = ChartType.Mixed;
         foreach (var kv in countsByY)
@@ -749,6 +757,8 @@ public class AutoChartService : IAutoChartService
 
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
     {
+        Stopwatch stopwatch = new Stopwatch();
+        stopwatch.Start();
         Table tempTable = _lqDbService.GetTable(csvfileid, fieldindexes);
         int minimumRelationship = 0;
         List<Chart?> res = new();
@@ -792,15 +802,15 @@ public class AutoChartService : IAutoChartService
         }
 
         // X, Y, Z
-        foreach (var num in numeric)
-        {
-            foreach (var fv in num)
-            {
-                System.Console.Write($"{fv.Field.Name},");
-            }
-
-            System.Console.WriteLine();
-        }
+        // foreach (var num in numeric)
+        // {
+        //     foreach (var fv in num)
+        //     {
+        //         System.Console.Write($"{fv.Field.Name},");
+        //     }
+        //
+        //     System.Console.WriteLine();
+        // }
         
         for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
         {
@@ -816,8 +826,8 @@ public class AutoChartService : IAutoChartService
                         {
                             if (categorical[categoricalIndex].Field.Type != typeof(DateTime) && 
                                 categorical[categoricalSubIndex].Field.Type != typeof(DateTime) &&
-                                CountDistinctValues(categorical[categoricalIndex]) <= 20 &&
-                                CountDistinctValues(categorical[categoricalSubIndex]) <= 20)
+                                CountDistinctValues(categorical[categoricalIndex]) <= 10 &&
+                                CountDistinctValues(categorical[categoricalSubIndex]) <= 10)
                                 res.Add(DetectMatrix(new List<FieldValues>
                                 {
                                     categorical[categoricalIndex],
@@ -957,14 +967,16 @@ public class AutoChartService : IAutoChartService
             else res.Add(DetectSideBar(new List<FieldValues> { categoricalFv }));
         }
         // X identifier
-        foreach (FieldValues identifierFv in identifier)
-        {
-            res.Add(DetectSideBar(new List<FieldValues> { identifierFv }));
-        }
+        // foreach (FieldValues identifierFv in identifier)
+        // {
+        //     res.Add(DetectSideBar(new List<FieldValues> { identifierFv }));
+        // }
         // X numeric
         foreach (List<FieldValues> lfv in numeric)
         {
-            foreach (FieldValues numericfv in lfv) res.Add(DetectHistogram(new List<FieldValues> {numericfv}));
+            foreach (FieldValues numericfv in lfv) 
+                if (!numericfv.Field.Categories.Contains(Category.Identifier))
+                    res.Add(DetectHistogram(new List<FieldValues> {numericfv}));
         }
         
         List<Chart> noNullRes = new List<Chart>();
@@ -972,6 +984,9 @@ public class AutoChartService : IAutoChartService
         {
             if (chart != null) noNullRes.Add(chart);
         }
+
+        stopwatch.Stop();
+        File.WriteAllText("DetectChart.txt", stopwatch.ElapsedMilliseconds.ToString());
         return noNullRes;
     }
 }

@@ -3,6 +3,7 @@ using LQ.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using LQ.Models.DTOs;
+using Microsoft.IdentityModel.Tokens;
 
 namespace LQ.Controllers;
 
@@ -18,8 +19,13 @@ public class AuthController : Controller
 
     [HttpPost("in")]
     [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> SignIn(string aname, string apassword)
+    public async Task<IActionResult> SignIn(string? aname, string? apassword)
     {
+        if (aname.IsNullOrEmpty() || apassword.IsNullOrEmpty() || String.IsNullOrWhiteSpace(aname) ||
+            String.IsNullOrWhiteSpace(apassword))
+        {
+            return Json(new { error = "We do not recognize you!" });
+        }
         Analyst? analyst = await _analystService.FindAnalystByName(aname);
         if (analyst is null)
         {

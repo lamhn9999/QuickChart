@@ -10,6 +10,7 @@ public interface ICSVService
     public Task<bool> ProcessUploadedCSV(Analyst analyst, IFormFile file);
     public Table? GetTable(string analystId, string filename);
     public Table? GetTable(string analystId, int csvFileId);
+    public Table? GetTableLimited(int csvFileId, int numRowLimited);
     public bool DetectDateTime(FieldValues fieldValues);
     public CSVFile? GetCSVFile(string analystid, string filename);
     public void RemoveCSVFile(string analystId, string fileName);

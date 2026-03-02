@@ -2,14 +2,18 @@
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
-    <title>AUTOMATIC CSV PLOTTING TOOL FOR DATA ANALYSTS!</title>
+    <title>Automatic CSV Plotting Tool for Data Analysts</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="~/style_tw.css"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Playfair Display', serif; }
+        .tab-active { border-bottom: 2px solid #E9967A; color: #E9967A; }
+    </style>
     <script>
-        let signinInputs;
-        let registerInputs;
-        
         document.addEventListener("DOMContentLoaded", () => {
             const signinBtn = document.getElementById("signinbutton1");
             signinBtn.addEventListener("click", signIn);
@@ -20,25 +24,31 @@
 
             const registerBtn = document.getElementById("registerbutton1");
             registerBtn.addEventListener("click", register);
-
-            signinInputs = [
-                document.getElementById("nameinput"),
-                document.getElementById("pwinput")
-            ];
-
-            registerInputs = [
-                document.getElementById("nameinputr"),
-                document.getElementById("pwinputr"),
-                document.getElementById("pwconfirminputr")
-            ];
+            
+            // Tab switching logic
+            document.getElementById("tab-signin").addEventListener("click", () => showGroup('signin'));
+            document.getElementById("tab-register").addEventListener("click", () => showGroup('register'));
         });
 
-        function showGroup(show, hide) {
-            hide.forEach(i => i.classList.remove("show"));
-            setTimeout(() => {
-                show.forEach(i => i.classList.add("show"));
-                show[0].focus();
-            }, 200);
+        function showGroup(type) {
+            const signinDiv = document.getElementById("signin-group");
+            const registerDiv = document.getElementById("register-group");
+            const tabSignin = document.getElementById("tab-signin");
+            const tabRegister = document.getElementById("tab-register");
+
+            if(type === 'signin') {
+                registerDiv.classList.add("hidden");
+                signinDiv.classList.remove("hidden");
+                tabRegister.classList.remove("tab-active");
+                tabSignin.classList.add("tab-active");
+                document.getElementById("nameinput").focus();
+            } else {
+                signinDiv.classList.add("hidden");
+                registerDiv.classList.remove("hidden");
+                tabSignin.classList.remove("tab-active");
+                tabRegister.classList.add("tab-active");
+                document.getElementById("nameinputr").focus();
+            }
         }
         
         function enterWorkspace()
@@ -48,7 +58,6 @@
         
         async function signIn()
         {
-            showGroup(signinInputs, registerInputs);
             const yourname = document.getElementById("nameinput").value;
             const yourpw = document.getElementById("pwinput").value;
             const response = await fetch("@Url.Action("SignIn", "Auth")", {
@@ -67,9 +76,10 @@
                 window.location.href = result.redirect;
             }
         }
+        
         async function register()
         {
-            showGroup(registerInputs, signinInputs);
+            // Placeholder: Not fully implemented in old code either
         }
         
         async function select(filename) {
@@ -104,12 +114,14 @@
                     : document.createElement("tr");
 
                 if (i === 0) {
-                    tr.classList.add("sticky", "top-0", "z-50", "bg-white");
+                    tr.classList.add("sticky", "top-0", "z-20", "bg-zinc-800");
                 }
 
                 row.forEach(cell => {
                     const el = document.createElement(i === 0 ? "th" : "td");
                     el.textContent = cell;
+                    if(i===0) el.classList.add("px-2", "py-2", "border-b", "border-zinc-700", "text-left");
+                    else el.classList.add("px-2", "py-1.5", "border-b", "border-zinc-800/50");
                     tr.appendChild(el);
                 });
 
@@ -118,70 +130,91 @@
         }
     </script>
 </head>
-<body class="bg-zinc-800 text-white">
-<div class="flex h-screen">
-    <div class="flex flex-col h-screen min-w-0 p-4 border-r border-zinc-700" style="width: 15%; max-width: 200px;">
-        <div class="listelement text-lg font-bold mb-2" id="doc">
-            <button>Documentation</button>
-        </div>
-        <div class="mb-5 max-w-full min-w-0">
-            <p class="text-lg font-bold">Sample files</p>
-            <div class="text-base min-w-0">
-                @{
-                    int id = 0;
-                    foreach (var file in Model)
-                    {
-                        <div class="flex justify-between">
-                            <div class="listelement min-w-0" id="listelement@id" onclick="select('@file.Name');">
-                                <div class="listline"></div>
-                                <div class="listfile overflow-hidden text-ellipsis">@file.Name</div>
-                            </div>
-                        </div>
-                        id++;
-                    }
-                }
-            </div>
-        </div>
-        <div class="text-lg flex flex-col mb-4">
-            <button class="signinbutton font-extrabold" id="signinbutton1">SIGN IN</button>
-            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="text" id="nameinput"/>
-            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="password" id="pwinput"/>
-        </div>
-        <div class="text-lg flex flex-col mb-4">
-            <button class="registerbutton font-extrabold" id="registerbutton1">REGISTER</button>
-            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="text" id="nameinputr"/>
-            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="password" id="pwinputr"/>
-            <input class=" text-black bg-white placeholder:text-black font-bold p-1 mt-1 text-sm" type="password" id="pwconfirminputr"/>
+<body class="bg-zinc-950 text-slate-200 min-h-screen flex flex-col">
+
+<nav class="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+        <span>
+            <img src="01384a5a5e3c1ea5887b428641e12121.gif" alt="gif" class="w-5 h-auto scale-x-[-1]">
+        </span>
+        <h1 class="text-xl font-semibold tracking-tight text-white">Automatic CSV Plotting Tool for <span class="text-[#E9967A]">Data Analysts</span></h1>
+    </div>
+</nav>
+
+<main class="flex-1 w-full max-w-7xl mx-auto p-8 flex flex-col gap-6 justify-center">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center min-h-[60vh]">
+        <div class="flex flex-col gap-6">
+             <h2 class="text-5xl font-extrabold leading-tight text-white mb-4">Effortless <span class="text-[#E9967A] italic">Data Visualization</span> at Your Fingertips.</h2>
+             <p class="text-zinc-400 text-lg mb-4">Upload your CSV files and instantly generate amazing plots, heatmaps, and matrices. Sign in to explore and manage your private workspace.</p>
+             
+             <div class="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-sm shadow-xl flex flex-col pt-2">
+                 <div class="flex border-b border-zinc-800 text-sm font-bold text-zinc-400 mb-4 px-6 pt-2">
+                     <button id="tab-signin" class="pb-2 mr-6 tab-active transition-colors hover:text-white hover:cursor-pointer">Sign In</button>
+                 
+                     <button id="tab-register" class="pb-2 transition-colors hover:text-white hover:cursor-pointer">Register</button>
+                 </div>
+                 
+                 <div class="px-6 pb-6 w-full">
+                     <div id="signin-group" class="flex flex-col gap-3">
+                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="text" id="nameinput" placeholder="Username"/>
+                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="password" id="pwinput" placeholder="Password"/>
+                         <button class="font-bold hover:cursor-pointer bg-[darksalmon] text-white rounded p-2.5 w-full mt-2 hover:bg-[#E9967A] transition-all" id="signinbutton1">SIGN IN</button>
+                     </div>
+                     <div id="register-group" class="hidden flex flex-col gap-3">
+                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="text" id="nameinputr" placeholder="Username"/>
+                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="password" id="pwinputr" placeholder="Password"/>
+                         <input class="w-full bg-zinc-950 text-white placeholder-zinc-500 rounded p-2.5 border border-zinc-700 outline-none focus:border-[#E9967A] text-sm" type="password" id="pwconfirminputr" placeholder="Confirm Password"/>
+                         <button class="font-bold bg-[darksalmon] hover:cursor-pointer text-white rounded p-2.5 w-full mt-2 hover:bg-[#E9967A] transition-all" id="registerbutton1">REGISTER</button>
+                     </div>
+                 </div>
+             </div>
         </div>
 
-        <div class="flex flex-1"></div>
-    </div>
-    <div class="flex flex-1 flex-col h-screen p-5 min-w-0">
-        <div class="flex flex-col flex-1 text-4xl min-h-0">
-            <div class="flex font-bold justify-between">
-                <p class="italic">Preview<span id="previewFilename" style="color: darksalmon;"></span></p>
-                <button class="enterbutton font-extrabold" id="workspaceButton" style="display: none">Enter Workspace /></button>
-            </div>
-            <div class="min-w-0 min-h-0 overflow-auto border-solid border-gray-500 border-2 flex-1 content-center align-middle">
-                <table class="text-lg border-separate border-spacing-0 bg-zinc-950" id="dataTable" hidden></table>
-                <div id="noPreview" class="text-center">
-                    <p class="text-gray-500 font-bold">No preview available</p>
+        <div class="flex flex-col h-[550px]">
+            <div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl flex flex-col h-full">
+                <!-- Preview Header -->
+                <div class="bg-zinc-900 border-b border-zinc-800 p-4 flex justify-between items-center z-30">
+                    <p class="font-semibold text-white">Preview<span id="previewFilename" class="text-[#E9967A] font-bold"></span></p>
+                    <button class="hover:cursor-pointer text-xs font-bold bg-[#E9967A] text-white px-3 py-1.5 rounded hover:bg-[darksalmon]" id="workspaceButton" style="display: none">Enter Workspace</button>
                 </div>
-                <div hidden class="flex-1 content-center" id="loader">
-                    <div class="loader">
-                        <div class="loader__bar"></div>
-                        <div class="loader__bar"></div>
-                        <div class="loader__bar"></div>
-                        <div class="loader__bar"></div>
-                        <div class="loader__bar"></div>
-                        <div class="loader__ball"></div>
+                <!-- Preview Body -->
+                <div class="flex-1 bg-zinc-950 overflow-auto relative content-center rounded-b-xl border border-t-0 p-1 border-zinc-800">
+                    <table class="w-full text-sm border-separate border-spacing-0" id="dataTable" hidden></table>
+                    <div id="noPreview" class="text-center absolute inset-0 flex items-center justify-center">
+                        <p class="text-zinc-600 font-medium">Select a sample file below</p>
+                    </div>
+                    <div hidden class="absolute inset-0 flex items-center justify-center bg-zinc-950/80 z-10" id="loader">
+                        <div class="loader">
+                            <div class="loader__bar"></div><div class="loader__bar"></div>
+                            <div class="loader__bar"></div><div class="loader__bar"></div>
+                            <div class="loader__bar"></div><div class="loader__ball"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pb-2">
+                <div class="flex gap-2 items-start">
+                    <div class="text-sm font-medium text-zinc-400 whitespace-nowrap flex py-1">
+                        Try it:
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        @{
+                            foreach (var file in Model)
+                            {
+                                <button class="whitespace-nowrap bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-full px-4 py-1 text-xs font-medium transition-colors text-zinc-300 hover:text-white"
+                                        onclick="select('@file.Name');">
+                                    @file.Name
+                                </button>
+                            }
+                        }
                     </div>
                 </div>
             </div>
         </div>
     </div>
-  
-    
-</div>
+</main>
+
 </body>
 </html>

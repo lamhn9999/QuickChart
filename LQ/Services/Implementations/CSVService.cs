@@ -412,6 +412,11 @@ public class CSVService : ICSVService
         return _lqDbService.GetTable(analystId, csvFileId);
     }
 
+    public Table? GetTableLimited(int csvFileId, int numRowLimited)
+    {
+        return _lqDbService.GetTableLimited(csvFileId, numRowLimited);
+    }
+
     public void RemoveCSVFile(string analystId, string fileName)
     {
         int csvFileId = _lqDbService.GetCSVFile(analystId, fileName).ID;

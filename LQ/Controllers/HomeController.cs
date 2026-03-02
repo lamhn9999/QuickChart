@@ -28,6 +28,15 @@ public class HomeController : Controller
         }
     }
 
+    private CSVFileDTO? CurrentCSVFile
+    {
+        get
+        {
+            var json = HttpContext.Session.GetString("CSVFileDTO");
+            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CSVFileDTO>(json);
+        }
+    }
+
     [HttpGet]
     public IActionResult Show()
     {
@@ -97,12 +106,13 @@ public class HomeController : Controller
         CSVFile? selectedFile = _csvService.GetCSVFile(analystId, filename);
         if (selectedFile is null)
             return NotFound();
-
-
-        if (!isGuest)
+        
+        HttpContext.Session.SetString("CSVFileDTO", JsonSerializer.Serialize(new CSVFileDTO{currentFileID = selectedFile.ID}));
+        if (isGuest)
         {
-            analystdto!.currentFileID = selectedFile.ID;
-            HttpContext.Session.SetString("AnalystDTO", JsonSerializer.Serialize(analystdto));
+            Table? table = _csvService.GetTableLimited(selectedFile.ID, 200);
+            if (table is null) return NotFound();
+            return Json(table.GetDisplay());
         }
         
         return Ok();
