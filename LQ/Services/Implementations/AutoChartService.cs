@@ -670,15 +670,122 @@ public class AutoChartService : IAutoChartService
             .OrderBy(y => y)
             .ToList();
 
-        Matrix.X.AddRange(xs);
+        foreach (var x in xs)
+        {
+            if (table[0].Field.Type == typeof(bool)) Matrix.X.Add($"{table[0].Field.Name} = {x.ToString()}");
+            else Matrix.X.Add(x.ToString());
+        }
 
         foreach (var yk in ys)
         {
             LabelData ykbyx = new();
-            ykbyx.Label = yk.ToString();
+            if (table[0].Field.Type == typeof(bool)) ykbyx.Label = $"{table[1].Field.Name} = {yk.ToString()}";
+            else ykbyx.Label = yk.ToString();
             foreach (var xk in xs)
             {
                 ykbyx.Data.Add(dict2C.GetValueOrDefault((xk, yk), 0));
+            }
+            Matrix.Y.Add(ykbyx);
+        }
+        
+        return Matrix;
+    }
+
+    private Chart DetectMatrixMean(List<FieldValues> table)
+    {
+        Chart Matrix = new Chart();
+        Matrix.ChartType = ChartType.Matrix;
+        
+        Dictionary<(object x, object y), double> dict2C = new();
+        Dictionary<object, double > dict1C = new();
+        // Setup, Count
+        for (int i = 0; i < table[0].Values.Count; i++)
+        {
+            if (table[0].Values[i].ValueCasted == null) continue;
+
+            if (table[0].Field.Type == typeof(List<string>))
+            {
+                foreach (string? f in (List<string?>)table[0].Values[i].ValueCasted)
+                {
+                    if (f == null) continue;
+                    if (table[1].Field.Type == typeof(List<string>))
+                    {
+                        foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
+                        {
+                            if (f1 is null) continue;
+                            if (!dict2C.TryGetValue((f, f1), out var cnt)) dict2C[(f, f1)] = 1;
+                            else dict2C[(f, f1)]++;
+                            if (!dict1C.TryGetValue(f, out var cntx)) dict1C[f] = 1;
+                            else dict1C[f] += 1;
+                        }
+                    }
+                    else
+                    {
+                        var f1 = table[1].Values[i].ValueCasted;
+                        if (f1 is null) continue;
+                        if (!dict2C.TryGetValue((f, f1), out var cnt)) dict2C[(f, f1)] = 1;
+                        else dict2C[(f, f1)]++;
+                        if (!dict1C.TryGetValue(f, out var cntx)) dict1C[f] = 1;
+                        else dict1C[f] += 1;
+                    }
+                }
+            }
+            else
+            {
+                var key = table[0].Values[i].ValueCasted;
+                if (table[1].Field.Categories.Contains(Category.Categorical))
+                {
+                    if (table[1].Field.Type == typeof(List<string>))
+                    {
+                        if (table[1].Values[i].ValueCasted == null) continue;
+                        foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
+                        {
+                            if (f1 is null) continue;
+                            if (!dict2C.TryGetValue((key, f1), out var cnt)) dict2C[(key, f1)] = 1;
+                            else dict2C[(key, f1)]++;
+                            if (!dict1C.TryGetValue(key, out var cntx)) dict1C[key] = 1;
+                            else dict1C[key] += 1;
+                        }
+                    }
+                    else
+                    {
+                        var f1 = table[1].Values[i].ValueCasted;
+                        if (f1 is null) continue;
+                        if (!dict2C.TryGetValue((key, f1), out var cnt)) dict2C[(key, f1)] = 1;
+                        else dict2C[(key, f1)]++;
+                        if (!dict1C.TryGetValue(key, out var cntx)) dict1C[key] = 1;
+                        else dict1C[key] += 1;
+                    }
+                }
+            }
+        }
+        
+        var xs = dict2C.Keys
+            .Select(k => k.x)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+
+        var ys = dict2C.Keys
+            .Select(k => k.y)
+            .Distinct()
+            .OrderBy(y => y)
+            .ToList();
+
+        foreach (var x in xs)
+        {
+            if (table[0].Field.Type == typeof(bool)) Matrix.X.Add($"{table[0].Field.Name} = {x.ToString()}");
+            else Matrix.X.Add(x.ToString());
+        }
+
+        foreach (var yk in ys)
+        {
+            LabelData ykbyx = new();
+            if (table[0].Field.Type == typeof(bool)) ykbyx.Label = $"{table[1].Field.Name} = {yk.ToString()}";
+            else ykbyx.Label = yk.ToString();
+            foreach (var xk in xs)
+            {
+                ykbyx.Data.Add(dict2C.GetValueOrDefault((xk, yk), 0) / dict1C.GetValueOrDefault(xk, 1));
             }
             Matrix.Y.Add(ykbyx);
         }
@@ -888,11 +995,18 @@ public class AutoChartService : IAutoChartService
                     {
                         if (CountDistinctValues(categorical[categoricalIndex]) <= 20 &&
                             CountDistinctValues(categorical[categoricalSubIndex]) <= 20)
+                        {
                             res.Add(DetectMatrix(new List<FieldValues>
                             {
                                 categorical[categoricalIndex],
                                 categorical[categoricalSubIndex]
                             }));
+                            res.Add(DetectMatrixMean(new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                categorical[categoricalSubIndex]
+                            }));
+                        }
                         else
                             res.Add(DetectLineChart(new List<FieldValues>
                             {

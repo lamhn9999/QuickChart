@@ -54,8 +54,6 @@
                 <tbody>
                 @for(int i = 0; i < Model.RowCount; i++)
                 {
-                // DELETE LATER
-                if (i > 200) break;
                 <tr>
                     @foreach (FieldValues fv in Model.Columns)
                     {
@@ -76,8 +74,8 @@
             <div class="flex-1 border-2 border-gray-500 content-center" id="selPlot">
                 <p class="p-10 text-3xl text-center text-gray-500">Please click a table header to select a column. We will generate appropriate plots based on your selection.</p>
             </div>
-            <div hidden class="flex-1 border-2 border-red-600 content-center" id="noPlot">
-                <p class="p-10 text-3xl text-center text-red-500">ZERO ZERO</p>
+            <div hidden class="flex-1 border-2 border-gray-600 content-center" id="noPlot">
+                <p class="p-10 text-3xl text-center text-gray-500">No chart generated.</p>
             </div>
             <div hidden class="flex-1 content-center" id="loader">
                 <div class="loader">
@@ -92,6 +90,33 @@
         </div>
     </div>
 </div>
+    <div class="hidden">
+        <div class="flex justify-end p-2 border-b border-zinc-800 bg-zinc-900/30">
+            <div class="relative flex flex-col items-end">
+                <button class="hover:cursor-pointer text-sm tracking-wider font-bold bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
+                    Turn into
+                    <svg class="w-2.5 h-2.5 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div class="absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-800 rounded shadow-2xl py-1 z-30">
+                    <button class="w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate text-[#E9967A] font-semibold bg-zinc-800/50 hover:bg-zinc-800">Item</button>
+                    <button class="w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate text-zinc-400 hover:bg-zinc-800 hover:text-white">Item</button>
+                </div>
+            </div>
 
+            <div class="relative flex flex-col items-end">
+                <button class="hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
+                    Background color
+                    <svg class="w-2.5 h-2.5 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div class="absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-800 rounded shadow-2xl py-1 z-30">
+                    <img style="margin-right:2px;" src="img_colormap.gif" alt="colormap">
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
