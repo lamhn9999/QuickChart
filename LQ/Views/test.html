@@ -18,16 +18,20 @@
             height: 400px;
         }
     </style>
+    
 </head>
 <body>
-<img src="/home/lam/LQ/LQ/wwwroot/arrow-right-svgrepo-com.svg">
-<button class="bg-none hover:cursor-pointer text-sm font-medium text-blue-200 hover:text-white transition-colors flex items-center gap-2">
-    <img src="/home/lam/LQ/LQ/wwwroot/arrow-right-svgrepo-com.svg" class="w-4 h-4">
-</button>
-<button id="back" class="hover:cursor-pointer text-sm font-medium text-zinc-400 hover:text-white transition-colors flex items-center gap-2" onclick="backHome();">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-    Back to Home
-</button>
+<div class="w-64 p-4 bg-zinc-900 rounded-xl shadow-xl">
+    <input type="color" id="hiddenPicker" class="hidden">
+
+    <div id="preview"
+         class="w-full h-12 rounded-lg cursor-pointer border border-zinc-700">
+    </div>
+
+    <input id="hexInput"
+           class="mt-3 w-full bg-zinc-800 text-white px-3 py-2 rounded-lg outline-none"
+           placeholder="#000000">
+</div>
 
 <canvas id="incomeHeatmap"></canvas>
 
@@ -99,6 +103,27 @@
                 }
             }
         }
+    });
+</script>
+
+<script>
+    const hiddenPicker = document.getElementById("hiddenPicker");
+    const preview = document.getElementById("preview");
+    const hexInput = document.getElementById("hexInput");
+
+    preview.addEventListener("click", () => {
+        hiddenPicker.click();
+    });
+
+    hiddenPicker.addEventListener("input", (e) => {
+        const color = e.target.value;
+        preview.style.backgroundColor = color;
+        hexInput.value = color;
+    });
+
+    hexInput.addEventListener("input", (e) => {
+        const color = e.target.value;
+        preview.style.backgroundColor = color;
     });
 </script>
 
