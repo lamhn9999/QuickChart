@@ -862,6 +862,77 @@ public class AutoChartService : IAutoChartService
         return mixedBarChart;
     }
 
+    private Chart? DetectMixedLineChart(List<FieldValues> table)
+    {
+        Chart mixedLineChart = new Chart();
+        mixedLineChart.ChartType = ChartType.MixedBar;
+        Dictionary<object, (double sum, int cnt)> avg1 = new Dictionary<object, (double sum, int cnt)>();
+        Dictionary<object, (double sum, int cnt)> avg2 = new Dictionary<object, (double sum, int cnt)>();
+        for (int i = 0; i < table[0].Values.Count; i++)
+        {
+            var val = table[1].Values[i].ValueCasted;
+            var val2 = table[2].Values[i].ValueCasted;
+            if (val == null || val2 == null) continue;
+            if (table[0].Values[i].ValueCasted == null) continue;
+            if (table[0].Field.Type == typeof(List<String>))
+            {
+                foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
+                {
+                    if (f == null) continue; 
+                    avg1[f] = avg1.TryGetValue(f, out var n) 
+                        ? (n.sum + Convert.ToDouble(val), n.cnt + 1) 
+                        : (Convert.ToDouble(val), 1);
+                    avg2[f] = avg2.TryGetValue(f, out var n2)
+                        ? (n2.sum + Convert.ToDouble(val2), n2.cnt + 1)
+                        : (Convert.ToDouble(val2), 1);
+                }
+            }
+            else
+            {
+                var key = table[0].Values[i].ValueCasted;
+                if (key == null) continue;
+                avg1[key] = avg1.TryGetValue(key, out var n) 
+                    ? (n.sum + Convert.ToDouble(val), n.cnt + 1) 
+                    : (Convert.ToDouble(val), 1);
+                avg2[key] = avg2.TryGetValue(key, out var n2)
+                    ? (n2.sum + Convert.ToDouble(val2), n2.cnt + 1)
+                    : (Convert.ToDouble(val2), 1);
+            }
+        }
+        var data1 = avg1
+            .Where(kv => kv.Value.cnt > 0)
+            .Select(kv => new { 
+                Key = kv.Key, 
+                Val = kv.Value.sum / (1.0 * kv.Value.cnt)
+                
+            })
+            .OrderBy(kv => kv.Key)
+            .ToList();
+        var data2 = avg2
+            .Where(kv => kv.Value.cnt > 0)
+            .Select(kv => new { 
+                Key = kv.Key, 
+                Val = kv.Value.sum / (1.0 * kv.Value.cnt)
+                
+            }).
+            OrderBy(kv => kv.Key)
+            .ToList();
+        mixedLineChart.X = data1.Select(kv => kv.Key).ToList();
+        LabelData labelDataY = new LabelData();
+        labelDataY.Label = $"Mean of \"{table[1].Field.Name}\" by \"{table[0].Field.Name}\"";
+        labelDataY.Data = data1.Select(kv => kv.Val).Cast<object>().ToList();
+        labelDataY.ChartType = ChartType.Line;
+        mixedLineChart.Y.Add(labelDataY);
+        
+        LabelData labelDataZ = new LabelData();
+        labelDataZ.Label = $"Mean of \"{table[2].Field.Name}\" by \"{table[0].Field.Name}\"";
+        labelDataZ.Data = data2.Select(kv => kv.Val).Cast<object>().ToList();
+        labelDataZ.ChartType = ChartType.Line;
+        mixedLineChart.Z.Add(labelDataZ);
+
+        return mixedLineChart;
+    }
+
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
     {
         Stopwatch stopwatch = new Stopwatch();
@@ -967,6 +1038,20 @@ public class AutoChartService : IAutoChartService
                         }));
                     }
             }
+            
+            // X categorical, Y Numeric, Z Numeric
+            for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
+            {
+                for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
+                {
+                    res.Add(DetectMixedLineChart(new List<FieldValues>
+                    {
+                        categorical[categoricalIndex],
+                        numericList[numericIndex],
+                        numericList[numericSubIndex]
+                    }));
+                }
+            }
         }
         // X, Y
         for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
@@ -1052,17 +1137,17 @@ public class AutoChartService : IAutoChartService
             }
         }
         // X numeric, Y numeric
-            for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
+        for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
+        {
+            for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
             {
-                for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
+                res.Add(DetectScatter(new List<FieldValues>
                 {
-                    res.Add(DetectScatter(new List<FieldValues>
-                    {
-                        numericList[numericIndex],
-                        numericList[numericSubIndex]
-                    }));
-                }
+                    numericList[numericIndex],
+                    numericList[numericSubIndex]
+                }));
             }
+        }
         // X identifier, Y numeric
         foreach (FieldValues identifierFv in identifier)
         foreach (FieldValues numericFv in numericList) if (identifierFv != numericFv) {

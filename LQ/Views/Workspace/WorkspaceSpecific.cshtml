@@ -42,24 +42,24 @@
                 <thead class="sticky top-0">
                 <tr>
                     @{
-                    foreach (FieldValues fv in Model.Columns)
-                    {
-                    <th onclick="fieldClicked(@fv.Field.Index)">
-                        @fv.Field.Name
-                    </th>
-                    }
+                        foreach (FieldValues fv in Model.Columns)
+                        {
+                            <th onclick="fieldClicked(@fv.Field.Index)">
+                                @fv.Field.Name
+                            </th>
+                        }
                     }
                 </tr>
                 </thead>
                 <tbody>
                 @for(int i = 0; i < Model.RowCount; i++)
                 {
-                <tr>
-                    @foreach (FieldValues fv in Model.Columns)
-                    {
-                    <td>@fv.Values[i].ValueString</td>
-                    }
-                </tr>
+                    <tr>
+                        @foreach (FieldValues fv in Model.Columns)
+                        {
+                            <td>@fv.Values[i].ValueString</td>
+                        }
+                    </tr>
                 }
                 </tbody>
             </table>
@@ -90,6 +90,41 @@
         </div>
     </div>
 </div>
+<script>
+    const box = document.getElementById("tablePanel");
+
+    let isDragging = false;
+    let startX, startY;
+    let scrollLeft, scrollTop;
+
+    box.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        box.classList.add("grabbing");
+
+        startX = e.pageX;
+        startY = e.pageY;
+
+        scrollLeft = box.scrollLeft;
+        scrollTop = box.scrollTop;
+    });
+
+    document.addEventListener("mouseup", () => {
+        isDragging = false;
+        box.classList.remove("grabbing");
+    });
+
+    document.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+
+        e.preventDefault();
+
+        const dx = e.pageX - startX;
+        const dy = e.pageY - startY;
+
+        box.scrollLeft = scrollLeft - dx;
+        box.scrollTop = scrollTop - dy;
+    });
+</script>
     <div class="hidden">
         <div class="flex justify-end p-2 border-b border-zinc-800 bg-zinc-900/30">
             <div class="relative flex flex-col items-end">
