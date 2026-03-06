@@ -3,6 +3,7 @@ using LQ.Data.Database;
 using LQ.Models.AnalystModels;
 using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
+using LQ.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
 
 namespace LQ.Services.Implementations;
@@ -111,6 +112,104 @@ public class LQDbService : ILQDbService
             foreach (Field f in fields)
             {
                 List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).Take(numRowLimited).ToList();
+                returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
+            }
+            returnTable.SetRowCount();
+            return returnTable;
+        }
+        catch 
+        {
+            return null;
+        }
+    }
+
+    private IQueryable<int> GetFilteredRowIndexesQuery(int csvfileid, List<ValueFilterDTO> filters)
+    {
+        if (filters.Count == 0)
+        {
+            return _lqdbContext.Values.Where(v => v.Field.CSVFile.ID == csvfileid).Select(v => v.RowIndex).Distinct();
+        }
+
+        IQueryable<int>? finalQuery = null;
+
+        foreach (var filter in filters)
+        {
+            var filterQuery = _lqdbContext.Values.Where(v => v.Field.CSVFile.ID == csvfileid && v.Field.Index == filter.FieldIndex);
+
+            if (filter.IsPartialMatch)
+            {
+                filterQuery = filterQuery.Where(v =>
+                    filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s)));
+            }
+            else
+            {
+                filterQuery = filterQuery.Where(v =>
+                    filter.FilteringValues.Contains(v.ValueString));
+            }
+
+            var matchingRowIndexes = filterQuery.Select(v => v.RowIndex);
+
+            if (finalQuery == null)
+            {
+                finalQuery = matchingRowIndexes;
+            }
+            else
+            {
+                finalQuery = finalQuery.Intersect(matchingRowIndexes);
+            }
+        }
+
+        return finalQuery!;
+    }
+
+    public Table? GetTableWithFilter(int csvfileid, List<ValueFilterDTO> filters)
+    {
+        try 
+        {
+            CSVFile? csvFile = GetCSVFile(csvfileid);
+            if (csvFile == null) return null;
+
+            Table returnTable = new Table(csvFile);
+            List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
+            
+            var validRowIndexesQuery = GetFilteredRowIndexesQuery(csvfileid, filters);
+            
+            foreach (Field f in fields)
+            {
+                List<Value> values = (from v in _lqdbContext.Values 
+                                      where v.Field.ID == f.ID && validRowIndexesQuery.Contains(v.RowIndex) 
+                                      orderby v.RowIndex 
+                                      select v).ToList();
+                returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
+            }
+            returnTable.SetRowCount();
+            return returnTable;
+        }
+        catch 
+        {
+            return null;
+        }
+    }
+
+    public Table? GetTableWithFilterLimited(int csvfileid, List<ValueFilterDTO> filters, int numRowLimited)
+    {
+        try 
+        {
+            CSVFile? csvFile = GetCSVFile(csvfileid);
+            if (csvFile == null) return null;
+
+            Table returnTable = new Table(csvFile);
+            List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
+            
+            var validRowIndexesQuery = GetFilteredRowIndexesQuery(csvfileid, filters);
+            var limitedRowIndexesList = validRowIndexesQuery.OrderBy(r => r).Take(numRowLimited).ToList();
+            
+            foreach (Field f in fields)
+            {
+                List<Value> values = (from v in _lqdbContext.Values 
+                                      where v.Field.ID == f.ID && limitedRowIndexesList.Contains(v.RowIndex) 
+                                      orderby v.RowIndex 
+                                      select v).ToList();
                 returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
             }
             returnTable.SetRowCount();

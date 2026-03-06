@@ -134,11 +134,32 @@ public sealed class CSVFileTest
     //     _lqDbService.RenameCSVFile(newid, "top_rated_movies.csv");
     //     Assert.IsNotNull(_lqDbService.GetCSVFile(tester, "top_rated_movies.csv"));
     // }
+    // [TestMethod]
+    // public async Task UploadTest()
+    // {
+    //     Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
+    //     bool temp = await _csvService.ProcessUploadedCSV(tester,
+    //         "/home/lam/LQ/LQ/Data/SampleCSVs/player_stats_2023.csv");
+    // }
     [TestMethod]
-    public async Task UploadTest()
+    public void FilterTest()
     {
-        Analyst tester = await _analystService.FindAnalystById(BaseDTO.DefaultAnalystID);
-        bool temp = await _csvService.ProcessUploadedCSV(tester,
-            "/home/lam/LQ/LQ/Data/SampleCSVs/player_stats_2023.csv");
+        List<ValueFilterDTO> filters = new List<ValueFilterDTO>
+        {
+            new ValueFilterDTO {FieldIndex = 1, FilteringValues = new List<string>{"2019", "2020"}},
+            new ValueFilterDTO {FieldIndex = 2, FilteringValues = new List<string>{"19"}},
+            new ValueFilterDTO {FieldIndex = 3, FilteringValues = new List<string>{"7.4"}},
+        };
+        Table? TestTable = _lqDbService.GetTableWithFilter(56, filters);
+        var tabledisplay = TestTable.GetDisplay();
+        for (int i = 0; i < tabledisplay.Length; i++)
+        {
+            for (int j = 0; j < tabledisplay[i].Length; j++)
+            {
+                Debug.Write(tabledisplay[i][j] + ",");
+            }
+
+            Debug.WriteLine("");
+        }
     }
 }

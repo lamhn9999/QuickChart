@@ -1,5 +1,6 @@
 using LQ.Models.AnalystModels;
 using LQ.Models.TableModels;
+using LQ.Models.DTOs;
 
 namespace LQ.Services.Interfaces;
 
@@ -13,6 +14,8 @@ public interface ILQDbService
     public Table? GetTable(string analystid, int csvfileid);
     public Table? GetTable(int csvfileid, List<int> fieldindexes);
     public Table? GetTableLimited(int csvfileid, int numRowLimited);
+    public Table? GetTableWithFilter(int csvfileid, List<ValueFilterDTO> filters);
+    public Table? GetTableWithFilterLimited(int csvfileid, List<ValueFilterDTO> filters, int numRowLimited);
     public void InsertCSVFile(CSVFile csvFile);
     public CSVFile? GetCSVFile(Analyst analyst, string filename);
     public CSVFile? GetCSVFile(string analystid, string filename);

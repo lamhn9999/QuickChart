@@ -14,12 +14,14 @@ public class WorkspaceController : Controller
     private ICSVService _csvService;
     private IAnalystService _analystService;
     private IAutoChartService _autoChartService;
+    private ILQDbService _lqDbService;
     
-    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService)
+    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, ILQDbService lqDbService)
     {
         _csvService = csvService;
         _analystService =  analystService;
         _autoChartService = autoChartService;
+        _lqDbService = lqDbService;
     }
     
     private AnalystDTO? CurrentAnalyst
@@ -67,5 +69,21 @@ public class WorkspaceController : Controller
         TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
         if (tabledto is null) return NotFound();
         return Json(_autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes));
+    }
+
+    [HttpPost("filter")]
+    [IgnoreAntiforgeryToken]
+    public IActionResult FilterTable([FromBody] List<ValueFilterDTO> filters)
+    {
+        string? json = HttpContext.Session.GetString("TableDTO");
+        if (json is null) return NotFound();
+        TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
+        if (tabledto is null) return NotFound();
+        
+        var table = _lqDbService.GetTableWithFilterLimited(tabledto.CSVFileID, filters, 200);
+        
+        if (table is null) return NotFound();
+        
+        return Json(table.GetDisplay());
     }
 }
