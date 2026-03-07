@@ -41,6 +41,15 @@ public class WorkspaceController : Controller
             return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CSVFileDTO>(json);
         }
     }
+
+    private List<ValueFilterDTO>? CurrentFilters
+    {
+        get
+        {
+            var json = HttpContext.Session.GetString("ListValueFilterDTO");
+            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<List<ValueFilterDTO>>(json);
+        }
+    }
     
     [HttpGet]
     public IActionResult EnterWorkspace()
@@ -68,7 +77,10 @@ public class WorkspaceController : Controller
         if (json is null) return NotFound();
         TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
         if (tabledto is null) return NotFound();
-        return Json(_autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes));
+        return Json(CurrentFilters is null
+            ? _autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes)
+            : _autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes, CurrentFilters)
+        );
     }
 
     [HttpPost("filter")]
@@ -83,6 +95,7 @@ public class WorkspaceController : Controller
         var table = _lqDbService.GetTableWithFilterLimited(tabledto.CSVFileID, filters, 200);
         
         if (table is null) return NotFound();
+        HttpContext.Session.SetString("ListValueFilterDTO", JsonSerializer.Serialize(filters));
         
         return Json(table.GetDisplay());
     }

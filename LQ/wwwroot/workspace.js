@@ -3,6 +3,8 @@ const listIndexes = new Set();
 const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar'];
 let controller;
 
+let filters = [];
+
 function backHome() {
     window.location.href = '/';
 }
@@ -50,6 +52,101 @@ function buildMatrixDataset(sample) {
             return a ? (a.bottom - a.top) / yCount - 2 : 0;
         }
     }];
+}
+
+function filterClicked(event, filterbtn) {
+    event.stopPropagation();
+
+    const popup = filterbtn.parentElement.querySelector(".filterPopup");
+    const wasOpen = !popup.classList.contains("hidden");
+
+    document.querySelectorAll('.filterPopup')
+        .forEach(fm => fm.classList.add('hidden'));
+
+    if (!wasOpen) {
+        popup.classList.remove('hidden');
+    }
+
+    const input = popup.querySelector("input");
+    input.focus();
+}
+
+function filterPopupClicked(event, filterpopup) {
+    event.stopPropagation();
+
+    const input = filterpopup.querySelector("input");
+    if (input) {
+        input.focus();
+    }
+}
+function filterInputKey(event, input) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+
+        const value = input.value;
+        const columnHeader = input.closest("th");
+
+        sendFilterRequest(value.trim(), columnHeader.dataset.index);
+    }
+}
+async function sendFilterRequest(value, index) {
+    if(value !== "") 
+        filters[index] = {
+            isPartialMatch: true,
+            isNot: false,
+            fieldIndex: index,
+            filteringValues: [value],
+        };
+    else filters[index] = undefined;
+
+    controller = new AbortController();
+    const response = await fetch("/workspace/filter", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(filters.filter(f => f !== undefined)),
+        signal: controller.signal
+    });
+    const result = await response.json();
+    
+    updateTable(result);
+}
+
+function updateTable(rows) {
+    const tbody = document.querySelector("#dataTable tbody");
+    let trs = tbody.querySelectorAll("tr");
+
+    const dataRows = rows.slice(1); // skip header if server includes it
+
+    dataRows.forEach((row, i) => {
+
+        let tr;
+
+        if (trs[i]) {
+            tr = trs[i];
+        }
+        else {
+            tr = document.createElement("tr");
+            tbody.appendChild(tr);
+
+            row.forEach(() => {
+                const td = document.createElement("td");
+                tr.appendChild(td);
+            });
+        }
+
+        const tds = tr.querySelectorAll("td");
+
+        row.forEach((cell, j) => {
+            tds[j].textContent = cell;
+        });
+
+    });
+
+    for (let i = dataRows.length; i < trs.length; i++) {
+        trs[i].remove();
+    }
 }
 
 async function autoChart() {

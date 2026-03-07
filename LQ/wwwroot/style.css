@@ -55,7 +55,7 @@ th {
     max-height: 8rem;
     padding: 0.25rem;
 
-    overflow: hidden;
+    /*overflow: hidden;*/
     /*white-space: normal;      */
     /*word-break: break-word; */
     /*overflow-wrap: anywhere;*/

@@ -44,8 +44,31 @@
                     @{
                         foreach (FieldValues fv in Model.Columns)
                         {
-                            <th onclick="fieldClicked(@fv.Field.Index)">
+                            <th onclick="fieldClicked(@fv.Field.Index)" class = "relative" data-index="@fv.Field.Index">
                                 @fv.Field.Name
+                                <div class="relative flex flex-col items-end z-50">
+                                    <button class="filter-btn hover:cursor-pointer" onclick="filterClicked(event, this)">
+                                        <svg width="20" height="20" viewBox="0 0 24 24">
+                                            <path d="M3 5H21L14 13V19L10 21V13L3 5Z"
+                                                  stroke="currentColor"
+                                                  stroke-width="1.8"
+                                                  stroke-linecap="round"
+                                                  stroke-linejoin="round"/>
+                                        </svg>
+                                    </button>
+                                    <div class="hidden filterPopup absolute top-full right-0 mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50"
+                                         onclick="filterPopupClicked(event, this)">
+                                        <label class="block text-xs text-zinc-400 mb-1">
+                                            Search in @fv.Field.Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="Type to filter..."
+                                            onkeydown="filterInputKey(event, this)"
+                                            class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 roundedtext-zinc-200 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] focus:border-[#E9967A] transition"
+                                        />
+                                    </div>
+                                </div>
                             </th>
                         }
                     }

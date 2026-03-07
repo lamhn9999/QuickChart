@@ -15,6 +15,7 @@ public interface ILQDbService
     public Table? GetTable(int csvfileid, List<int> fieldindexes);
     public Table? GetTableLimited(int csvfileid, int numRowLimited);
     public Table? GetTableWithFilter(int csvfileid, List<ValueFilterDTO> filters);
+    public Table? GetTableWithFilter(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters);
     public Table? GetTableWithFilterLimited(int csvfileid, List<ValueFilterDTO> filters, int numRowLimited);
     public void InsertCSVFile(CSVFile csvFile);
     public CSVFile? GetCSVFile(Analyst analyst, string filename);

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using LQ.Models.ChartModels;
+using LQ.Models.DTOs;
 using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -938,6 +939,262 @@ public class AutoChartService : IAutoChartService
         Stopwatch stopwatch = new Stopwatch();
         stopwatch.Start();
         Table tempTable = _lqDbService.GetTable(csvfileid, fieldindexes);
+        int minimumRelationship = 0;
+        List<Chart?> res = new();
+        
+        List<FieldValues> identifier = new List<FieldValues>();
+        List<FieldValues> categorical = new List<FieldValues>();
+        List<List<FieldValues>> numeric = new List<List<FieldValues>>();
+        List<FieldValues> numericList = new List<FieldValues>();
+        List<(double med, double IQR)> scaleInfo = new List<(double med, double IQR)>(); 
+        foreach (FieldValues fv in tempTable.Columns)
+        {
+            if (fv.Field.Categories.Contains(Category.Identifier))
+                identifier.Add(fv);
+            if (fv.Field.Categories.Contains(Category.Categorical))
+                categorical.Add(fv);
+            if (fv.Field.Categories.Contains(Category.Numeric))
+            {
+                numericList.Add(fv);
+                (double med, double IQR) fvInfo = GetScaleInfo(fv.Values);
+                bool found = false;
+                for (int i = 0; i < numeric.Count; i++)
+                {
+                    (double med, double IQR) curInfo = scaleInfo[i];
+                    if (Math.Abs(curInfo.med - fvInfo.med) / Math.Max(fvInfo.IQR, curInfo.IQR) <= 1 &&
+                        Math.Max(curInfo.IQR, fvInfo.IQR) / Math.Min(curInfo.IQR, fvInfo.IQR) <= 2)
+                    {
+                        found = true;
+                        numeric[i].Add(fv);
+                        List<Value> newList = new List<Value>();
+                        foreach (FieldValues fvi in numeric[i])
+                        foreach(Value val in fvi.Values) newList.Add(val);
+                        scaleInfo[i] = GetScaleInfo(newList);
+                    }
+                }
+                if (!found)
+                {
+                    numeric.Add(new List<FieldValues> {fv});
+                    scaleInfo.Add(fvInfo);
+                }
+            }
+        }
+
+        // X, Y, Z
+        // foreach (var num in numeric)
+        // {
+        //     foreach (var fv in num)
+        //     {
+        //         System.Console.Write($"{fv.Field.Name},");
+        //     }
+        //
+        //     System.Console.WriteLine();
+        // }
+        
+        for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
+        {
+            // X Categorical, Y Categorical, Z Categorical
+            // X Categorical, Y Categorical, Z Numeric
+            for(int categoricalSubIndex = categoricalIndex + 1; categoricalSubIndex < categorical.Count; categoricalSubIndex++)
+            {
+                foreach (List<FieldValues> sameNumerics in numeric)
+                {
+                    foreach (FieldValues numericFv in sameNumerics)
+                    {
+                        if (numericFv != categorical[categoricalIndex] && numericFv != categorical[categoricalSubIndex])
+                        {
+                            if (categorical[categoricalIndex].Field.Type != typeof(DateTime) && 
+                                categorical[categoricalSubIndex].Field.Type != typeof(DateTime) &&
+                                CountDistinctValues(categorical[categoricalIndex]) <= 10 &&
+                                CountDistinctValues(categorical[categoricalSubIndex]) <= 10)
+                                res.Add(DetectMatrix(new List<FieldValues>
+                                {
+                                    categorical[categoricalIndex],
+                                    categorical[categoricalSubIndex],
+                                    numericFv,
+                                }));
+                            else
+                                res.Add(DetectLineChart(new List<FieldValues>
+                                {
+                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime) ? categorical[categoricalIndex] : categorical[categoricalSubIndex]),
+                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime) ? categorical[categoricalSubIndex] : categorical[categoricalIndex]),
+                                    numericFv,
+                                }));
+                        }   
+                    }
+                }
+            }
+            // X Categorical, Y Numeric, Z Identifier
+            foreach (FieldValues numericFv in numericList)
+            {
+                if (categorical[categoricalIndex] == numericFv) continue;
+                    foreach (FieldValues identifierFv in identifier)
+                    {
+                        if (identifierFv == numericFv || identifierFv == categorical[categoricalIndex]) continue;
+                        res.Add(DetectMixedBarChart(new List<FieldValues>
+                        {
+                            categorical[categoricalIndex],
+                            numericFv,
+                            identifierFv
+                        }));
+                    }
+            }
+            
+            // X categorical, Y Numeric, Z Numeric
+            for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
+            {
+                for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
+                {
+                    res.Add(DetectMixedLineChart(new List<FieldValues>
+                    {
+                        categorical[categoricalIndex],
+                        numericList[numericIndex],
+                        numericList[numericSubIndex]
+                    }));
+                }
+            }
+        }
+        // X, Y
+        for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
+        {
+            // X Categorical, Y Categorical
+            for(int categoricalSubIndex = categoricalIndex + 1; categoricalSubIndex < categorical.Count; categoricalSubIndex++)
+            {
+                if (categorical[categoricalIndex].Field.Type == typeof(DateTime))
+                {
+                    if (categorical[categoricalSubIndex].Field.Type != typeof(DateTime))
+                        res.Add(DetectLineChart(new List<FieldValues>
+                        {
+                            categorical[categoricalIndex],
+                            categorical[categoricalSubIndex]
+                        }));
+                }
+                else
+                {
+                    if (categorical[categoricalSubIndex].Field.Type == typeof(DateTime))
+                        res.Add(DetectLineChart(new List<FieldValues>
+                        {
+                            categorical[categoricalSubIndex],
+                            categorical[categoricalIndex]
+                        }));
+                    else
+                    {
+                        if (CountDistinctValues(categorical[categoricalIndex]) <= 20 &&
+                            CountDistinctValues(categorical[categoricalSubIndex]) <= 20)
+                        {
+                            res.Add(DetectMatrix(new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                categorical[categoricalSubIndex]
+                            }));
+                            res.Add(DetectMatrixMean(new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                categorical[categoricalSubIndex]
+                            }));
+                        }
+                        else
+                            res.Add(DetectLineChart(new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                categorical[categoricalSubIndex]
+                            }));
+                    }
+                }
+            }
+            // X Categorical, Y Numeric
+            foreach (List<FieldValues> lfv in numeric)
+            {
+                foreach (FieldValues numericfv in lfv) 
+                {
+                    if (numericfv != categorical[categoricalIndex])
+                    {
+                        if (categorical[categoricalIndex].Field.Type == typeof(DateTime) || categorical[categoricalIndex].Field.Categories.Contains(Category.Numeric))
+                        {
+                            res.Add(DetectLineChart(new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                numericfv
+                            }));
+                        }
+                        else
+                        {
+                            res.Add(CountDistinctValues(categorical[categoricalIndex]) <= 20
+                                ? DetectBarChart(new List<FieldValues>{categorical[categoricalIndex], numericfv})
+                                : DetectSideBar(new List<FieldValues>{categorical[categoricalIndex], numericfv})
+                            );
+                        }
+                    }
+                }
+            }
+            // X Categorical, Y list<Numeric>
+            foreach (List<FieldValues> lfv in numeric)
+            {
+                List<FieldValues> sameScale = new List<FieldValues>();
+                foreach (FieldValues nfv in lfv) if (nfv != categorical[categoricalIndex]) sameScale.Add(nfv);
+                if (sameScale.Count == 1) continue;
+                sameScale.Insert(0, categorical[categoricalIndex]);
+                res.Add(DetectBarChart(sameScale));
+            }
+        }
+        // X numeric, Y numeric
+        for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
+        {
+            for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
+            {
+                res.Add(DetectScatter(new List<FieldValues>
+                {
+                    numericList[numericIndex],
+                    numericList[numericSubIndex]
+                }));
+            }
+        }
+        // X identifier, Y numeric
+        foreach (FieldValues identifierFv in identifier)
+        foreach (FieldValues numericFv in numericList) if (identifierFv != numericFv) {
+            res.Add(DetectSideBar(new List<FieldValues>()
+            {
+                identifierFv,
+                numericFv
+            }));
+        }
+
+        // X categorical
+        foreach (FieldValues categoricalFv in categorical)
+        {
+            if (CountDistinctValues(categoricalFv) <= 20)
+                res.Add(DetectPieChart(new List<FieldValues> { categoricalFv }));
+            else res.Add(DetectSideBar(new List<FieldValues> { categoricalFv }));
+        }
+        // X identifier
+        // foreach (FieldValues identifierFv in identifier)
+        // {
+        //     res.Add(DetectSideBar(new List<FieldValues> { identifierFv }));
+        // }
+        // X numeric
+        foreach (List<FieldValues> lfv in numeric)
+        {
+            foreach (FieldValues numericfv in lfv) 
+                if (!numericfv.Field.Categories.Contains(Category.Identifier))
+                    res.Add(DetectHistogram(new List<FieldValues> {numericfv}));
+        }
+        
+        List<Chart> noNullRes = new List<Chart>();
+        foreach (Chart? chart in res) 
+        {
+            if (chart != null) noNullRes.Add(chart);
+        }
+
+        stopwatch.Stop();
+        File.WriteAllText("DetectChart.txt", stopwatch.ElapsedMilliseconds.ToString());
+        return noNullRes;
+    }
+
+    public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters, CancellationToken cancellationToken = default)
+    {
+        Stopwatch stopwatch = new Stopwatch();
+        stopwatch.Start();
+        Table tempTable = _lqDbService.GetTableWithFilter(csvfileid, fieldindexes, filters);
         int minimumRelationship = 0;
         List<Chart?> res = new();
         

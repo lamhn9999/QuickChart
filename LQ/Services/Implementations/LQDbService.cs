@@ -191,6 +191,35 @@ public class LQDbService : ILQDbService
         }
     }
 
+    public Table? GetTableWithFilter(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters)
+    {
+        try 
+        {
+            CSVFile? csvFile = GetCSVFile(csvfileid);
+            if (csvFile == null) return null;
+
+            Table returnTable = new Table(csvFile);
+            List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile && fieldindexes.Contains(f.Index) orderby f.Index select f).ToList();
+            
+            var validRowIndexesQuery = GetFilteredRowIndexesQuery(csvfileid, filters);
+            
+            foreach (Field f in fields)
+            {
+                List<Value> values = (from v in _lqdbContext.Values 
+                    where v.Field.ID == f.ID && validRowIndexesQuery.Contains(v.RowIndex) 
+                    orderby v.RowIndex 
+                    select v).ToList();
+                returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
+            }
+            returnTable.SetRowCount();
+            return returnTable;
+        }
+        catch 
+        {
+            return null;
+        }
+    }
+
     public Table? GetTableWithFilterLimited(int csvfileid, List<ValueFilterDTO> filters, int numRowLimited)
     {
         try 
