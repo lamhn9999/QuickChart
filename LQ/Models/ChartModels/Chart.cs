@@ -33,7 +33,7 @@ public class Chart
         ? 1
         : Y.Count() + Z.Count();
 
-    public int PanelIndex => RelationshipCount - 1 >= 0 ? RelationshipCount - 1 : 0;
+    public int PanelIndex { get; set; } = -1;
     public string ShowJson()
     {
         return JsonSerializer.Serialize(this);

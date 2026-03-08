@@ -6,3 +6,5 @@ Identity's features like Roles, User Claims, or Login Tokens natively down the r
 Recommendation: In the future, for a professional repository, you should consider updating LQDbContext : DbContext to LQDbContext : IdentityUserContext<Analyst>
 to natively support the entire EF Core schema lifecycle.
 
+toprated: loi dem country_origin va original_language
+student_data: chon cot age => null

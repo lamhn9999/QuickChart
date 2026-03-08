@@ -939,7 +939,7 @@ public class AutoChartService : IAutoChartService
         Stopwatch stopwatch = new Stopwatch();
         stopwatch.Start();
         Table tempTable = _lqDbService.GetTable(csvfileid, fieldindexes);
-        int minimumRelationship = 0;
+       int minimumRelationship = 0;
         List<Chart?> res = new();
         
         List<FieldValues> identifier = new List<FieldValues>();
@@ -990,6 +990,9 @@ public class AutoChartService : IAutoChartService
         //
         //     System.Console.WriteLine();
         // }
+
+        Dictionary<List<FieldValues>, int> ChartIndex = new Dictionary<List<FieldValues>, int>();
+        int curChartIndex = 0;
         
         for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
         {
@@ -1003,23 +1006,41 @@ public class AutoChartService : IAutoChartService
                     {
                         if (numericFv != categorical[categoricalIndex] && numericFv != categorical[categoricalSubIndex])
                         {
-                            if (categorical[categoricalIndex].Field.Type != typeof(DateTime) && 
+                            if (categorical[categoricalIndex].Field.Type != typeof(DateTime) &&
                                 categorical[categoricalSubIndex].Field.Type != typeof(DateTime) &&
                                 CountDistinctValues(categorical[categoricalIndex]) <= 10 &&
                                 CountDistinctValues(categorical[categoricalSubIndex]) <= 10)
-                                res.Add(DetectMatrix(new List<FieldValues>
+                            {
+                                List<FieldValues> chartTable = new List<FieldValues>
                                 {
                                     categorical[categoricalIndex],
                                     categorical[categoricalSubIndex],
                                     numericFv,
-                                }));
+                                };
+                                Chart resChart = DetectMatrix(chartTable);
+                                if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                    ChartIndex[chartTable] = curChartIndex++;
+                                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                                res.Add(resChart);
+                            }
                             else
-                                res.Add(DetectLineChart(new List<FieldValues>
+                            {
+                                List<FieldValues> chartTable = new List<FieldValues>
                                 {
-                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime) ? categorical[categoricalIndex] : categorical[categoricalSubIndex]),
-                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime) ? categorical[categoricalSubIndex] : categorical[categoricalIndex]),
+                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime)
+                                        ? categorical[categoricalIndex]
+                                        : categorical[categoricalSubIndex]),
+                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime)
+                                        ? categorical[categoricalSubIndex]
+                                        : categorical[categoricalIndex]),
                                     numericFv,
-                                }));
+                                };
+                                Chart resChart = DetectLineChart(chartTable);
+                                if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                    ChartIndex[chartTable] = curChartIndex++;
+                                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                                res.Add(resChart);
+                            }
                         }   
                     }
                 }
@@ -1031,12 +1052,17 @@ public class AutoChartService : IAutoChartService
                     foreach (FieldValues identifierFv in identifier)
                     {
                         if (identifierFv == numericFv || identifierFv == categorical[categoricalIndex]) continue;
-                        res.Add(DetectMixedBarChart(new List<FieldValues>
+                        List<FieldValues> chartTable = new List<FieldValues>
                         {
                             categorical[categoricalIndex],
                             numericFv,
                             identifierFv
-                        }));
+                        };
+                        Chart resChart = DetectMixedBarChart(chartTable);
+                        if (!ChartIndex.TryGetValue(chartTable, out var id))
+                            ChartIndex[chartTable] = curChartIndex++;
+                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                        res.Add(resChart);
                     }
             }
             
@@ -1045,12 +1071,17 @@ public class AutoChartService : IAutoChartService
             {
                 for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
                 {
-                    res.Add(DetectMixedLineChart(new List<FieldValues>
+                    List<FieldValues> chartTable = new List<FieldValues>
                     {
                         categorical[categoricalIndex],
                         numericList[numericIndex],
                         numericList[numericSubIndex]
-                    }));
+                    };
+                    Chart resChart = DetectMixedLineChart(chartTable);
+                    if (!ChartIndex.TryGetValue(chartTable, out var id))
+                        ChartIndex[chartTable] = curChartIndex++;
+                    resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                    res.Add(resChart);
                 }
             }
         }
@@ -1063,42 +1094,67 @@ public class AutoChartService : IAutoChartService
                 if (categorical[categoricalIndex].Field.Type == typeof(DateTime))
                 {
                     if (categorical[categoricalSubIndex].Field.Type != typeof(DateTime))
-                        res.Add(DetectLineChart(new List<FieldValues>
+                    {
+                        List<FieldValues> chartTable = new List<FieldValues>
                         {
                             categorical[categoricalIndex],
                             categorical[categoricalSubIndex]
-                        }));
+                        };
+                        Chart resChart = DetectLineChart(chartTable);
+                        if (!ChartIndex.TryGetValue(chartTable, out var id))
+                            ChartIndex[chartTable] = curChartIndex++;
+                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                        res.Add(resChart);
+                    }
                 }
                 else
                 {
                     if (categorical[categoricalSubIndex].Field.Type == typeof(DateTime))
-                        res.Add(DetectLineChart(new List<FieldValues>
+                    {
+                        List<FieldValues> chartTable = new List<FieldValues>
                         {
                             categorical[categoricalSubIndex],
                             categorical[categoricalIndex]
-                        }));
+                        };
+                        Chart resChart = DetectMatrix(chartTable);
+                        if (!ChartIndex.TryGetValue(chartTable, out var id))
+                            ChartIndex[chartTable] = curChartIndex++;
+                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                        res.Add(resChart);
+                    }
                     else
                     {
                         if (CountDistinctValues(categorical[categoricalIndex]) <= 20 &&
                             CountDistinctValues(categorical[categoricalSubIndex]) <= 20)
                         {
-                            res.Add(DetectMatrix(new List<FieldValues>
+                            List<FieldValues> chartTable = new List<FieldValues>
                             {
-                                categorical[categoricalIndex],
-                                categorical[categoricalSubIndex]
-                            }));
-                            res.Add(DetectMatrixMean(new List<FieldValues>
-                            {
-                                categorical[categoricalIndex],
-                                categorical[categoricalSubIndex]
-                            }));
+                                categorical[categoricalSubIndex],
+                                categorical[categoricalIndex]
+                            };
+                            Chart resChart = DetectMatrix(chartTable);
+                            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                ChartIndex[chartTable] = curChartIndex++;
+                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart);
+
+                            Chart resChart2 = DetectMatrixMean(chartTable);
+                            resChart2.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart2);
                         }
                         else
-                            res.Add(DetectLineChart(new List<FieldValues>
+                        {
+                            List<FieldValues> chartTable = new List<FieldValues>
                             {
                                 categorical[categoricalIndex],
                                 categorical[categoricalSubIndex]
-                            }));
+                            };
+                            Chart resChart = DetectLineChart(chartTable);
+                            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                ChartIndex[chartTable] = curChartIndex++;
+                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart);
+                        }
                     }
                 }
             }
@@ -1111,18 +1167,31 @@ public class AutoChartService : IAutoChartService
                     {
                         if (categorical[categoricalIndex].Field.Type == typeof(DateTime) || categorical[categoricalIndex].Field.Categories.Contains(Category.Numeric))
                         {
-                            res.Add(DetectLineChart(new List<FieldValues>
+                            List<FieldValues> chartTable = new List<FieldValues>
                             {
                                 categorical[categoricalIndex],
                                 numericfv
-                            }));
+                            };
+                            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                ChartIndex[chartTable] = curChartIndex++;
+                            Chart resChart = DetectLineChart(chartTable);
+                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart);
                         }
                         else
                         {
-                            res.Add(CountDistinctValues(categorical[categoricalIndex]) <= 20
-                                ? DetectBarChart(new List<FieldValues>{categorical[categoricalIndex], numericfv})
-                                : DetectSideBar(new List<FieldValues>{categorical[categoricalIndex], numericfv})
-                            );
+                            List<FieldValues> chartTable = new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                numericfv
+                            };
+                            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                ChartIndex[chartTable] = curChartIndex++;
+                            Chart resChart = CountDistinctValues(categorical[categoricalIndex]) <= 20
+                                ? DetectBarChart(chartTable)
+                                : DetectSideBar(chartTable);
+                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart);
                         }
                     }
                 }
@@ -1134,7 +1203,11 @@ public class AutoChartService : IAutoChartService
                 foreach (FieldValues nfv in lfv) if (nfv != categorical[categoricalIndex]) sameScale.Add(nfv);
                 if (sameScale.Count == 1) continue;
                 sameScale.Insert(0, categorical[categoricalIndex]);
-                res.Add(DetectBarChart(sameScale));
+                if (!ChartIndex.TryGetValue(sameScale, out var id))
+                    ChartIndex[sameScale] = curChartIndex++;
+                Chart resChart = DetectBarChart(sameScale);
+                resChart.PanelIndex = ChartIndex.GetValueOrDefault(sameScale, -1);
+                res.Add(resChart);
             }
         }
         // X numeric, Y numeric
@@ -1142,29 +1215,48 @@ public class AutoChartService : IAutoChartService
         {
             for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
             {
-                res.Add(DetectScatter(new List<FieldValues>
+                List<FieldValues> chartTable = new List<FieldValues>
                 {
                     numericList[numericIndex],
                     numericList[numericSubIndex]
-                }));
+                };
+                if (!ChartIndex.TryGetValue(chartTable, out var id))
+                    ChartIndex[chartTable] = curChartIndex++;
+                Chart resChart = DetectScatter(chartTable);
+                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                res.Add(resChart);
             }
         }
         // X identifier, Y numeric
         foreach (FieldValues identifierFv in identifier)
         foreach (FieldValues numericFv in numericList) if (identifierFv != numericFv) {
-            res.Add(DetectSideBar(new List<FieldValues>()
+            List<FieldValues> chartTable = new List<FieldValues>
             {
                 identifierFv,
                 numericFv
-            }));
+            };
+            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                ChartIndex[chartTable] = curChartIndex++;
+            Chart resChart = DetectSideBar(chartTable);
+            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+            res.Add(resChart);
         }
 
         // X categorical
         foreach (FieldValues categoricalFv in categorical)
         {
-            if (CountDistinctValues(categoricalFv) <= 20)
-                res.Add(DetectPieChart(new List<FieldValues> { categoricalFv }));
-            else res.Add(DetectSideBar(new List<FieldValues> { categoricalFv }));
+            List<FieldValues> chartTable = new List<FieldValues>
+            {
+               categoricalFv
+            };
+            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                ChartIndex[chartTable] = curChartIndex++;
+            Chart resChart = CountDistinctValues(categoricalFv) <= 20
+                ? DetectPieChart(chartTable)
+                : DetectSideBar(chartTable);
+            resChart.PanelIndex = ChartIndex[chartTable];
+            Console.WriteLine(ChartIndex[chartTable]);
+            res.Add(resChart);
         }
         // X identifier
         // foreach (FieldValues identifierFv in identifier)
@@ -1174,9 +1266,19 @@ public class AutoChartService : IAutoChartService
         // X numeric
         foreach (List<FieldValues> lfv in numeric)
         {
-            foreach (FieldValues numericfv in lfv) 
+            foreach (FieldValues numericfv in lfv)
                 if (!numericfv.Field.Categories.Contains(Category.Identifier))
-                    res.Add(DetectHistogram(new List<FieldValues> {numericfv}));
+                {
+                    List<FieldValues> chartTable = new List<FieldValues>
+                    {
+                        numericfv
+                    };
+                    if (!ChartIndex.TryGetValue(chartTable, out var id))
+                        ChartIndex[chartTable] = curChartIndex++;
+                    Chart resChart = DetectHistogram(chartTable);
+                    resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                    res.Add(resChart);
+                }
         }
         
         List<Chart> noNullRes = new List<Chart>();
@@ -1246,6 +1348,9 @@ public class AutoChartService : IAutoChartService
         //
         //     System.Console.WriteLine();
         // }
+
+        Dictionary<List<FieldValues>, int> ChartIndex = new Dictionary<List<FieldValues>, int>();
+        int curChartIndex = 0;
         
         for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
         {
@@ -1259,23 +1364,41 @@ public class AutoChartService : IAutoChartService
                     {
                         if (numericFv != categorical[categoricalIndex] && numericFv != categorical[categoricalSubIndex])
                         {
-                            if (categorical[categoricalIndex].Field.Type != typeof(DateTime) && 
+                            if (categorical[categoricalIndex].Field.Type != typeof(DateTime) &&
                                 categorical[categoricalSubIndex].Field.Type != typeof(DateTime) &&
                                 CountDistinctValues(categorical[categoricalIndex]) <= 10 &&
                                 CountDistinctValues(categorical[categoricalSubIndex]) <= 10)
-                                res.Add(DetectMatrix(new List<FieldValues>
+                            {
+                                List<FieldValues> chartTable = new List<FieldValues>
                                 {
                                     categorical[categoricalIndex],
                                     categorical[categoricalSubIndex],
                                     numericFv,
-                                }));
+                                };
+                                Chart resChart = DetectMatrix(chartTable);
+                                if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                    ChartIndex[chartTable] = curChartIndex++;
+                                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                                res.Add(resChart);
+                            }
                             else
-                                res.Add(DetectLineChart(new List<FieldValues>
+                            {
+                                List<FieldValues> chartTable = new List<FieldValues>
                                 {
-                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime) ? categorical[categoricalIndex] : categorical[categoricalSubIndex]),
-                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime) ? categorical[categoricalSubIndex] : categorical[categoricalIndex]),
+                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime)
+                                        ? categorical[categoricalIndex]
+                                        : categorical[categoricalSubIndex]),
+                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime)
+                                        ? categorical[categoricalSubIndex]
+                                        : categorical[categoricalIndex]),
                                     numericFv,
-                                }));
+                                };
+                                Chart resChart = DetectLineChart(chartTable);
+                                if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                    ChartIndex[chartTable] = curChartIndex++;
+                                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                                res.Add(resChart);
+                            }
                         }   
                     }
                 }
@@ -1287,12 +1410,17 @@ public class AutoChartService : IAutoChartService
                     foreach (FieldValues identifierFv in identifier)
                     {
                         if (identifierFv == numericFv || identifierFv == categorical[categoricalIndex]) continue;
-                        res.Add(DetectMixedBarChart(new List<FieldValues>
+                        List<FieldValues> chartTable = new List<FieldValues>
                         {
                             categorical[categoricalIndex],
                             numericFv,
                             identifierFv
-                        }));
+                        };
+                        Chart resChart = DetectMixedBarChart(chartTable);
+                        if (!ChartIndex.TryGetValue(chartTable, out var id))
+                            ChartIndex[chartTable] = curChartIndex++;
+                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                        res.Add(resChart);
                     }
             }
             
@@ -1301,12 +1429,17 @@ public class AutoChartService : IAutoChartService
             {
                 for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
                 {
-                    res.Add(DetectMixedLineChart(new List<FieldValues>
+                    List<FieldValues> chartTable = new List<FieldValues>
                     {
                         categorical[categoricalIndex],
                         numericList[numericIndex],
                         numericList[numericSubIndex]
-                    }));
+                    };
+                    Chart resChart = DetectMixedLineChart(chartTable);
+                    if (!ChartIndex.TryGetValue(chartTable, out var id))
+                        ChartIndex[chartTable] = curChartIndex++;
+                    resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                    res.Add(resChart);
                 }
             }
         }
@@ -1319,42 +1452,67 @@ public class AutoChartService : IAutoChartService
                 if (categorical[categoricalIndex].Field.Type == typeof(DateTime))
                 {
                     if (categorical[categoricalSubIndex].Field.Type != typeof(DateTime))
-                        res.Add(DetectLineChart(new List<FieldValues>
+                    {
+                        List<FieldValues> chartTable = new List<FieldValues>
                         {
                             categorical[categoricalIndex],
                             categorical[categoricalSubIndex]
-                        }));
+                        };
+                        Chart resChart = DetectLineChart(chartTable);
+                        if (!ChartIndex.TryGetValue(chartTable, out var id))
+                            ChartIndex[chartTable] = curChartIndex++;
+                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                        res.Add(resChart);
+                    }
                 }
                 else
                 {
                     if (categorical[categoricalSubIndex].Field.Type == typeof(DateTime))
-                        res.Add(DetectLineChart(new List<FieldValues>
+                    {
+                        List<FieldValues> chartTable = new List<FieldValues>
                         {
                             categorical[categoricalSubIndex],
                             categorical[categoricalIndex]
-                        }));
+                        };
+                        Chart resChart = DetectMatrix(chartTable);
+                        if (!ChartIndex.TryGetValue(chartTable, out var id))
+                            ChartIndex[chartTable] = curChartIndex++;
+                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                        res.Add(resChart);
+                    }
                     else
                     {
                         if (CountDistinctValues(categorical[categoricalIndex]) <= 20 &&
                             CountDistinctValues(categorical[categoricalSubIndex]) <= 20)
                         {
-                            res.Add(DetectMatrix(new List<FieldValues>
+                            List<FieldValues> chartTable = new List<FieldValues>
                             {
-                                categorical[categoricalIndex],
-                                categorical[categoricalSubIndex]
-                            }));
-                            res.Add(DetectMatrixMean(new List<FieldValues>
-                            {
-                                categorical[categoricalIndex],
-                                categorical[categoricalSubIndex]
-                            }));
+                                categorical[categoricalSubIndex],
+                                categorical[categoricalIndex]
+                            };
+                            Chart resChart = DetectMatrix(chartTable);
+                            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                ChartIndex[chartTable] = curChartIndex++;
+                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart);
+
+                            Chart resChart2 = DetectMatrixMean(chartTable);
+                            resChart2.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart2);
                         }
                         else
-                            res.Add(DetectLineChart(new List<FieldValues>
+                        {
+                            List<FieldValues> chartTable = new List<FieldValues>
                             {
                                 categorical[categoricalIndex],
                                 categorical[categoricalSubIndex]
-                            }));
+                            };
+                            Chart resChart = DetectLineChart(chartTable);
+                            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                ChartIndex[chartTable] = curChartIndex++;
+                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart);
+                        }
                     }
                 }
             }
@@ -1367,18 +1525,31 @@ public class AutoChartService : IAutoChartService
                     {
                         if (categorical[categoricalIndex].Field.Type == typeof(DateTime) || categorical[categoricalIndex].Field.Categories.Contains(Category.Numeric))
                         {
-                            res.Add(DetectLineChart(new List<FieldValues>
+                            List<FieldValues> chartTable = new List<FieldValues>
                             {
                                 categorical[categoricalIndex],
                                 numericfv
-                            }));
+                            };
+                            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                ChartIndex[chartTable] = curChartIndex++;
+                            Chart resChart = DetectLineChart(chartTable);
+                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart);
                         }
                         else
                         {
-                            res.Add(CountDistinctValues(categorical[categoricalIndex]) <= 20
-                                ? DetectBarChart(new List<FieldValues>{categorical[categoricalIndex], numericfv})
-                                : DetectSideBar(new List<FieldValues>{categorical[categoricalIndex], numericfv})
-                            );
+                            List<FieldValues> chartTable = new List<FieldValues>
+                            {
+                                categorical[categoricalIndex],
+                                numericfv
+                            };
+                            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                                ChartIndex[chartTable] = curChartIndex++;
+                            Chart resChart = CountDistinctValues(categorical[categoricalIndex]) <= 20
+                                ? DetectBarChart(chartTable)
+                                : DetectSideBar(chartTable);
+                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                            res.Add(resChart);
                         }
                     }
                 }
@@ -1390,7 +1561,11 @@ public class AutoChartService : IAutoChartService
                 foreach (FieldValues nfv in lfv) if (nfv != categorical[categoricalIndex]) sameScale.Add(nfv);
                 if (sameScale.Count == 1) continue;
                 sameScale.Insert(0, categorical[categoricalIndex]);
-                res.Add(DetectBarChart(sameScale));
+                if (!ChartIndex.TryGetValue(sameScale, out var id))
+                    ChartIndex[sameScale] = curChartIndex++;
+                Chart resChart = DetectBarChart(sameScale);
+                resChart.PanelIndex = ChartIndex.GetValueOrDefault(sameScale, -1);
+                res.Add(resChart);
             }
         }
         // X numeric, Y numeric
@@ -1398,29 +1573,48 @@ public class AutoChartService : IAutoChartService
         {
             for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
             {
-                res.Add(DetectScatter(new List<FieldValues>
+                List<FieldValues> chartTable = new List<FieldValues>
                 {
                     numericList[numericIndex],
                     numericList[numericSubIndex]
-                }));
+                };
+                if (!ChartIndex.TryGetValue(chartTable, out var id))
+                    ChartIndex[chartTable] = curChartIndex++;
+                Chart resChart = DetectScatter(chartTable);
+                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                res.Add(resChart);
             }
         }
         // X identifier, Y numeric
         foreach (FieldValues identifierFv in identifier)
         foreach (FieldValues numericFv in numericList) if (identifierFv != numericFv) {
-            res.Add(DetectSideBar(new List<FieldValues>()
+            List<FieldValues> chartTable = new List<FieldValues>
             {
                 identifierFv,
                 numericFv
-            }));
+            };
+            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                ChartIndex[chartTable] = curChartIndex++;
+            Chart resChart = DetectSideBar(chartTable);
+            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+            res.Add(resChart);
         }
 
         // X categorical
         foreach (FieldValues categoricalFv in categorical)
         {
-            if (CountDistinctValues(categoricalFv) <= 20)
-                res.Add(DetectPieChart(new List<FieldValues> { categoricalFv }));
-            else res.Add(DetectSideBar(new List<FieldValues> { categoricalFv }));
+            List<FieldValues> chartTable = new List<FieldValues>
+            {
+               categoricalFv
+            };
+            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                ChartIndex[chartTable] = curChartIndex++;
+            Chart resChart = CountDistinctValues(categoricalFv) <= 20
+                ? DetectPieChart(chartTable)
+                : DetectSideBar(chartTable);
+            resChart.PanelIndex = ChartIndex[chartTable];
+            Console.WriteLine(ChartIndex[chartTable]);
+            res.Add(resChart);
         }
         // X identifier
         // foreach (FieldValues identifierFv in identifier)
@@ -1430,9 +1624,19 @@ public class AutoChartService : IAutoChartService
         // X numeric
         foreach (List<FieldValues> lfv in numeric)
         {
-            foreach (FieldValues numericfv in lfv) 
+            foreach (FieldValues numericfv in lfv)
                 if (!numericfv.Field.Categories.Contains(Category.Identifier))
-                    res.Add(DetectHistogram(new List<FieldValues> {numericfv}));
+                {
+                    List<FieldValues> chartTable = new List<FieldValues>
+                    {
+                        numericfv
+                    };
+                    if (!ChartIndex.TryGetValue(chartTable, out var id))
+                        ChartIndex[chartTable] = curChartIndex++;
+                    Chart resChart = DetectHistogram(chartTable);
+                    resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                    res.Add(resChart);
+                }
         }
         
         List<Chart> noNullRes = new List<Chart>();

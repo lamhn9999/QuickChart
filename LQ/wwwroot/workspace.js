@@ -149,6 +149,37 @@ function updateTable(rows) {
     }
 }
 
+function getContrastTextColor(color) {
+    const temp = document.createElement("div");
+    temp.style.color = color;
+    document.body.appendChild(temp);
+
+    const rgb = getComputedStyle(temp).color;
+    document.body.removeChild(temp);
+
+    const [r, g, b] = rgb.match(/\d+/g).map(Number);
+
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+    return brightness > 128 ? "black" : "white";
+}
+
+function reformatColor(color, canvas)
+{
+    canvas.style.backgroundColor = color;
+
+    const textColor = getContrastTextColor(color);
+    const chart = Chart.getChart(canvas);
+
+    chart.options.plugins.legend.labels.color = textColor;
+    chart.options.plugins.title.color = textColor;
+
+    chart.options.scales.x.ticks.color = textColor;
+    chart.options.scales.y.ticks.color = textColor;
+
+    chart.update();
+}
+
 async function autoChart() {
     const selPlot = document.getElementById("selPlot");
     const noPlot = document.getElementById("noPlot");
@@ -374,14 +405,16 @@ async function autoChart() {
                 hiddenPicker.oninput = (e) => {
                     const color = e.target.value;
                     hexInput.value = color;
-                    wrapper.querySelector('canvas').style.backgroundColor = color;
+                    // wrapper.querySelector('canvas').style.backgroundColor = color;
+                    reformatColor(color, wrapper.querySelector('canvas'));
                 };
 
                 hexInput.oninput = (e) => {
                     const color = e.target.value;
                     if (/^#[0-9A-F]{6}$/i.test(color)) {
                         hiddenPicker.value = color;
-                        wrapper.querySelector('canvas').style.backgroundColor = color;
+                        // wrapper.querySelector('canvas').style.backgroundColor = color;
+                        reformatColor(color, wrapper.querySelector('canvas'));
                     }
                 };
 

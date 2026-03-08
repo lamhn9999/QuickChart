@@ -108,6 +108,7 @@ public class HomeController : Controller
             return NotFound();
         
         HttpContext.Session.SetString("CSVFileDTO", JsonSerializer.Serialize(new CSVFileDTO{currentFileID = selectedFile.ID}));
+        HttpContext.Session.Remove("ListValueFilterDTO");
         if (isGuest)
         {
             Table? table = _csvService.GetTableLimited(selectedFile.ID, 200);
