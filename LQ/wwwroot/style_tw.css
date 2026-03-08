@@ -422,9 +422,6 @@
   .min-w-0 {
     min-width: calc(var(--spacing) * 0);
   }
-  .min-w-\[1Item20px\] {
-    min-width: 1Item20px;
-  }
   .min-w-\[120px\] {
     min-width: 120px;
   }
@@ -818,6 +815,12 @@
   }
   .text-zinc-600 {
     color: var(--color-zinc-600);
+  }
+  .lowercase {
+    text-transform: lowercase;
+  }
+  .uppercase {
+    text-transform: uppercase;
   }
   .italic {
     font-style: italic;
@@ -1484,6 +1487,43 @@ td, th {
 .loader.hidden * {
   animation: none !important;
   display: none;
+}
+@keyframes shake {
+  0% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-6px);
+  }
+  30% {
+    transform: translateX(6px);
+  }
+  45% {
+    transform: translateX(-6px);
+  }
+  60% {
+    transform: translateX(6px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+  90% {
+    transform: translateX(4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+.shake {
+  animation: shake 0.4s ease-in-out;
+}
+.error-border {
+  border-color: red !important;
+}
+.error-log {
+  color: red;
+  font-size: 12px;
+  margin-top: 2px;
 }
 @property --tw-border-spacing-x {
   syntax: "<length>";

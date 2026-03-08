@@ -585,3 +585,29 @@ th {
     animation: none !important;
     display: none;
 }
+
+/*--- ERROR LOG ---*/
+@keyframes shake {
+    0% { transform: translateX(0); }
+    15% { transform: translateX(-6px); }
+    30% { transform: translateX(6px); }
+    45% { transform: translateX(-6px); }
+    60% { transform: translateX(6px); }
+    75% { transform: translateX(-4px); }
+    90% { transform: translateX(4px); }
+    100% { transform: translateX(0); }
+}
+
+.shake {
+    animation: shake 0.4s ease-in-out;
+}
+
+.error-border {
+    border-color: red !important;
+}
+
+.error-log {
+    color: red;
+    font-size: 12px;
+    margin-top: 2px;
+}

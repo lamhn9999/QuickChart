@@ -80,6 +80,12 @@
         
         async function register()
         {
+            document.querySelectorAll("#register-group .error-log").forEach(e => e.remove());
+
+            document.querySelectorAll("#register-group input").forEach(input => {
+                input.classList.remove("error-border", "shake");
+                input._errorLog = null;
+            });
             const data = {
                 name : document.getElementById("nameinputr").value,
                 email : document.getElementById("emailinputr").value,
@@ -97,6 +103,79 @@
             if(result.redirect) {
                 window.location.href = result.redirect;
             }
+            else if(result.error)
+            {
+                handleRegisterError(result);
+            }
+            else throw new Error("Something went wrong");
+        }
+
+        function handleRegisterError(result)
+        {
+            const group = {
+                name : document.getElementById("nameinputr"),
+                email : document.getElementById("emailinputr"),
+                password : document.getElementById("pwinputr"),
+                confirmpassword : document.getElementById("pwconfirminputr"),
+            };
+
+            if(result.error !== "Requirements not met!" && result.error !== "Registration failed.")
+                throw new Error("Something went wrong");
+
+            const details = result.details || [];
+            const has = msg => details.some(d => d.includes(msg));
+
+            if(has("Username is required") || has("Username must be between"))
+                shake_and_log(group.name, "Invalid username");
+
+            if(has("Email is required") || has("Invalid email"))
+                shake_and_log(group.email, "Invalid email");
+
+            if(has("Passwords do not match"))
+                shake_and_log(group.confirmpassword, "Passwords do not match");
+
+
+            // ---- password rule checks ----
+            const pwErrors = [];
+
+            if(has("Password is required"))
+                pwErrors.push("Password required");
+
+            if(has("Passwords must be at least 8 characters"))
+                pwErrors.push("At least 8 characters");
+
+            if(has("Passwords must have at least one non alphanumeric"))
+                pwErrors.push("1 special character");
+
+            if(has("Passwords must have at least one lowercase"))
+                pwErrors.push("1 lowercase letter");
+
+            if(has("Passwords must have at least one uppercase"))
+                pwErrors.push("1 uppercase letter");
+
+            if(pwErrors.length > 0)
+                shake_and_log(group.password, pwErrors.join(", "));
+        }
+        function shake_and_log(input, message)
+        {
+            input.classList.add("error-border", "shake");
+
+            if (input._errorLog) {
+                input._errorLog.remove();
+            }
+
+            const log = document.createElement("div");
+            log.className = "error-log";
+            log.textContent = message;
+
+            input.insertAdjacentElement("beforebegin", log);
+
+            // store reference
+            input._errorLog = log;
+
+            setTimeout(() => {
+                input.classList.remove("shake");
+            }, 500);
         }
         
         async function select(filename) {
