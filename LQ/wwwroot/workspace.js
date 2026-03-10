@@ -5,6 +5,16 @@ let controller;
 
 let filters = [];
 
+const axisStyle = {
+    ticks: { color: "white" },
+    grid: { color: "lightgray" }
+};
+
+const stackedAxis = {
+    ...axisStyle,
+    stacked: true
+};
+
 function backHome() {
     window.location.href = '/';
 }
@@ -231,6 +241,14 @@ function reformatColor(color, canvas)
 
     chart.options.scales.x.ticks.color = textColor;
     chart.options.scales.y.ticks.color = textColor;
+    if(chart.options.scales.z)
+        chart.options.scales.z.ticks.color = textColor;
+
+    if (chart.config.type === "matrix") {
+        chart.data.datasets.forEach(ds => {
+            ds.borderColor = textColor;
+        });
+    }
 
     chart.update();
 }
@@ -339,33 +357,56 @@ async function autoChart() {
                     ...(!(isMixed || isMixed_notStacked) && {
                         type: chartArray[sample.chartType]
                     }),
+
                     data: {
                         ...(isMatrix ? {} : { labels: sample.x }),
-                        datasets,
+                        datasets
                     },
+
                     options: {
                         responsive: true,
+
+                        plugins: {
+                            legend: {
+                                labels: { color: "white" }
+                            },
+                            title: {
+                                display: true,
+                                text: "My Chart",
+                                color: "white"
+                            }
+                        },
+
                         scales: isMatrix
                             ? {
                                 x: {
-                                    type: 'category',
+                                    type: "category",
                                     labels: sample.x,
-                                    offset: true
+                                    offset: true,
+                                    ...axisStyle
                                 },
                                 y: {
-                                    type: 'category',
+                                    type: "category",
                                     labels: sample.y.map(r => r.label),
-                                    offset: true
+                                    offset: true,
+                                    ...axisStyle
                                 }
                             }
                             : isMixed
                                 ? {
-                                    x: { stacked: true },
-                                    y: { position: 'left', stacked: true }
+                                    x: stackedAxis,
+                                    y: {
+                                        position: "left",
+                                        ...stackedAxis
+                                    }
                                 }
                                 : {
-                                    y: { position: 'left' }
-                                },
+                                    x: axisStyle,
+                                    y: {
+                                        position: "left",
+                                        ...axisStyle
+                                    }
+                                }
                     }
                 };
 
@@ -387,7 +428,10 @@ async function autoChart() {
                 }
 
                 if (!isMatrix && sample.z?.length > 0) {
-                    cfg.options.scales.z = { position: 'right' };
+                    cfg.options.scales.z = { 
+                        position: 'right',
+                        ...axisStyle,
+                    };
                 }
 
                 if (sample.chartType === 6) {
@@ -395,6 +439,7 @@ async function autoChart() {
                 }
 
                 const chartInstance = new Chart(ctx, cfg);
+                
                 chartInstances.push(chartInstance);
             });
 
