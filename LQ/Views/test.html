@@ -34,6 +34,7 @@
 </div>
 
 <canvas id="incomeHeatmap"></canvas>
+<canvas id="incomeScatterPlot"></canvas>
 
 <script>
     const heatmapData = [
@@ -104,6 +105,45 @@
             }
         }
     });
+</script>
+
+<script>
+    function generateRandomPoints(n) {
+        const points = [];
+        for (let i = 0; i < n; i++) {
+            points.push({
+                x: Math.random() * 20 - 10, 
+                y: Math.random() * 20 - 10
+            });
+        }
+        return points;
+    }
+
+    const scatterData = {
+        datasets: [
+            {
+                label: 'Scatter Dataset',
+                data: generateRandomPoints(50),
+            },
+            {
+                label: 'Scatter Dataset 2',
+                data: generateRandomPoints(50),
+            }
+        ]
+    };
+    const config = {
+        type: 'scatter',
+        data: scatterData,
+        options: {
+            scales: {
+                x: {
+                    type: 'linear',
+                    position: 'bottom'
+                }
+            }
+        }
+    };
+    new Chart(document.getElementById("incomeScatterPlot"), config);
 </script>
 
 <script>

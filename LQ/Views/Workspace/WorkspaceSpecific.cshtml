@@ -61,12 +61,24 @@
                                         <label class="block text-xs text-zinc-400 mb-1">
                                             Search in @fv.Field.Name
                                         </label>
+                                        <!-- CHIP CONTAINER -->
+                                        <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
                                         <input
                                             type="text"
                                             placeholder="Type to filter..."
                                             onkeydown="filterInputKey(event, this)"
                                             class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 roundedtext-zinc-200 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] focus:border-[#E9967A] transition"
                                         />
+                                        <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
+                                            <input
+                                                type="checkbox"
+                                                name="IsNot"
+                                                value="true"
+                                                class="w-1.5 h-1.5 hover: hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]"
+                                                onclick="event.stopPropagation()"
+                                            />
+                                            Exclude results
+                                        </label>
                                     </div>
                                 </div>
                             </th>
@@ -148,33 +160,36 @@
         box.scrollTop = scrollTop - dy;
     });
 </script>
-    <div class="hidden">
-        <div class="flex justify-end p-2 border-b border-zinc-800 bg-zinc-900/30">
-            <div class="relative flex flex-col items-end">
-                <button class="hover:cursor-pointer text-sm tracking-wider font-bold bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
-                    Turn into
-                    <svg class="w-2.5 h-2.5 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                </button>
-                <div class="absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-800 rounded shadow-2xl py-1 z-30">
-                    <button class="w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate text-[#E9967A] font-semibold bg-zinc-800/50 hover:bg-zinc-800">Item</button>
-                    <button class="w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate text-zinc-400 hover:bg-zinc-800 hover:text-white">Item</button>
-                </div>
-            </div>
 
-            <div class="relative flex flex-col items-end">
-                <button class="hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
-                    Background color
-                    <svg class="w-2.5 h-2.5 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                </button>
-                <div class="absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-800 rounded shadow-2xl py-1 z-30">
-                    <img style="margin-right:2px;" src="img_colormap.gif" alt="colormap">
-                </div>
+@* HIDDEN SECTION FOR TAILWIND *@
+<div class="hidden">
+    <div class="rounded-xl bg-[darksalmon] text-black px-2 py-1 text-xs flex items-center gap-1 truncate"></div>
+    <div class="flex justify-end p-2 border-b border-zinc-800 bg-zinc-900/30">
+        <div class="relative flex flex-col items-end">
+            <button class="hover:cursor-pointer text-sm tracking-wider font-bold bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
+                Turn into
+                <svg class="w-2.5 h-2.5 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div class="absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-800 rounded shadow-2xl py-1 z-30">
+                <button class="w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate text-[#E9967A] font-semibold bg-zinc-800/50 hover:bg-zinc-800">Item</button>
+                <button class="w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate text-zinc-400 hover:bg-zinc-800 hover:text-white">Item</button>
+            </div>
+        </div>
+
+        <div class="relative flex flex-col items-end">
+            <button class="hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
+                Background color
+                <svg class="w-2.5 h-2.5 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div class="absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-800 rounded shadow-2xl py-1 z-30">
+                <img style="margin-right:2px;" src="img_colormap.gif" alt="colormap">
             </div>
         </div>
     </div>
+</div>
 </body>
 </html>

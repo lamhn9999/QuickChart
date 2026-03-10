@@ -79,25 +79,80 @@ function filterPopupClicked(event, filterpopup) {
         input.focus();
     }
 }
-function filterInputKey(event, input) {
+async function filterInputKey(event, input) {
     if (event.key === "Enter") {
         event.preventDefault();
 
         const value = input.value;
         const columnHeader = input.closest("th");
+        const index = columnHeader.dataset.index;
+        const isNotCheckboxValue = input.nextElementSibling.querySelector("input").checked;
 
-        sendFilterRequest(value.trim(), columnHeader.dataset.index);
+        await sendFilterRequest(value.trim(), isNotCheckboxValue, index);
+        appendFilterValue(input, index);
     }
 }
-async function sendFilterRequest(value, index) {
-    if(value !== "") 
-        filters[index] = {
-            isPartialMatch: true,
-            isNot: false,
-            fieldIndex: index,
-            filteringValues: [value],
-        };
-    else filters[index] = undefined;
+function appendFilterValue(input, index) {
+    const container = input.previousElementSibling; // chip container above input
+    const value = input.value.trim();
+    if (!value) return;
+
+    const chip = document.createElement("div");
+    chip.className =
+        "filterValue rounded-xl bg-[darksalmon] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
+
+    const text = document.createElement("span");
+    text.textContent = value;
+    text.className = "truncate min-w-0";   // important
+
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "✕";
+    removeBtn.className = "ml-1 font-bold hover:cursor-pointer";
+
+    removeBtn.onclick = (e) => {
+        e.stopPropagation();
+
+        filters[index].filteringValues =
+            filters[index].filteringValues.filter(v => v !== value);
+
+        if (filters[index].filteringValues.length === 0) {
+            filters[index] = undefined;
+        }
+
+        chip.remove();
+        // Send a filter request without the current input, restore after request is done
+    };
+
+    chip.onclick = () => {
+        input.value = value;
+        input.focus();
+    };
+
+    chip.appendChild(text);
+    chip.appendChild(removeBtn);
+
+    container.appendChild(chip);
+
+    input.value = "";
+}
+
+async function sendFilterRequest(value, isNotCheckboxValue, index) {
+    if (value !== "") {
+        if (!filters[index]) {
+            filters[index] = {
+                isPartialMatch: true,
+                fieldIndex: index,
+                filteringValues: []
+            };
+        }
+        if (!filters[index].filteringValues.includes(value)) {
+            filters[index].filteringValues.push(value);
+        }
+        filters[index].isNot = isNotCheckboxValue;
+    } 
+    else if (filters[index] && filters[index].filteringValues.length === 0) {
+        filters[index] = undefined;
+    }
 
     controller = new AbortController();
     const response = await fetch("/workspace/filter", {

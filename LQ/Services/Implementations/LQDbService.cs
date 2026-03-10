@@ -139,12 +139,16 @@ public class LQDbService : ILQDbService
             if (filter.IsPartialMatch)
             {
                 filterQuery = filterQuery.Where(v =>
-                    filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s)));
+                    filter.IsNot
+                        ? !filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s))
+                        :  filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s)));
             }
             else
             {
                 filterQuery = filterQuery.Where(v =>
-                    filter.FilteringValues.Contains(v.ValueString));
+                    filter.IsNot
+                        ? !filter.FilteringValues.Contains(v.ValueString)
+                        :  filter.FilteringValues.Contains(v.ValueString));
             }
 
             var matchingRowIndexes = filterQuery.Select(v => v.RowIndex);

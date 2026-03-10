@@ -64,6 +64,7 @@ public class WorkspaceController : Controller
             RowCount = table.RowCount,
             CSVFileID = table.CSVFile.ID
         }));
+        HttpContext.Session.Remove("ListValueFilterDTO");
         return CurrentAnalyst is null
             ? View("Workspace", table)
             : View("WorkspaceSpecific", table);
@@ -96,7 +97,11 @@ public class WorkspaceController : Controller
         
         if (table is null) return NotFound();
         HttpContext.Session.SetString("ListValueFilterDTO", JsonSerializer.Serialize(filters));
-        
+
+        // var filtersjson = JsonSerializer.Serialize(filters);
+        // Console.WriteLine(filtersjson);
+        // var tablejson = JsonSerializer.Serialize(table.GetDisplay());
+        // Console.WriteLine(tablejson);
         return Json(table.GetDisplay());
     }
 }

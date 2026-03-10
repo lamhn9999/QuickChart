@@ -81,9 +81,9 @@ public class AutoChartTest
     public async Task NumericTest()
     {
         File.WriteAllText(logPath, String.Empty);
-        Analyst tester = await _analystService.FindAnalystByName("Lam.H.N");
-        Table tempTable = _csvService.GetTable(tester.Id, "top_rated_2000webseries.csv");
-        List<int> fieldindexes = new List<int> { 5, 6, 7 };
+        Analyst tester = await _analystService.FindAnalystByName("BuiThanhLam");
+        Table tempTable = _csvService.GetTable(tester.Id, "student_data.csv");
+        List<int> fieldindexes = new List<int> { 12, 13 };
         List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
         
         File.AppendAllText(logPath, "--------------------------------------------\n");

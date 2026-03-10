@@ -9,6 +9,7 @@ using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.TagHelpers;
+using Microsoft.Data.SqlClient.DataClassification;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Table = LQ.Models.TableModels.Table;
 
@@ -511,17 +512,69 @@ public class AutoChartService : IAutoChartService
     {
         Chart scatterChart = new Chart();
         scatterChart.ChartType = ChartType.Scatter;
-        LabelData labelData = new LabelData();
-        labelData.Label = $"Relationship between \"{table[0].Field.Name}\" and \"{table[1].Field.Name}\"";
-        for (int i = 0; i < table[0].Values.Count; i++)
+        if (table[0].Field.Categories.Contains(Category.Categorical) && table.Count == 3)
         {
-            if (table[0].Values[i].ValueCasted == null ||
-                table[1].Values[i].ValueCasted == null) continue;
-            labelData.Data.Add(new {x = table[0].Values[i].ValueCasted, 
-                                y = table[1].Values[i].ValueCasted});
+            Dictionary<object, LabelData> listData = new Dictionary<object, LabelData>();
+            for (int i = 0; i < table[0].Values.Count; i++)
+            {
+                var val1 = table[1].Values[i].ValueCasted;
+                var val2 = table[2].Values[i].ValueCasted;
+                if (table[0].Values[i].ValueCasted == null || val1 == null || val2 == null) continue;
+                if (table[0].Field.Type == typeof(List<string>))
+                {
+                    foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
+                    {
+                        if (f == null) continue;
+                        if (!listData.TryGetValue(f, out LabelData ld))
+                        {
+                            LabelData ldf = new LabelData();
+                            ldf.Label = f.ToString();
+                            listData[f] = ldf;
+                        }
+
+                        listData[f].Data.Add(new { x = val1, y = val2 });
+                    }
+                }
+                else
+                {
+                    var f = table[0].Values[i].ValueCasted;
+                    if (f == null) continue;
+                    if (!listData.TryGetValue(f, out LabelData ld))
+                    {
+                        LabelData ldf = new LabelData();
+                        ldf.Label = f.ToString();
+                        listData[f] = ldf;
+                    }
+
+                    listData[f].Data.Add(new { x = val1, y = val2 });
+                }
+            }
+
+            foreach (var item in listData)
+            {
+                scatterChart.Y.Add(item.Value);
+            }
+
+            return scatterChart;
         }
-        scatterChart.Y.Add(labelData);
-        return scatterChart;
+        else
+        {
+            LabelData labelData = new LabelData();
+            labelData.Label = $"Relationship between \"{table[0].Field.Name}\" and \"{table[1].Field.Name}\"";
+            for (int i = 0; i < table[0].Values.Count; i++)
+            {
+                if (table[0].Values[i].ValueCasted == null ||
+                    table[1].Values[i].ValueCasted == null) continue;
+                labelData.Data.Add(new
+                {
+                    x = table[0].Values[i].ValueCasted,
+                    y = table[1].Values[i].ValueCasted
+                });
+            }
+
+            scatterChart.Y.Add(labelData);
+            return scatterChart;
+        }
     }
 
     private Chart? DetectSideBar(List<FieldValues> table)
@@ -936,367 +989,18 @@ public class AutoChartService : IAutoChartService
 
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
     {
-        Stopwatch stopwatch = new Stopwatch();
-        stopwatch.Start();
         Table tempTable = _lqDbService.GetTable(csvfileid, fieldindexes);
-       int minimumRelationship = 0;
-        List<Chart?> res = new();
-        
-        List<FieldValues> identifier = new List<FieldValues>();
-        List<FieldValues> categorical = new List<FieldValues>();
-        List<List<FieldValues>> numeric = new List<List<FieldValues>>();
-        List<FieldValues> numericList = new List<FieldValues>();
-        List<(double med, double IQR)> scaleInfo = new List<(double med, double IQR)>(); 
-        foreach (FieldValues fv in tempTable.Columns)
-        {
-            if (fv.Field.Categories.Contains(Category.Identifier))
-                identifier.Add(fv);
-            if (fv.Field.Categories.Contains(Category.Categorical))
-                categorical.Add(fv);
-            if (fv.Field.Categories.Contains(Category.Numeric))
-            {
-                numericList.Add(fv);
-                (double med, double IQR) fvInfo = GetScaleInfo(fv.Values);
-                bool found = false;
-                for (int i = 0; i < numeric.Count; i++)
-                {
-                    (double med, double IQR) curInfo = scaleInfo[i];
-                    if (Math.Abs(curInfo.med - fvInfo.med) / Math.Max(fvInfo.IQR, curInfo.IQR) <= 1 &&
-                        Math.Max(curInfo.IQR, fvInfo.IQR) / Math.Min(curInfo.IQR, fvInfo.IQR) <= 2)
-                    {
-                        found = true;
-                        numeric[i].Add(fv);
-                        List<Value> newList = new List<Value>();
-                        foreach (FieldValues fvi in numeric[i])
-                        foreach(Value val in fvi.Values) newList.Add(val);
-                        scaleInfo[i] = GetScaleInfo(newList);
-                    }
-                }
-                if (!found)
-                {
-                    numeric.Add(new List<FieldValues> {fv});
-                    scaleInfo.Add(fvInfo);
-                }
-            }
-        }
-
-        // X, Y, Z
-        // foreach (var num in numeric)
-        // {
-        //     foreach (var fv in num)
-        //     {
-        //         System.Console.Write($"{fv.Field.Name},");
-        //     }
-        //
-        //     System.Console.WriteLine();
-        // }
-
-        Dictionary<List<FieldValues>, int> ChartIndex = new Dictionary<List<FieldValues>, int>();
-        int curChartIndex = 0;
-        
-        for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
-        {
-            // X Categorical, Y Categorical, Z Categorical
-            // X Categorical, Y Categorical, Z Numeric
-            for(int categoricalSubIndex = categoricalIndex + 1; categoricalSubIndex < categorical.Count; categoricalSubIndex++)
-            {
-                foreach (List<FieldValues> sameNumerics in numeric)
-                {
-                    foreach (FieldValues numericFv in sameNumerics)
-                    {
-                        if (numericFv != categorical[categoricalIndex] && numericFv != categorical[categoricalSubIndex])
-                        {
-                            if (categorical[categoricalIndex].Field.Type != typeof(DateTime) &&
-                                categorical[categoricalSubIndex].Field.Type != typeof(DateTime) &&
-                                CountDistinctValues(categorical[categoricalIndex]) <= 10 &&
-                                CountDistinctValues(categorical[categoricalSubIndex]) <= 10)
-                            {
-                                List<FieldValues> chartTable = new List<FieldValues>
-                                {
-                                    categorical[categoricalIndex],
-                                    categorical[categoricalSubIndex],
-                                    numericFv,
-                                };
-                                Chart resChart = DetectMatrix(chartTable);
-                                if (!ChartIndex.TryGetValue(chartTable, out var id))
-                                    ChartIndex[chartTable] = curChartIndex++;
-                                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                                res.Add(resChart);
-                            }
-                            else
-                            {
-                                List<FieldValues> chartTable = new List<FieldValues>
-                                {
-                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime)
-                                        ? categorical[categoricalIndex]
-                                        : categorical[categoricalSubIndex]),
-                                    (categorical[categoricalIndex].Field.Type == typeof(DateTime)
-                                        ? categorical[categoricalSubIndex]
-                                        : categorical[categoricalIndex]),
-                                    numericFv,
-                                };
-                                Chart resChart = DetectLineChart(chartTable);
-                                if (!ChartIndex.TryGetValue(chartTable, out var id))
-                                    ChartIndex[chartTable] = curChartIndex++;
-                                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                                res.Add(resChart);
-                            }
-                        }   
-                    }
-                }
-            }
-            // X Categorical, Y Numeric, Z Identifier
-            foreach (FieldValues numericFv in numericList)
-            {
-                if (categorical[categoricalIndex] == numericFv) continue;
-                    foreach (FieldValues identifierFv in identifier)
-                    {
-                        if (identifierFv == numericFv || identifierFv == categorical[categoricalIndex]) continue;
-                        List<FieldValues> chartTable = new List<FieldValues>
-                        {
-                            categorical[categoricalIndex],
-                            numericFv,
-                            identifierFv
-                        };
-                        Chart resChart = DetectMixedBarChart(chartTable);
-                        if (!ChartIndex.TryGetValue(chartTable, out var id))
-                            ChartIndex[chartTable] = curChartIndex++;
-                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                        res.Add(resChart);
-                    }
-            }
-            
-            // X categorical, Y Numeric, Z Numeric
-            for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
-            {
-                for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
-                {
-                    List<FieldValues> chartTable = new List<FieldValues>
-                    {
-                        categorical[categoricalIndex],
-                        numericList[numericIndex],
-                        numericList[numericSubIndex]
-                    };
-                    Chart resChart = DetectMixedLineChart(chartTable);
-                    if (!ChartIndex.TryGetValue(chartTable, out var id))
-                        ChartIndex[chartTable] = curChartIndex++;
-                    resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                    res.Add(resChart);
-                }
-            }
-        }
-        // X, Y
-        for(int categoricalIndex = 0; categoricalIndex < categorical.Count; categoricalIndex++)
-        {
-            // X Categorical, Y Categorical
-            for(int categoricalSubIndex = categoricalIndex + 1; categoricalSubIndex < categorical.Count; categoricalSubIndex++)
-            {
-                if (categorical[categoricalIndex].Field.Type == typeof(DateTime))
-                {
-                    if (categorical[categoricalSubIndex].Field.Type != typeof(DateTime))
-                    {
-                        List<FieldValues> chartTable = new List<FieldValues>
-                        {
-                            categorical[categoricalIndex],
-                            categorical[categoricalSubIndex]
-                        };
-                        Chart resChart = DetectLineChart(chartTable);
-                        if (!ChartIndex.TryGetValue(chartTable, out var id))
-                            ChartIndex[chartTable] = curChartIndex++;
-                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                        res.Add(resChart);
-                    }
-                }
-                else
-                {
-                    if (categorical[categoricalSubIndex].Field.Type == typeof(DateTime))
-                    {
-                        List<FieldValues> chartTable = new List<FieldValues>
-                        {
-                            categorical[categoricalSubIndex],
-                            categorical[categoricalIndex]
-                        };
-                        Chart resChart = DetectMatrix(chartTable);
-                        if (!ChartIndex.TryGetValue(chartTable, out var id))
-                            ChartIndex[chartTable] = curChartIndex++;
-                        resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                        res.Add(resChart);
-                    }
-                    else
-                    {
-                        if (CountDistinctValues(categorical[categoricalIndex]) <= 20 &&
-                            CountDistinctValues(categorical[categoricalSubIndex]) <= 20)
-                        {
-                            List<FieldValues> chartTable = new List<FieldValues>
-                            {
-                                categorical[categoricalSubIndex],
-                                categorical[categoricalIndex]
-                            };
-                            Chart resChart = DetectMatrix(chartTable);
-                            if (!ChartIndex.TryGetValue(chartTable, out var id))
-                                ChartIndex[chartTable] = curChartIndex++;
-                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                            res.Add(resChart);
-
-                            Chart resChart2 = DetectMatrixMean(chartTable);
-                            resChart2.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                            res.Add(resChart2);
-                        }
-                        else
-                        {
-                            List<FieldValues> chartTable = new List<FieldValues>
-                            {
-                                categorical[categoricalIndex],
-                                categorical[categoricalSubIndex]
-                            };
-                            Chart resChart = DetectLineChart(chartTable);
-                            if (!ChartIndex.TryGetValue(chartTable, out var id))
-                                ChartIndex[chartTable] = curChartIndex++;
-                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                            res.Add(resChart);
-                        }
-                    }
-                }
-            }
-            // X Categorical, Y Numeric
-            foreach (List<FieldValues> lfv in numeric)
-            {
-                foreach (FieldValues numericfv in lfv) 
-                {
-                    if (numericfv != categorical[categoricalIndex])
-                    {
-                        if (categorical[categoricalIndex].Field.Type == typeof(DateTime) || categorical[categoricalIndex].Field.Categories.Contains(Category.Numeric))
-                        {
-                            List<FieldValues> chartTable = new List<FieldValues>
-                            {
-                                categorical[categoricalIndex],
-                                numericfv
-                            };
-                            if (!ChartIndex.TryGetValue(chartTable, out var id))
-                                ChartIndex[chartTable] = curChartIndex++;
-                            Chart resChart = DetectLineChart(chartTable);
-                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                            res.Add(resChart);
-                        }
-                        else
-                        {
-                            List<FieldValues> chartTable = new List<FieldValues>
-                            {
-                                categorical[categoricalIndex],
-                                numericfv
-                            };
-                            if (!ChartIndex.TryGetValue(chartTable, out var id))
-                                ChartIndex[chartTable] = curChartIndex++;
-                            Chart resChart = CountDistinctValues(categorical[categoricalIndex]) <= 20
-                                ? DetectBarChart(chartTable)
-                                : DetectSideBar(chartTable);
-                            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                            res.Add(resChart);
-                        }
-                    }
-                }
-            }
-            // X Categorical, Y list<Numeric>
-            foreach (List<FieldValues> lfv in numeric)
-            {
-                List<FieldValues> sameScale = new List<FieldValues>();
-                foreach (FieldValues nfv in lfv) if (nfv != categorical[categoricalIndex]) sameScale.Add(nfv);
-                if (sameScale.Count == 1) continue;
-                sameScale.Insert(0, categorical[categoricalIndex]);
-                if (!ChartIndex.TryGetValue(sameScale, out var id))
-                    ChartIndex[sameScale] = curChartIndex++;
-                Chart resChart = DetectBarChart(sameScale);
-                resChart.PanelIndex = ChartIndex.GetValueOrDefault(sameScale, -1);
-                res.Add(resChart);
-            }
-        }
-        // X numeric, Y numeric
-        for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
-        {
-            for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
-            {
-                List<FieldValues> chartTable = new List<FieldValues>
-                {
-                    numericList[numericIndex],
-                    numericList[numericSubIndex]
-                };
-                if (!ChartIndex.TryGetValue(chartTable, out var id))
-                    ChartIndex[chartTable] = curChartIndex++;
-                Chart resChart = DetectScatter(chartTable);
-                resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                res.Add(resChart);
-            }
-        }
-        // X identifier, Y numeric
-        foreach (FieldValues identifierFv in identifier)
-        foreach (FieldValues numericFv in numericList) if (identifierFv != numericFv) {
-            List<FieldValues> chartTable = new List<FieldValues>
-            {
-                identifierFv,
-                numericFv
-            };
-            if (!ChartIndex.TryGetValue(chartTable, out var id))
-                ChartIndex[chartTable] = curChartIndex++;
-            Chart resChart = DetectSideBar(chartTable);
-            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-            res.Add(resChart);
-        }
-
-        // X categorical
-        foreach (FieldValues categoricalFv in categorical)
-        {
-            List<FieldValues> chartTable = new List<FieldValues>
-            {
-               categoricalFv
-            };
-            if (!ChartIndex.TryGetValue(chartTable, out var id))
-                ChartIndex[chartTable] = curChartIndex++;
-            Chart resChart = CountDistinctValues(categoricalFv) <= 20
-                ? DetectPieChart(chartTable)
-                : DetectSideBar(chartTable);
-            resChart.PanelIndex = ChartIndex[chartTable];
-            Console.WriteLine(ChartIndex[chartTable]);
-            res.Add(resChart);
-        }
-        // X identifier
-        // foreach (FieldValues identifierFv in identifier)
-        // {
-        //     res.Add(DetectSideBar(new List<FieldValues> { identifierFv }));
-        // }
-        // X numeric
-        foreach (List<FieldValues> lfv in numeric)
-        {
-            foreach (FieldValues numericfv in lfv)
-                if (!numericfv.Field.Categories.Contains(Category.Identifier))
-                {
-                    List<FieldValues> chartTable = new List<FieldValues>
-                    {
-                        numericfv
-                    };
-                    if (!ChartIndex.TryGetValue(chartTable, out var id))
-                        ChartIndex[chartTable] = curChartIndex++;
-                    Chart resChart = DetectHistogram(chartTable);
-                    resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
-                    res.Add(resChart);
-                }
-        }
-        
-        List<Chart> noNullRes = new List<Chart>();
-        foreach (Chart? chart in res) 
-        {
-            if (chart != null) noNullRes.Add(chart);
-        }
-
-        stopwatch.Stop();
-        File.WriteAllText("DetectChart.txt", stopwatch.ElapsedMilliseconds.ToString());
-        return noNullRes;
+        return CreateChart(tempTable);
     }
 
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters, CancellationToken cancellationToken = default)
     {
-        Stopwatch stopwatch = new Stopwatch();
-        stopwatch.Start();
         Table tempTable = _lqDbService.GetTableWithFilter(csvfileid, fieldindexes, filters);
+        return CreateChart(tempTable);
+    }
+
+    private List<Chart> CreateChart(Table tempTable)
+    {
         int minimumRelationship = 0;
         List<Chart?> res = new();
         
@@ -1440,6 +1144,10 @@ public class AutoChartService : IAutoChartService
                         ChartIndex[chartTable] = curChartIndex++;
                     resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
                     res.Add(resChart);
+
+                    Chart resChart2 = DetectScatter(chartTable);
+                    resChart2.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+                    res.Add(resChart2);
                 }
             }
         }
@@ -1559,7 +1267,7 @@ public class AutoChartService : IAutoChartService
             {
                 List<FieldValues> sameScale = new List<FieldValues>();
                 foreach (FieldValues nfv in lfv) if (nfv != categorical[categoricalIndex]) sameScale.Add(nfv);
-                if (sameScale.Count == 1) continue;
+                if (sameScale.Count <= 1) continue;
                 sameScale.Insert(0, categorical[categoricalIndex]);
                 if (!ChartIndex.TryGetValue(sameScale, out var id))
                     ChartIndex[sameScale] = curChartIndex++;
@@ -1644,9 +1352,7 @@ public class AutoChartService : IAutoChartService
         {
             if (chart != null) noNullRes.Add(chart);
         }
-
-        stopwatch.Stop();
-        File.WriteAllText("DetectChart.txt", stopwatch.ElapsedMilliseconds.ToString());
+        
         return noNullRes;
     }
 }
