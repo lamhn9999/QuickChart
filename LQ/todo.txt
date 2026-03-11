@@ -9,3 +9,5 @@ to natively support the entire EF Core schema lifecycle.
 toprated: loi dem country_origin va original_language
 student_data: chon cot age => null
 retail_sales: gender & age 
+
+implement: int column distribution tables

@@ -119,18 +119,21 @@ function appendFilterValue(input, index) {
     removeBtn.textContent = "✕";
     removeBtn.className = "ml-1 font-bold hover:cursor-pointer";
 
-    removeBtn.onclick = (e) => {
+    removeBtn.onclick = async (e) => {
         e.stopPropagation();
 
-        filters[index].filteringValues =
-            filters[index].filteringValues.filter(v => v !== value);
+        if (filters[index].filteringValues) {
+            filters[index].filteringValues =
+                filters[index].filteringValues.filter(v => v !== value);
 
-        if (filters[index].filteringValues.length === 0) {
-            filters[index] = undefined;
+            if (filters[index].filteringValues.length === 0) {
+                filters[index] = undefined;
+            }
         }
 
         chip.remove();
-        // Send a filter request without the current input, restore after request is done
+        const isNotCheckboxValue = input.nextElementSibling.querySelector("input").checked;
+        await sendFilterRequest("", isNotCheckboxValue, index);
     };
 
     chip.onclick = () => {
@@ -146,6 +149,16 @@ function appendFilterValue(input, index) {
     input.value = "";
 }
 
+async function excludeCheckboxClicked(event, checkbox) {
+    event.stopPropagation();
+
+    const columnHeader = checkbox.closest("th");
+    const index = columnHeader.dataset.index;
+    const isNotCheckboxValue = checkbox.checked;
+
+    await sendFilterRequest("", isNotCheckboxValue, index);
+}
+
 async function sendFilterRequest(value, isNotCheckboxValue, index) {
     if (value !== "") {
         if (!filters[index]) {
@@ -159,9 +172,12 @@ async function sendFilterRequest(value, isNotCheckboxValue, index) {
             filters[index].filteringValues.push(value);
         }
         filters[index].isNot = isNotCheckboxValue;
-    } 
-    else if (filters[index] && filters[index].filteringValues.length === 0) {
-        filters[index] = undefined;
+    }
+    else if (filters[index]) {
+        filters[index].isNot = isNotCheckboxValue;
+        if (filters[index].filteringValues.length === 0) {
+            filters[index] = undefined;
+        }
     }
 
     controller = new AbortController();
@@ -174,7 +190,7 @@ async function sendFilterRequest(value, isNotCheckboxValue, index) {
         signal: controller.signal
     });
     const result = await response.json();
-    
+
     updateTable(result);
 }
 
@@ -229,8 +245,7 @@ function getContrastTextColor(color) {
     return brightness > 128 ? "black" : "white";
 }
 
-function reformatColor(color, canvas)
-{
+function reformatColor(color, canvas) {
     canvas.style.backgroundColor = color;
 
     const textColor = getContrastTextColor(color);
@@ -241,7 +256,7 @@ function reformatColor(color, canvas)
 
     chart.options.scales.x.ticks.color = textColor;
     chart.options.scales.y.ticks.color = textColor;
-    if(chart.options.scales.z)
+    if (chart.options.scales.z)
         chart.options.scales.z.ticks.color = textColor;
 
     if (chart.config.type === "matrix") {
@@ -428,7 +443,7 @@ async function autoChart() {
                 }
 
                 if (!isMatrix && sample.z?.length > 0) {
-                    cfg.options.scales.z = { 
+                    cfg.options.scales.z = {
                         position: 'right',
                         ...axisStyle,
                     };
@@ -439,7 +454,7 @@ async function autoChart() {
                 }
 
                 const chartInstance = new Chart(ctx, cfg);
-                
+
                 chartInstances.push(chartInstance);
             });
 
@@ -603,6 +618,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("click", () => {
         document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
         document.querySelectorAll('.plot-btn svg, .plot-bgbtn svg').forEach(s => s.classList.remove('rotate-180'));
+        document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
     });
 
     if (resizer && left) {
