@@ -47,7 +47,8 @@
                             <th onclick="fieldClicked(@fv.Field.Index)" class = "relative" data-index="@fv.Field.Index">
                                 @fv.Field.Name
                                 <div class="relative flex flex-col items-end z-50">
-                                    <button class="filter-btn hover:cursor-pointer" onclick="filterClicked(event, this)">
+                                    <button class="filter-btn hover:cursor-pointer relative" onclick="filterClicked(event, this)">
+                                        <span class="filter-chip hidden absolute -top-1.5 -left-1.5 bg-[#E9967A] text-black text-[10px] font-bold h-4 min-w-[16px] flex items-center justify-center rounded-full pointer-events-none z-10 px-1"></span>
                                         <svg width="20" height="20" viewBox="0 0 24 24">
                                             <path d="M3 5H21L14 13V19L10 21V13L3 5Z"
                                                   stroke="currentColor"
@@ -90,9 +91,9 @@
                 @for(int i = 0; i < Model.RowCount; i++)
                 {
                     <tr>
-                        @foreach (FieldValues fv in Model.Columns)
+                        @foreach (FieldValues fvx in Model.Columns)
                         {
-                            <td>@fv.Values[i].ValueString</td>
+                            <td>@fvx.Values[i].ValueString</td>
                         }
                     </tr>
                 }

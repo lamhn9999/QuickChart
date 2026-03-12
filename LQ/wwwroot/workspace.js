@@ -149,6 +149,21 @@ function appendFilterValue(input, index) {
     input.value = "";
 }
 
+function updateFilterChipUI(index) {
+    const th = document.querySelector(`th[data-index="${index}"]`);
+    if (!th) return;
+    const filter = filters[index];
+    const chip = th.querySelector('.filter-chip');
+    if (!chip) return;
+
+    if (filter && filter.filteringValues && filter.filteringValues.length > 0) {
+        chip.textContent = filter.filteringValues.length;
+        chip.classList.remove('hidden');
+    } else {
+        chip.classList.add('hidden');
+    }
+}
+
 async function excludeCheckboxClicked(event, checkbox) {
     event.stopPropagation();
 
@@ -179,6 +194,8 @@ async function sendFilterRequest(value, isNotCheckboxValue, index) {
             filters[index] = undefined;
         }
     }
+
+    updateFilterChipUI(index);
 
     controller = new AbortController();
     const response = await fetch("/workspace/filter", {
