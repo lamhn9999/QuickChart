@@ -154,41 +154,78 @@ public class CSVService : ICSVService
 
     private bool DetectCategoryList(FieldValues fieldvalues)
     {
-        HashSet<string> parsedSet = new();
-        int parsedCount = 0;
-        HashSet<string> nonparsedSet = new();
+        HashSet<string> nonparsedSet = new HashSet<string>();
         int nonparsedCount = 0;
-        
+        HashSet<char> charCandidates = new HashSet<char>();
+
         foreach (Value v in fieldvalues.Values)
         {
-            if (String.IsNullOrWhiteSpace(v.ValueString)) continue;
-            string[] splitted = v.ValueString
-                .Trim()
-                .TrimStart(possibleOpen)
-                .TrimEnd(possibleEnd)
-                .Split(',')
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrEmpty(s))
-                .ToArray();
-            foreach (string f in splitted)
+            if (string.IsNullOrWhiteSpace(v.ValueString)) continue;
+            string val = v.ValueString.Trim().TrimStart(possibleOpen).TrimEnd(possibleEnd);
+            nonparsedSet.Add(val);
+            nonparsedCount++;
+
+            foreach (char c in val)
             {
-                parsedSet.Add(f.Trim());
-                parsedCount++;
+                if (!char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c))
+                {
+                    charCandidates.Add(c);
+                }
             }
         }
 
-        foreach (Value v in fieldvalues.Values)
+        if (nonparsedCount == 0 || nonparsedSet.Count == 0) return false;
+
+        double rate1 = (double)nonparsedSet.Count / nonparsedCount;
+
+        char bestSeparator = '\0';
+        double bestRate2 = double.MaxValue;
+        int bestParsedCount = 0;
+
+        // Ensure comma is checked
+        if (!charCandidates.Contains(',')) charCandidates.Add(',');
+
+        foreach (char sep in charCandidates)
         {
-            if (v.ValueString is null) continue;
-            nonparsedSet.Add(v.ValueString.Trim());
-            nonparsedCount++;
+            HashSet<string> parsedSet = new HashSet<string>();
+            int parsedCount = 0;
+
+            foreach (Value v in fieldvalues.Values)
+            {
+                if (string.IsNullOrWhiteSpace(v.ValueString)) continue;
+                string s = v.ValueString.Trim().TrimStart(possibleOpen).TrimEnd(possibleEnd);
+                
+                string[] splitted = s.Split(sep)
+                    .Select(x => x.Trim())
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .ToArray();
+
+                foreach (string f in splitted)
+                {
+                    parsedSet.Add(f);
+                    parsedCount++;
+                }
+            }
+
+            // Must actively split items to be considered a list separator
+            if (parsedCount > nonparsedCount)
+            {
+                double rate2 = (double)parsedSet.Count / parsedCount;
+                if (rate2 <= Field.CATEGORICAL_THRESHOLD && rate2 < rate1)
+                {
+                    // If rates tie, prefer the separator that results in more items
+                    if (rate2 < bestRate2 || (rate2 == bestRate2 && parsedCount > bestParsedCount))
+                    {
+                        bestRate2 = rate2;
+                        bestSeparator = sep;
+                        bestParsedCount = parsedCount;
+                    }
+                }
+            }
         }
 
-        double rate1 = (1.0 * nonparsedSet.Count) / (1.0 * nonparsedCount);
-        double rate2 = (1.0 * parsedSet.Count) / (1.0 * parsedCount);
-        if (rate2 <= Field.CATEGORICAL_THRESHOLD && rate2 < rate1) 
+        if (bestSeparator != '\0') 
         {
-            // fieldvalues.Field.Categories.Add(Category.Categorical);
             foreach (var v in fieldvalues.Values)
             {
                 if (string.IsNullOrWhiteSpace(v.ValueString))
@@ -202,11 +239,10 @@ public class CSVService : ICSVService
                         .Trim()
                         .TrimStart(possibleOpen)
                         .TrimEnd(possibleEnd)
-                        .Split(',')
+                        .Split(bestSeparator)
                         .Select(s => s.Trim())
                         .Where(s => !string.IsNullOrEmpty(s))
                 );
-                // Debug.WriteLine(v.ValueStringFormatted);
             }
 
             return true;

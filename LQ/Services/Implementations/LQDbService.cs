@@ -49,43 +49,10 @@ public class LQDbService : ILQDbService
         }
     }
 
-    private async Task<List<Field>> GetFieldsAsync(int csvfileid)
+    private Table BuildTableFromFieldsAndValues(CSVFile csvFile, List<Field> fields, List<Value> allValues)
     {
-        List<Field> returnFields = await _lqdbContext.Fields.Where(f => f.CSVFile.ID == csvfileid).OrderBy(f=>f.Index).ToListAsync();
-        return returnFields;
-    }
-    private async Task<List<Field>> GetFieldsAsync(int csvfileid, List<int> fieldindexes)
-    {
-        List<Field> returnFields = await _lqdbContext.Fields.Where(f => f.CSVFile.ID == csvfileid && fieldindexes.Contains(f.Index)).OrderBy(f => f.Index).ToListAsync();
-        return returnFields;
-    }
-    
-    public async Task<Table> GetTableAsync(int csvfileid)
-    {
-        Table returnTable = new Table(GetCSVFile(csvfileid));
-        List<Field> fields = await GetFieldsAsync(csvfileid);
-        foreach (Field f in fields)
-        {
-            List<Value> values = await (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).ToListAsync();
-            returnTable.Columns.Add(new FieldValues{Field = f, Values = values});
-        }
-        returnTable.SetRowCount();
-        return returnTable;
-    }
-
-    public async Task<Table> GetTableAsync(int csvfileid, List<int> fieldindexes)
-    {
-        Table returnTable = new Table(GetCSVFile(csvfileid));
-        List<Field> fields = await GetFieldsAsync(csvfileid, fieldindexes);
-        var fieldIds = fields.Select(f => f.ID).ToList();
-        
-        var allValues = await _lqdbContext.Values
-            .Where(v => fieldIds.Contains(v.FieldID))
-            .OrderBy(v => v.RowIndex)
-            .ToListAsync();
-            
-        var valuesByFieldId = allValues.GroupBy(v => v.FieldID)
-            .ToDictionary(g => g.Key, g => g.ToList());
+        Table returnTable = new Table(csvFile);
+        var valuesByFieldId = allValues.GroupBy(v => v.FieldID).ToDictionary(g => g.Key, g => g.ToList());
 
         foreach (Field f in fields)
         {
@@ -95,17 +62,74 @@ public class LQDbService : ILQDbService
         return returnTable;
     }
 
+    private IQueryable<Field> GetFieldsQuery(int csvfileid, List<int>? fieldindexes = null)
+    {
+        if (fieldindexes != null)
+        {
+            return _lqdbContext.Fields
+                .Where(f => f.CSVFile.ID == csvfileid && fieldindexes.Contains(f.Index))
+                .OrderBy(f => f.Index);
+        }
+        return _lqdbContext.Fields
+            .Where(f => f.CSVFile.ID == csvfileid)
+            .OrderBy(f => f.Index);
+    }
+
+    private async Task<List<Field>> GetFieldsAsync(int csvfileid, List<int>? fieldindexes = null)
+    {
+        if (fieldindexes != null)
+        {
+            return await (from f in _lqdbContext.Fields 
+                          where f.CSVFile.ID == csvfileid && fieldindexes.Contains(f.Index) 
+                          orderby f.Index 
+                          select f).ToListAsync();
+        }
+        return await (from f in _lqdbContext.Fields 
+                      where f.CSVFile.ID == csvfileid 
+                      orderby f.Index 
+                      select f).ToListAsync();
+    }
+    
+    public async Task<Table> GetTableAsync(int csvfileid)
+    {
+        CSVFile csvFile = GetCSVFile(csvfileid)!;
+        List<Field> fields = await GetFieldsAsync(csvfileid);
+        List<int> fieldIds = fields.Select(f => f.ID).ToList();
+        
+        List<Value> allValues = await (from v in _lqdbContext.Values 
+                                       where fieldIds.Contains(v.FieldID) 
+                                       orderby v.RowIndex 
+                                       select v).ToListAsync();
+                                       
+        return BuildTableFromFieldsAndValues(csvFile, fields, allValues);
+    }
+
+    public async Task<Table> GetTableAsync(int csvfileid, List<int> fieldindexes)
+    {
+        CSVFile csvFile = GetCSVFile(csvfileid)!;
+        List<Field> fields = await GetFieldsAsync(csvfileid, fieldindexes);
+        var fieldIds = fields.Select(f => f.ID).ToList();
+        
+        var allValues = await (from v in _lqdbContext.Values 
+                               where fieldIds.Contains(v.FieldID) 
+                               orderby v.RowIndex 
+                               select v).ToListAsync();
+                               
+        return BuildTableFromFieldsAndValues(csvFile, fields, allValues);
+    }
+
     public Table? GetTable(CSVFile csvFile)
     {
-        Table returnTable = new Table(csvFile);
-        List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
-        foreach (Field f in fields)
-        {
-            List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).ToList();
-            returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
-        }
-        returnTable.SetRowCount();
-        return returnTable;
+        var fieldsQuery = GetFieldsQuery(csvFile.ID);
+        var fieldIdsQuery = fieldsQuery.Select(f => f.ID);
+        
+        var fields = fieldsQuery.ToList();
+        var allValues = _lqdbContext.Values
+            .Where(v => fieldIdsQuery.Contains(v.FieldID))
+            .OrderBy(v => v.RowIndex)
+            .ToList();
+                         
+        return BuildTableFromFieldsAndValues(csvFile, fields, allValues);
     }
 
     public Table? GetTable(string analystid, string filename)
@@ -118,59 +142,57 @@ public class LQDbService : ILQDbService
 
     public Table? GetTable(int csvfileid)
     {
-        return GetTable(GetCSVFile(csvfileid));
+        return GetTable(GetCSVFile(csvfileid)!);
     }
 
     public Table? GetTable(string analystid, int csvfileid)
     {
-        CSVFile? csvFile = (from f in _lqdbContext.CSVFiles 
-            where f.ID == csvfileid && f.AnalystID == analystid 
-            select f).FirstOrDefault();
+        CSVFile? csvFile = _lqdbContext.CSVFiles.FirstOrDefault(f => f.ID == csvfileid && f.AnalystID == analystid);
         return csvFile is null
             ? null
             : GetTable(csvFile);
     }
 
-    public Table GetTable(int csvfileid, List<int> fieldindexes)
+    public Table? GetTable(int csvfileid, List<int> fieldindexes)
     {
-        Table returnTable = new Table(GetCSVFile(csvfileid));
-        List<Field> fields = (from f in _lqdbContext.Fields 
-            where f.CSVFile.ID == csvfileid && (fieldindexes.Contains(f.Index))
-            // where f.CSVFile.ID == csvfileid && (fieldindexes.BinarySearch(f.Index) >= 0)
-            select f).ToList();
-            
-        var fieldIds = fields.Select(f => f.ID).ToList();
+        CSVFile? csvFile = GetCSVFile(csvfileid);
+        if (csvFile == null) return null;
+        
+        var fieldsQuery = GetFieldsQuery(csvfileid, fieldindexes);
+        var fieldIdsQuery = fieldsQuery.Select(f => f.ID);
+        
+        var fields = fieldsQuery.ToList();
         var allValues = _lqdbContext.Values
-            .Where(v => fieldIds.Contains(v.FieldID))
+            .Where(v => fieldIdsQuery.Contains(v.FieldID))
             .OrderBy(v => v.RowIndex)
             .ToList();
-
-        var valuesByFieldId = allValues.GroupBy(v => v.FieldID)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        foreach (Field f in fields)
-        {
-            returnTable.Columns.Add(new FieldValues{Field = f, Values = valuesByFieldId.GetValueOrDefault(f.ID, new List<Value>())});
-        }
-        returnTable.SetRowCount();
-        return returnTable;
+                         
+        return BuildTableFromFieldsAndValues(csvFile, fields, allValues);
     }
 
     public Table? GetTableLimited(int csvfileid, int numRowLimited)
     {
         try
         {
-            Table returnTable;
             CSVFile? csvFile = GetCSVFile(csvfileid);
-            returnTable = new Table(GetCSVFile(csvfileid));
-            List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
-            foreach (Field f in fields)
-            {
-                List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).Take(numRowLimited).ToList();
-                returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
-            }
-            returnTable.SetRowCount();
-            return returnTable;
+            if (csvFile == null) return null;
+            
+            var fieldsQuery = GetFieldsQuery(csvfileid);
+            var fieldIdsQuery = fieldsQuery.Select(f => f.ID);
+            
+            var limitedRowIndexesQuery = _lqdbContext.Values
+                .Where(v => fieldIdsQuery.Contains(v.FieldID))
+                .Select(v => v.RowIndex)
+                .Distinct()
+                .OrderBy(r => r)
+                .Take(numRowLimited);
+                                     
+            var allValues = _lqdbContext.Values
+                .Where(v => fieldIdsQuery.Contains(v.FieldID) && limitedRowIndexesQuery.Contains(v.RowIndex))
+                .OrderBy(v => v.RowIndex)
+                .ToList();
+            
+            return BuildTableFromFieldsAndValues(csvFile, fieldsQuery.ToList(), allValues);
         }
         catch 
         {
@@ -228,21 +250,16 @@ public class LQDbService : ILQDbService
             CSVFile? csvFile = GetCSVFile(csvfileid);
             if (csvFile == null) return null;
 
-            Table returnTable = new Table(csvFile);
-            List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
-            
+            var fieldsQuery = GetFieldsQuery(csvfileid);
+            var fieldIdsQuery = fieldsQuery.Select(f => f.ID);
             var validRowIndexesQuery = GetFilteredRowIndexesQuery(csvfileid, filters);
             
-            foreach (Field f in fields)
-            {
-                List<Value> values = (from v in _lqdbContext.Values 
-                                      where v.Field.ID == f.ID && validRowIndexesQuery.Contains(v.RowIndex) 
-                                      orderby v.RowIndex 
-                                      select v).ToList();
-                returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
-            }
-            returnTable.SetRowCount();
-            return returnTable;
+            var allValues = _lqdbContext.Values
+                .Where(v => fieldIdsQuery.Contains(v.FieldID) && validRowIndexesQuery.Contains(v.RowIndex))
+                .OrderBy(v => v.RowIndex)
+                .ToList();
+                                     
+            return BuildTableFromFieldsAndValues(csvFile, fieldsQuery.ToList(), allValues);
         }
         catch 
         {
@@ -257,21 +274,16 @@ public class LQDbService : ILQDbService
             CSVFile? csvFile = GetCSVFile(csvfileid);
             if (csvFile == null) return null;
 
-            Table returnTable = new Table(csvFile);
-            List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile && fieldindexes.Contains(f.Index) orderby f.Index select f).ToList();
-            
+            var fieldsQuery = GetFieldsQuery(csvfileid, fieldindexes);
+            var fieldIdsQuery = fieldsQuery.Select(f => f.ID);
             var validRowIndexesQuery = GetFilteredRowIndexesQuery(csvfileid, filters);
             
-            foreach (Field f in fields)
-            {
-                List<Value> values = (from v in _lqdbContext.Values 
-                    where v.Field.ID == f.ID && validRowIndexesQuery.Contains(v.RowIndex) 
-                    orderby v.RowIndex 
-                    select v).ToList();
-                returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
-            }
-            returnTable.SetRowCount();
-            return returnTable;
+            var allValues = _lqdbContext.Values
+                .Where(v => fieldIdsQuery.Contains(v.FieldID) && validRowIndexesQuery.Contains(v.RowIndex))
+                .OrderBy(v => v.RowIndex)
+                .ToList();
+                                     
+            return BuildTableFromFieldsAndValues(csvFile, fieldsQuery.ToList(), allValues);
         }
         catch 
         {
@@ -286,22 +298,17 @@ public class LQDbService : ILQDbService
             CSVFile? csvFile = GetCSVFile(csvfileid);
             if (csvFile == null) return null;
 
-            Table returnTable = new Table(csvFile);
-            List<Field> fields = (from f in _lqdbContext.Fields where f.CSVFile == csvFile orderby f.Index select f).ToList();
-            
+            var fieldsQuery = GetFieldsQuery(csvfileid);
+            var fieldIdsQuery = fieldsQuery.Select(f => f.ID);
             var validRowIndexesQuery = GetFilteredRowIndexesQuery(csvfileid, filters);
-            var limitedRowIndexesList = validRowIndexesQuery.OrderBy(r => r).Take(numRowLimited).ToList();
+            var limitedRowIndexesQuery = validRowIndexesQuery.OrderBy(r => r).Take(numRowLimited);
             
-            foreach (Field f in fields)
-            {
-                List<Value> values = (from v in _lqdbContext.Values 
-                                      where v.Field.ID == f.ID && limitedRowIndexesList.Contains(v.RowIndex) 
-                                      orderby v.RowIndex 
-                                      select v).ToList();
-                returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
-            }
-            returnTable.SetRowCount();
-            return returnTable;
+            var allValues = _lqdbContext.Values
+                .Where(v => fieldIdsQuery.Contains(v.FieldID) && limitedRowIndexesQuery.Contains(v.RowIndex))
+                .OrderBy(v => v.RowIndex)
+                .ToList();
+                             
+            return BuildTableFromFieldsAndValues(csvFile, fieldsQuery.ToList(), allValues);
         }
         catch 
         {
@@ -321,17 +328,12 @@ public class LQDbService : ILQDbService
 
     public CSVFile? GetCSVFile(string analystid, string filename)
     {
-        return (from f in _lqdbContext.CSVFiles
-                where f.AnalystID == analystid && f.Name == filename 
-                select f)
-            .FirstOrDefault();
+        return _lqdbContext.CSVFiles.FirstOrDefault(f => f.AnalystID == analystid && f.Name == filename);
     }
 
     public CSVFile? GetCSVFile(int csvfileid)
     {
-        return (from f in _lqdbContext.CSVFiles
-            where f.ID == csvfileid
-            select f).FirstOrDefault();
+        return _lqdbContext.CSVFiles.FirstOrDefault(f => f.ID == csvfileid);
     }
 
     public List<CSVFile> GetCSVFiles(Analyst analyst)
@@ -341,10 +343,7 @@ public class LQDbService : ILQDbService
 
     public List<CSVFile> GetCSVFiles(string analystid)
     {
-        return (from f in _lqdbContext.CSVFiles
-                where f.AnalystID == analystid
-                select f)
-            .ToList();
+        return _lqdbContext.CSVFiles.Where(f => f.AnalystID == analystid).ToList();
     }
     public void InsertField(Field field)
     {
@@ -373,24 +372,18 @@ public class LQDbService : ILQDbService
         });
     }
 
-
     public bool SearchFileByAnalyst(Analyst analyst, string fileName)
     {
-        return (from a in _lqdbContext.CSVFiles 
-            where a.AnalystID == analyst.Id && a.Name == fileName select a).Any();
+        return _lqdbContext.CSVFiles.Any(a => a.AnalystID == analyst.Id && a.Name == fileName);
     }
 
     public void RemoveCSVFile(int CSVFileID)
     {
-        _lqdbContext.CSVFiles.Where(f => f.ID == CSVFileID).
-            ExecuteDeleteAsync();
-        _lqdbContext.SaveChanges();
+        _lqdbContext.CSVFiles.Where(f => f.ID == CSVFileID).ExecuteDelete();
     }
 
     public void RenameCSVFile(int CSVFileID, string newName)
     {
-        _lqdbContext.CSVFiles.Where(f => f.ID == CSVFileID).
-            ExecuteUpdateAsync(setters => setters.SetProperty(f => f.Name, newName));
-        _lqdbContext.SaveChanges();
+        _lqdbContext.CSVFiles.Where(f => f.ID == CSVFileID).ExecuteUpdate(setters => setters.SetProperty(f => f.Name, newName));
     }
 }
