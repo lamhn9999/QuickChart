@@ -15,12 +15,34 @@ public class Field
     public string? Name { get; set; }
     public int Index { get; set; }
     
-    public string? TypeName { get; set; }   
+    private string? _typeName;
+    public string? TypeName 
+    { 
+        get => _typeName; 
+        set 
+        {
+            _typeName = value;
+            _type = null;
+        }
+    }   
+
+    private Type? _type;
     [NotMapped]
     public Type? Type
     {
-        get => string.IsNullOrEmpty(TypeName) ? null : Type.GetType(TypeName); 
-        set => TypeName = value?.AssemblyQualifiedName;
+        get
+        {
+            if (_type == null && !string.IsNullOrEmpty(_typeName))
+            {
+                _type = System.Type.GetType(_typeName);
+            }
+            return _type;
+        }
+        set 
+        {
+            _type = value;
+            _typeName = value?.AssemblyQualifiedName;
+        }
     }
 
     public required List<Category> Categories { get; set; } = new();

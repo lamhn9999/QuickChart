@@ -998,6 +998,12 @@ public class AutoChartService : IAutoChartService
         Table tempTable = _lqDbService.GetTableWithFilter(csvfileid, fieldindexes, filters);
         return CreateChart(tempTable);
     }
+    
+    public async Task<List<Chart>> DetectChartAsync(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
+    {
+        Table tempTable = await _lqDbService.GetTableAsync(csvfileid, fieldindexes);
+        return CreateChart(tempTable);
+    }
 
     private List<Chart> CreateChart(Table tempTable)
     {

@@ -7,10 +7,34 @@ namespace LQ.Models.TableModels;
 
 public class Value
 {
-    public string? ValueStringFormatted { get; set; }
+    private string? _valueStringFormatted;
+    public string? ValueStringFormatted 
+    { 
+        get => _valueStringFormatted; 
+        set 
+        {
+            _valueStringFormatted = value;
+            _isCasted = false;
+        }
+    }
     public string? ValueString { get; set; }
 
-    [NotMapped] public object? ValueCasted => CastValue(ValueStringFormatted);
+    private bool _isCasted = false;
+    private object? _valueCasted;
+
+    [NotMapped] 
+    public object? ValueCasted 
+    {
+        get
+        {
+            if (!_isCasted)
+            {
+                _valueCasted = CastValue(_valueStringFormatted);
+                _isCasted = true;
+            }
+            return _valueCasted;
+        }
+    }
 
     public int RowIndex { get; set; }
     public bool Existance { get; set; } = true;

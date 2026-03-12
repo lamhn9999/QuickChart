@@ -48,7 +48,53 @@ public class LQDbService : ILQDbService
             await InsertValuesAsync(table.Columns[i].Values);
         }
     }
+
+    private async Task<List<Field>> GetFieldsAsync(int csvfileid)
+    {
+        List<Field> returnFields = await _lqdbContext.Fields.Where(f => f.CSVFile.ID == csvfileid).OrderBy(f=>f.Index).ToListAsync();
+        return returnFields;
+    }
+    private async Task<List<Field>> GetFieldsAsync(int csvfileid, List<int> fieldindexes)
+    {
+        List<Field> returnFields = await _lqdbContext.Fields.Where(f => f.CSVFile.ID == csvfileid && fieldindexes.Contains(f.Index)).OrderBy(f => f.Index).ToListAsync();
+        return returnFields;
+    }
     
+    public async Task<Table> GetTableAsync(int csvfileid)
+    {
+        Table returnTable = new Table(GetCSVFile(csvfileid));
+        List<Field> fields = await GetFieldsAsync(csvfileid);
+        foreach (Field f in fields)
+        {
+            List<Value> values = await (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).ToListAsync();
+            returnTable.Columns.Add(new FieldValues{Field = f, Values = values});
+        }
+        returnTable.SetRowCount();
+        return returnTable;
+    }
+
+    public async Task<Table> GetTableAsync(int csvfileid, List<int> fieldindexes)
+    {
+        Table returnTable = new Table(GetCSVFile(csvfileid));
+        List<Field> fields = await GetFieldsAsync(csvfileid, fieldindexes);
+        var fieldIds = fields.Select(f => f.ID).ToList();
+        
+        var allValues = await _lqdbContext.Values
+            .Where(v => fieldIds.Contains(v.FieldID))
+            .OrderBy(v => v.RowIndex)
+            .ToListAsync();
+            
+        var valuesByFieldId = allValues.GroupBy(v => v.FieldID)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (Field f in fields)
+        {
+            returnTable.Columns.Add(new FieldValues{Field = f, Values = valuesByFieldId.GetValueOrDefault(f.ID, new List<Value>())});
+        }
+        returnTable.SetRowCount();
+        return returnTable;
+    }
+
     public Table? GetTable(CSVFile csvFile)
     {
         Table returnTable = new Table(csvFile);
@@ -92,10 +138,19 @@ public class LQDbService : ILQDbService
             where f.CSVFile.ID == csvfileid && (fieldindexes.Contains(f.Index))
             // where f.CSVFile.ID == csvfileid && (fieldindexes.BinarySearch(f.Index) >= 0)
             select f).ToList();
+            
+        var fieldIds = fields.Select(f => f.ID).ToList();
+        var allValues = _lqdbContext.Values
+            .Where(v => fieldIds.Contains(v.FieldID))
+            .OrderBy(v => v.RowIndex)
+            .ToList();
+
+        var valuesByFieldId = allValues.GroupBy(v => v.FieldID)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         foreach (Field f in fields)
         {
-            List<Value> values = (from v in _lqdbContext.Values orderby v.RowIndex where v.Field.ID == f.ID select v).ToList();
-            returnTable.Columns.Add(new FieldValues{Field = f,  Values = values});
+            returnTable.Columns.Add(new FieldValues{Field = f, Values = valuesByFieldId.GetValueOrDefault(f.ID, new List<Value>())});
         }
         returnTable.SetRowCount();
         return returnTable;

@@ -8,6 +8,8 @@ public interface ILQDbService
 {
     public void InsertTable(Table table);
     public Task InsertTableAsync(Table table);
+    public Task<Table> GetTableAsync(int csvfileid);
+    public Task<Table> GetTableAsync(int csvfileid, List<int> fieldindexes);
     public Table? GetTable(CSVFile csvFile);
     public Table? GetTable(string analystid, string filename);
     public Table? GetTable(int csvfileid);

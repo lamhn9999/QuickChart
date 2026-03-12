@@ -15,13 +15,16 @@ public class WorkspaceController : Controller
     private IAnalystService _analystService;
     private IAutoChartService _autoChartService;
     private ILQDbService _lqDbService;
+    private readonly ILogger<WorkspaceController> _logger;
+    private Stopwatch _stopwatch = new Stopwatch();
     
-    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, ILQDbService lqDbService)
+    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, ILQDbService lqDbService, ILogger<WorkspaceController> logger)
     {
         _csvService = csvService;
         _analystService =  analystService;
         _autoChartService = autoChartService;
         _lqDbService = lqDbService;
+        _logger = logger;
     }
     
     private AnalystDTO? CurrentAnalyst
@@ -72,16 +75,23 @@ public class WorkspaceController : Controller
 
     [HttpPost]
     [IgnoreAntiforgeryToken]
-    public IActionResult AutoChart([FromBody] List<int> fieldindexes)
+    public async Task<IActionResult> AutoChart([FromBody] List<int> fieldindexes)
     {
         string? json = HttpContext.Session.GetString("TableDTO");
         if (json is null) return NotFound();
         TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
         if (tabledto is null) return NotFound();
-        return Json(CurrentFilters is null
-            ? _autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes)
-            : _autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes, CurrentFilters)
-        );
+        
+        _stopwatch.Start();
+        var returnCharts = CurrentFilters is null
+            ? await _autoChartService.DetectChartAsync(tabledto.CSVFileID, fieldindexes)
+            : _autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes, CurrentFilters);
+        _stopwatch.Stop();
+        TimeSpan ts = _stopwatch.Elapsed;
+        string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+            ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
+        _logger.LogInformation($"RunTime {elapsedTime}\n{JsonSerializer.Serialize(fieldindexes)}");
+        return Json(returnCharts);
     }
 
     [HttpPost("filter")]
