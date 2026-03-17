@@ -6,24 +6,13 @@ namespace LQ.Models.DTOs;
 
 public class ValueFilterDTO
 {
-    public bool IsPartialMatch { get; set; } = false;
-    public bool IsNot { get; set; } = false;
-    public bool IsNumber { get; set; } = false;
+    public bool IsPartialMatch { get; init; } = false;
+    public bool IsNot { get; init; } = false;
+    public bool IsNumber { get; init; } = false;
     [Required]
-    public int FieldIndex { get; set; }
-    [Required] 
-    public List<String> FilteringValues { get; set; } = new List<string>();
-    public void MatchFieldProperty(Type fieldType, List<Category> fieldCategories)
-    {
-        switch (fieldType)
-        {
-            case var t when t == typeof(string) && fieldCategories.Contains(Category.Identifier):
-                IsPartialMatch = true;
-                break;
-
-            case var t when (t == typeof(int) || t== typeof(double)) && !fieldCategories.Contains(Category.Categorical):
-                IsNumber = true;
-                break;
-        }
-    }
+    public int FieldIndex { get; init; }
+    public List<String> FilteringValues { get; init; } = new List<string>();
+    public (int leftBound, int rightBound)? IntBound;
+    public (double leftBound, double rightBound)? DoubleBound;
+    public (DateTime leftBound, DateTime rightBound)? DateTimeBound;
 }

@@ -160,7 +160,7 @@ table {
 thead {
     position: sticky;
     top: 0;
-    border: 3px solid green;
+    /*border: 3px solid;*/
     background-color: black;
 }
 

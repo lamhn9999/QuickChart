@@ -33,53 +33,86 @@
         </div>
     </nav>
 
-    <div class="flex flex-1 flex-col md:flex-row min-h-0 md:max-h-full">
+    <div id="mainWrapper" class="group flex flex-1 flex-col md:flex-row min-h-0 md:max-h-full relative">
+        
+        <!-- Floating Expand/Collapse Button (Now handles the animation timing perfectly) -->
+        <button
+            onclick="const tp = document.getElementById('tablePanel'); tp.style.transition = 'all 0.5s ease-in-out'; document.getElementById('mainWrapper').classList.toggle('is-collapsed'); setTimeout(() => tp.style.transition = '', 500);"
+            class="absolute bottom-6 left-6 z-[60] flex items-center justify-center w-12 h-12 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full border border-zinc-600 shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            title="Toggle Table"
+        >
+            <svg class="w-6 h-6 transition-transform duration-500 group-[.is-collapsed]:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 3v18" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+
+        <!-- Table Panel (Removed transition classes so dragging is 100% instant) -->
         <div
             id="tablePanel"
-            class="overflow-auto
-                   w-full md:w-1/2 md:min-w-1/5">
-            <table id="dataTable" class="w-full border-separate border-spacing-0">
-                <thead class="sticky top-0">
-                <tr>
+            class="overflow-auto w-full md:w-1/2 md:min-w-1/5 group-[.is-collapsed]:md:!w-80 group-[.is-collapsed]:md:!min-w-[20rem] group-[.is-collapsed]:md:!max-w-[20rem] group-[.is-collapsed]:md:!flex-none">
+            
+            <table id="dataTable" class="w-full border-separate border-spacing-0 group-[.is-collapsed]:block">
+                <thead class="sticky top-0 group-[.is-collapsed]:block group-[.is-collapsed]:static">
+                <!-- The TR becomes the bordered column container when collapsed -->
+                <tr class="group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:items-stretch group-[.is-collapsed]:w-[calc(100%-2rem)] group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700 group-[.is-collapsed]:rounded-2xl group-[.is-collapsed]:p-3 group-[.is-collapsed]:gap-2 group-[.is-collapsed]:m-4 group-[.is-collapsed]:bg-zinc-900/30 transition-all">
                     @{
                         foreach (FieldValues fv in Model.Columns)
                         {
-                            <th onclick="fieldClicked(@fv.Field.Index)" class = "relative" data-index="@fv.Field.Index">
-                                @fv.Field.Name
-                                <div class="relative flex flex-col items-end z-50">
-                                    <button class="filter-btn hover:cursor-pointer relative" onclick="filterClicked(event, this)">
-                                        <span class="filter-chip hidden absolute -top-1.5 -left-1.5 bg-[#E9967A] text-black text-[10px] font-bold h-4 min-w-[16px] flex items-center justify-center rounded-full pointer-events-none z-10 px-1"></span>
-                                        <svg width="20" height="20" viewBox="0 0 24 24">
-                                            <path d="M3 5H21L14 13V19L10 21V13L3 5Z"
-                                                  stroke="currentColor"
-                                                  stroke-width="1.8"
-                                                  stroke-linecap="round"
-                                                  stroke-linejoin="round"/>
-                                        </svg>
-                                    </button>
-                                    <div class="hidden filterPopup absolute top-full right-0 mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50"
-                                         onclick="filterPopupClicked(event, this)">
-                                        <label class="block text-xs text-zinc-400 mb-1">
-                                            Search in @fv.Field.Name
-                                        </label>
-                                        <!-- CHIP CONTAINER -->
-                                        <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
-                                        <input
-                                            type="text"
-                                            placeholder="Type to filter..."
-                                            onkeydown="filterInputKey(event, this)"
-                                            class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 roundedtext-zinc-200 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] focus:border-[#E9967A] transition"
-                                        />
-                                        <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
+                            <!-- The TH becomes a larger, block-level card when collapsed -->
+                            <th onclick="fieldClicked(@fv.Field.Index)" class="relative align-top p-2 focus-within:z-[100] has-[.filterPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@fv.Field.Index">
+                                <!-- Flex container: Column in expanded, Row in collapsed -->
+                                <div class="flex flex-col h-full min-h-[64px] justify-between group-[.is-collapsed]:flex-row group-[.is-collapsed]:items-center group-[.is-collapsed]:min-h-0">
+                                    
+                                    <!-- Top Row (Expanded) / Left Side (Collapsed) -->
+                                    <div class="flex justify-between items-start w-full group-[.is-collapsed]:w-auto group-[.is-collapsed]:flex-1 group-[.is-collapsed]:items-center group-[.is-collapsed]:justify-start group-[.is-collapsed]:gap-3 overflow-hidden">
+                                        
+                                        <!-- Field Name (Top Left) -->
+                                        <span class="font-semibold truncate group-[.is-collapsed]:font-medium">@fv.Field.Name</span>
+                                        
+                                        <!-- Field Type (Top Right) -->
+                                        <span class="text-[10px] font-normal text-zinc-500 tracking-wide shrink-0 group-[.is-collapsed]:text-sm">@fv.Field.Type.Name</span>
+                                    </div>
+
+                                    <!-- Bottom Row (Expanded) / Right Side (Collapsed) -->
+                                    <div class="flex justify-end mt-2 group-[.is-collapsed]:mt-0 group-[.is-collapsed]:shrink-0 relative z-50">
+                                        
+                                        <!-- Filter Button (Bottom Right) -->
+                                        <button class="filter-btn hover:cursor-pointer relative z-40" onclick="filterClicked(event, this)">
+                                            <span class="filter-chip hidden absolute -top-1.5 -left-1.5 bg-[#E9967A] text-black text-[10px] font-bold h-4 min-w-[16px] flex items-center justify-center rounded-full pointer-events-none z-10 px-1"></span>
+                                            <svg width="20" height="20" viewBox="0 0 24 24">
+                                                <path d="M3 5H21L14 13V19L10 21V13L3 5Z"
+                                                      stroke="currentColor"
+                                                      stroke-width="1.8"
+                                                      stroke-linecap="round"
+                                                      stroke-linejoin="round"/>
+                                            </svg>
+                                        </button>
+                                        
+                                        <!-- Filter Popup (Added text-left and font-normal so it doesn't inherit TH bolding) -->
+                                        <div class="hidden filterPopup absolute top-full right-0 mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal"
+                                             onclick="filterPopupClicked(event, this)">
+                                            <label class="block text-xs text-zinc-400 mb-1">
+                                                Search in @fv.Field.Name
+                                            </label>
+                                            <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
                                             <input
-                                                type="checkbox"
-                                                name="IsNot"
-                                                value="true"
-                                                class="w-1.5 h-1.5 hover: hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]"
-                                                onclick="excludeCheckboxClicked(event, this)"
+                                                type="text"
+                                                placeholder="Type to filter..."
+                                                onkeydown="filterInputKey(event, this)"
+                                                class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 roundedtext-zinc-200 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] focus:border-[#E9967A] transition"
                                             />
-                                            Exclude results
-                                        </label>
+                                            <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
+                                                <input
+                                                    type="checkbox"
+                                                    name="IsNot"
+                                                    value="true"
+                                                    class="w-1.5 h-1.5 hover: hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]"
+                                                    onclick="excludeCheckboxClicked(event, this)"
+                                                />
+                                                Exclude results
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </th>
@@ -87,7 +120,8 @@
                     }
                 </tr>
                 </thead>
-                <tbody>
+                <!-- Hides the rows entirely when collapsed -->
+                <tbody class="group-[.is-collapsed]:hidden">
                 @for(int i = 0; i < Model.RowCount; i++)
                 {
                     <tr>
@@ -101,10 +135,10 @@
             </table>
         </div>
 
+        <!-- Drag Handle (Fades out when collapsed) -->
         <div
             id="drag"
-            class="hidden md:block mx-1 w-1 rounded-full
-                   cursor-col-resize bg-gray-500"
+            class="hidden md:block mx-1 w-1 rounded-full cursor-col-resize bg-gray-500 transition-opacity duration-500 group-[.is-collapsed]:opacity-0 group-[.is-collapsed]:pointer-events-none"
         ></div>
         <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto" id="plotPanel">
             <div class="flex-1 border-2 border-gray-500 content-center" id="selPlot">
@@ -137,6 +171,12 @@
         isDragging = true;
         box.classList.add("grabbing");
 
+        // CORRECT way to apply !important in JavaScript
+        box.style.setProperty('transition', 'none', 'important');
+
+        // Prevent text highlighting during drag (fixes 90% of drag lag)
+        document.body.style.setProperty('user-select', 'none', 'important');
+
         startX = e.pageX;
         startY = e.pageY;
 
@@ -145,8 +185,13 @@
     });
 
     document.addEventListener("mouseup", () => {
+        if (!isDragging) return;
         isDragging = false;
         box.classList.remove("grabbing");
+
+        // Clean up styles when done dragging
+        box.style.removeProperty('transition');
+        document.body.style.removeProperty('user-select');
     });
 
     document.addEventListener("mousemove", (e) => {
