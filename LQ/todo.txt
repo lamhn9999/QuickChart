@@ -11,3 +11,8 @@ student_data: chon cot age => null
 retail_sales: gender & age 
 
 implement: int column distribution tables
+
+main_dataset:
+    revenue + budget
+    cast + director, cast + keywords, cast + genres
+    genres + budget_adj + revenue_adj

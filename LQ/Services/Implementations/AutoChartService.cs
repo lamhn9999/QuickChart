@@ -1276,7 +1276,7 @@ public class AutoChartService : IAutoChartService
                 if (sameScale.Count <= 1) continue;
                 sameScale.Insert(0, categorical[categoricalIndex]);
                 if (!ChartIndex.TryGetValue(sameScale, out var id))
-                    ChartIndex[sameScale] = curChartIndex++;
+                    ChartIndex[sameScale] = curChartIndex++; 
                 Chart resChart = DetectBarChart(sameScale);
                 resChart.PanelIndex = ChartIndex.GetValueOrDefault(sameScale, -1);
                 res.Add(resChart);
@@ -1331,10 +1331,18 @@ public class AutoChartService : IAutoChartService
             res.Add(resChart);
         }
         // X identifier
-        // foreach (FieldValues identifierFv in identifier)
-        // {
-        //     res.Add(DetectSideBar(new List<FieldValues> { identifierFv }));
-        // }
+        foreach (FieldValues identifierFv in identifier)
+        {
+            List<FieldValues> chartTable = new List<FieldValues>
+            {
+                identifierFv
+            };
+            if (!ChartIndex.TryGetValue(chartTable, out var id))
+                ChartIndex[chartTable] = curChartIndex++;
+            Chart resChart = DetectSideBar(chartTable);
+            resChart.PanelIndex = ChartIndex.GetValueOrDefault(chartTable, -1);
+            res.Add(resChart);
+        }
         // X numeric
         foreach (List<FieldValues> lfv in numeric)
         {

@@ -13,6 +13,9 @@ public class CSVService : ICSVService
     private readonly IAutoChartService _autoChartService;
     private static char[] possibleOpen = new[] { '\"', '[' };
     private static char[] possibleEnd = new[] { '\"', ']' };
+
+    private const double TOLERANCE = 0.000000001;
+    
     public CSVService(ILQDbService lqdbService, IAutoChartService autoChartService)
     {
         _lqDbService = lqdbService;
@@ -176,7 +179,7 @@ public class CSVService : ICSVService
 
         if (nonparsedCount == 0 || nonparsedSet.Count == 0) return false;
 
-        double rate1 = (double)nonparsedSet.Count / nonparsedCount;
+        double rateNonParsed = (double)nonparsedSet.Count / nonparsedCount;
 
         char bestSeparator = '\0';
         double bestRate2 = double.MaxValue;
@@ -210,20 +213,20 @@ public class CSVService : ICSVService
             // Must actively split items to be considered a list separator
             if (parsedCount > nonparsedCount)
             {
-                double rate2 = (double)parsedSet.Count / parsedCount;
-                if (rate2 <= Field.CATEGORICAL_THRESHOLD && rate2 < rate1)
+                double rateParsed = (double)parsedSet.Count / parsedCount;
+                if (rateParsed <= Field.CATEGORICAL_THRESHOLD && rateParsed < rateNonParsed)
                 {
                     // If rates tie, prefer the separator that results in more items
-                    if (rate2 < bestRate2 || (rate2 == bestRate2 && parsedCount > bestParsedCount))
+                    if (rateParsed < bestRate2 || (rateParsed == bestRate2 && parsedCount > bestParsedCount))
                     {
-                        bestRate2 = rate2;
+                        bestRate2 = rateParsed;
                         bestSeparator = sep;
                         bestParsedCount = parsedCount;
                     }
                 }
             }
         }
-
+        
         if (bestSeparator != '\0') 
         {
             foreach (var v in fieldvalues.Values)
@@ -245,6 +248,108 @@ public class CSVService : ICSVService
                 );
             }
 
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool DetectIdentifierList(FieldValues fieldvalues)
+    {
+        Console.WriteLine($"DetectIdentifierList {fieldvalues.Field.Name}");
+        HashSet<string> nonparsedSet = new HashSet<string>();
+        int nonparsedCount = 0;
+        HashSet<char> charCandidates = new HashSet<char>();
+
+        foreach (Value v in fieldvalues.Values)
+        {
+            if (string.IsNullOrWhiteSpace(v.ValueString)) continue;
+            string val = v.ValueString.Trim().TrimStart(possibleOpen).TrimEnd(possibleEnd);
+            nonparsedSet.Add(val);
+            nonparsedCount++;
+
+            foreach (char c in val)
+            {
+                if (!char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c))
+                {
+                    charCandidates.Add(c);
+                }
+            }
+        }
+
+        if (nonparsedCount == 0 || nonparsedSet.Count == 0) return false;
+
+        double rateNonParsed = (double)nonparsedSet.Count / nonparsedCount;
+
+        char bestSeparator = '\0';
+        double bestRate2 = double.MaxValue;
+        int bestParsedCount = 0;
+
+        // Ensure comma is checked
+        if (!charCandidates.Contains(',')) charCandidates.Add(',');
+
+        foreach (char sep in charCandidates)
+        {
+            HashSet<string> parsedSet = new HashSet<string>();
+            int parsedCount = 0;
+
+            foreach (Value v in fieldvalues.Values)
+            {
+                if (string.IsNullOrWhiteSpace(v.ValueString)) continue;
+                string s = v.ValueString.Trim().TrimStart(possibleOpen).TrimEnd(possibleEnd);
+                
+                string[] splitted = s.Split(sep)
+                    .Select(x => x.Trim())
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .ToArray();
+
+                foreach (string f in splitted)
+                {
+                    parsedSet.Add(f);
+                    parsedCount++;
+                }
+            }
+
+            // Must actively split items to be considered a list separator
+            if (parsedCount > nonparsedCount)
+            {
+                double rateParsed = (double)parsedSet.Count / parsedCount;
+                if (rateParsed > Field.CATEGORICAL_THRESHOLD && rateParsed < rateNonParsed && rateParsed <= Field.IDENTIFIER_LIST_THRESHOLD)
+                {
+                    // If rates tie, prefer the separator that results in more items
+                    if (rateParsed < bestRate2 || (rateParsed == bestRate2 && parsedCount > bestParsedCount))
+                    {
+                        bestRate2 = rateParsed;
+                        bestSeparator = sep;
+                        bestParsedCount = parsedCount;
+                    }
+                }
+            }
+        }
+        
+        Console.WriteLine($"bestRate2: {bestRate2}");
+        Console.WriteLine($"rateNonParsed: {rateNonParsed}");
+
+        if (bestSeparator != '\0') 
+        {
+            foreach (var v in fieldvalues.Values)
+            {
+                if (string.IsNullOrWhiteSpace(v.ValueString))
+                {
+                    v.ValueStringFormatted = null;
+                    continue;
+                }
+
+                v.ValueStringFormatted = string.Join(',',
+                    v.ValueString
+                        .Trim()
+                        .TrimStart(possibleOpen)
+                        .TrimEnd(possibleEnd)
+                        .Split(bestSeparator)
+                        .Select(s => s.Trim())
+                        .Where(s => !string.IsNullOrEmpty(s))
+                );
+            }
             return true;
         }
 
@@ -315,7 +420,7 @@ public class CSVService : ICSVService
             return typeof(double);
         }
 
-        if (DetectCategoryList(fieldvalues))
+        if (DetectCategoryList(fieldvalues) || DetectIdentifierList(fieldvalues))
         {
             return typeof(List<string>);
         }
