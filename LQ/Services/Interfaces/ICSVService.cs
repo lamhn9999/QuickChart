@@ -12,7 +12,7 @@ public interface ICSVService
     public Table? GetTable(string analystId, int csvFileId);
     public Table? GetTableLimited(int csvFileId, int numRowLimited);
     public bool DetectDateTime(FieldValues fieldValues);
-    public Task<bool> ChangeFieldType(int csvFileId, int fieldIndex, string newType);
+    public Task<bool> ChangeFieldType(int csvFileId, int fieldId, string newType);
     public CSVFile? GetCSVFile(string analystid, string filename);
     public void RemoveCSVFile(string analystId, string fileName);
     public void RenameCSVFile(string analystId, string fileName, string newFileName);

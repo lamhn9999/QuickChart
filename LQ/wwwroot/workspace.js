@@ -70,8 +70,9 @@ function filterClicked(event, filterbtn) {
     const popup = filterbtn.parentElement.querySelector(".filterPopup");
     const wasOpen = !popup.classList.contains("hidden");
 
-    document.querySelectorAll('.filterPopup')
-        .forEach(fm => fm.classList.add('hidden'));
+    document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
+    document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
+    document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
 
     if (!wasOpen) {
         popup.classList.remove('hidden');
@@ -602,6 +603,104 @@ async function autoChart() {
     }
 }
 
+function showToast(message, isError = false) {
+    const toast = document.createElement("div");
+    toast.className = `fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-2xl backdrop-blur-xl border ${isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-green-500/10 border-green-500/20 text-green-400'} text-sm font-medium transition-all duration-300 transform scale-95 opacity-0 flex items-center gap-2`;
+    toast.innerHTML = `
+        ${isError ?
+            '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>' :
+            '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}
+        <span>${message}</span>
+    `;
+    document.body.appendChild(toast);
+
+    // Animate in
+    requestAnimationFrame(() => {
+        toast.classList.remove('scale-95', 'opacity-0');
+        toast.classList.add('scale-100', 'opacity-100');
+    });
+
+    // Animate out and remove
+    setTimeout(() => {
+        toast.classList.remove('scale-100', 'opacity-100');
+        toast.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+
+function gearBtnClicked(event, button) {
+    event.stopPropagation();
+
+    const popup = button.parentElement.querySelector('.gearPopup');
+    const wasOpen = !popup.classList.contains('hidden');
+
+    document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
+    document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
+    document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
+
+    if (!wasOpen) {
+        popup.classList.remove('hidden');
+        button.querySelector('svg').classList.add('rotate-180');
+
+        const rect = button.getBoundingClientRect();
+        popup.style.position = 'fixed'; // Ensure it's fixed for accurate positioning
+        popup.style.top = `${rect.bottom + 8}px`;
+        popup.style.left = `${rect.left}px`;
+    }
+}
+
+async function changeFieldType(event, fieldIndex, newType) {
+    event.stopPropagation();
+
+    // Hide all popups
+    document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
+    document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
+
+    try {
+        const formData = new FormData();
+        formData.append('fieldIndex', fieldIndex);
+        formData.append('newType', newType);
+
+        const response = await fetch('/workspace/changeFieldType', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+
+        if (result === "Field updated") {
+            const typeMapping = {
+                "string": "String",
+                "int": "Int32",
+                "double": "Double",
+                "datetime": "DateTime",
+                "bool": "Boolean",
+                "list": "List`1"
+            };
+            const span = document.getElementById(`fieldType-${fieldIndex}`);
+            if (span) {
+                span.textContent = typeMapping[newType] || newType;
+                const header = span.closest('th');
+                if (header) {
+                    const buttonsContainer = header.querySelector('.group-hover\\\\/changeType\\\\:flex');
+                    if (buttonsContainer) {
+                        const buttonsHtml = Object.keys(typeMapping)
+                            .filter(t => t !== newType)
+                            .map(t => `<button onclick="changeFieldType(event, ${fieldIndex}, '${t}')" class="text-left px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors w-full tracking-wide">${t}</button>`)
+                            .join('');
+                        buttonsContainer.innerHTML = buttonsHtml;
+                    }
+                }
+            }
+            showToast(`Field type successfully changed to ${newType}.`);
+        } else {
+            showToast("Failed to update field type.", true);
+        }
+    } catch (e) {
+        showToast("Error updating field type.", true);
+    }
+}
+
 function fieldClicked(fieldindex) {
     if (controller) {
         controller.abort("New fetch!");
@@ -636,7 +735,17 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
         document.querySelectorAll('.plot-btn svg, .plot-bgbtn svg').forEach(s => s.classList.remove('rotate-180'));
         document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
+        document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
+        document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
     });
+
+    if (left) {
+        left.addEventListener('scroll', () => {
+            document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
+            document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
+            document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
+        });
+    }
 
     if (resizer && left) {
         let startX = 0;
@@ -654,7 +763,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.addEventListener('mousemove', e => {
             if (!isDragging) return;
             const dx = e.clientX - startX;
-            left.style.width = `${startWidth + dx}px`;
+            left.style.width = `${startWidth + dx} px`;
         });
 
         document.addEventListener('mouseup', () => {

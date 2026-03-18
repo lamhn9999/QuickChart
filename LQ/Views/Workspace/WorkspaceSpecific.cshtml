@@ -60,18 +60,59 @@
                         foreach (FieldValues fv in Model.Columns)
                         {
                             <!-- The TH becomes a larger, block-level card when collapsed -->
-                            <th onclick="fieldClicked(@fv.Field.Index)" class="relative align-top p-2 focus-within:z-[100] has-[.filterPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@fv.Field.Index">
+                            <th onclick="fieldClicked(@fv.Field.Index)" class="relative align-top p-2 focus-within:z-[100] has-[.filterPopup:not(.hidden)]:z-[100] has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@fv.Field.Index">
                                 <!-- Flex container: Column in expanded, Row in collapsed -->
                                 <div class="flex flex-col h-full min-h-[64px] justify-between group-[.is-collapsed]:flex-row group-[.is-collapsed]:items-center group-[.is-collapsed]:min-h-0">
                                     
                                     <!-- Top Row (Expanded) / Left Side (Collapsed) -->
-                                    <div class="flex justify-between items-start w-full group-[.is-collapsed]:w-auto group-[.is-collapsed]:flex-1 group-[.is-collapsed]:items-center group-[.is-collapsed]:justify-start group-[.is-collapsed]:gap-3 overflow-hidden">
+                                    <div class="flex justify-between items-start w-full group-[.is-collapsed]:w-auto group-[.is-collapsed]:flex-1 group-[.is-collapsed]:items-center group-[.is-collapsed]:justify-start group-[.is-collapsed]:gap-3 min-w-0">
                                         
                                         <!-- Field Name (Top Left) -->
                                         <span class="font-semibold truncate group-[.is-collapsed]:font-medium">@fv.Field.Name</span>
                                         
                                         <!-- Field Type (Top Right) -->
-                                        <span class="text-[10px] font-normal text-zinc-500 tracking-wide shrink-0 group-[.is-collapsed]:text-sm">@fv.Field.Type.Name</span>
+                                        <div class="flex items-center gap-1 relative z-[60]">
+                                            <span class="text-[10px] font-normal text-zinc-500 tracking-wide shrink-0 group-[.is-collapsed]:text-sm" id="fieldType-@fv.Field.Index">@fv.Field.Type.Name</span>
+                                            
+                                            <div class="relative">
+                                                <button class="gear-btn hover:cursor-pointer text-zinc-500 hover:text-white transition-colors relative z-40 focus:outline-none p-1 -m-1 rounded-full" onclick="gearBtnClicked(event, this)">
+                                                    <svg class="w-3.5 h-3.5 transition-transform duration-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <circle cx="12" cy="12" r="3"></circle>
+                                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                                    </svg>
+                                                </button>
+                                                
+                                                <div class="hidden gearPopup fixed border border-white/20 bg-zinc-900/90 backdrop-blur-xl shadow-2xl rounded-xl p-1 z-[9999] text-left font-normal" onclick="event.stopPropagation()">
+                                                    <div class="relative group/changeType">
+                                                        <div class="px-3 py-2 hover:bg-white/10 rounded-lg cursor-pointer text-sm text-zinc-100 font-medium transition-colors flex items-center justify-between gap-3">
+                                                            Change Field Type
+                                                            <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                                        </div>
+                                                        
+                                                        <div class="hidden group-hover/changeType:flex absolute top-0 left-full w-max min-w-[120px] bg-zinc-900/95 backdrop-blur-3xl border border-white/20 rounded-xl p-1 shadow-2xl flex-col gap-0.5 z-[9999]">
+                                                            @{
+                                                                string ctName = "";
+                                                                if (fv.Field.Type == typeof(string)) { ctName = "string"; }
+                                                                else if (fv.Field.Type == typeof(int)) { ctName = "int"; }
+                                                                else if (fv.Field.Type == typeof(double)) { ctName = "double"; }
+                                                                else if (fv.Field.Type == typeof(DateTime)) { ctName = "datetime"; }
+                                                                else if (fv.Field.Type == typeof(bool)) { ctName = "bool"; }
+                                                                else if (fv.Field.Type == typeof(System.Collections.Generic.List<string>)) { ctName = "list"; }
+
+                                                                var allTypes = new string[] { "string", "int", "double", "datetime", "bool", "list" };
+                                                                foreach (var t in allTypes)
+                                                                {
+                                                                    if (t != ctName)
+                                                                    {
+                                                                        <button onclick="changeFieldType(event, @fv.Field.Index, '@t')" class="text-left px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors w-full tracking-wide">@t</button>
+                                                                    }
+                                                                }
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <!-- Bottom Row (Expanded) / Right Side (Collapsed) -->
@@ -90,7 +131,7 @@
                                         </button>
                                         
                                         <!-- Filter Popup (Added text-left and font-normal so it doesn't inherit TH bolding) -->
-                                        <div class="hidden filterPopup absolute top-full right-0 mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal"
+                                        <div class="hidden filterPopup absolute top-full left-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal"
                                              onclick="filterPopupClicked(event, this)">
                                             <label class="block text-xs text-zinc-400 mb-1">
                                                 Search in @fv.Field.Name

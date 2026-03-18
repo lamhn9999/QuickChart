@@ -29,7 +29,7 @@ public interface ILQDbService
     public void InsertValue(Value value);
     public void InsertValues(List<Value> values);
     public Task InsertValuesAsync(List<Value> values);
-    public Task<bool> ChangeFieldType(int csvFileId, int fieldIndex, Type newType);
+    public Task<bool> ChangeFieldType(int csvFileId, int fieldId, Type newType);
     public bool SearchFileByAnalyst(Analyst analyst,  string fileName);
     public void RemoveCSVFile(int CSVFileID);
     public void RenameCSVFile(int CSVFileID, string newName);

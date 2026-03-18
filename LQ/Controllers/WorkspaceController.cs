@@ -62,8 +62,7 @@ public class WorkspaceController : Controller
         if (table is null) return NotFound();
         HttpContext.Session.SetString("TableDTO", JsonSerializer.Serialize(new TableDTO
         {
-            FieldIDs = (from f in table.Columns
-                select f.Field.ID).ToList(),
+            FieldIDs = table.Columns.OrderBy(f => f.Field.Index).Select(f => f.Field.ID).ToList(),
             RowCount = table.RowCount,
             CSVFileID = table.CSVFile.ID
         }));
@@ -120,7 +119,16 @@ public class WorkspaceController : Controller
     public async Task<IActionResult> ChangeFieldType(int fieldIndex, string newType)
     {
         if (CurrentCSVFile is null) return NotFound();
-        var res = await _csvService.ChangeFieldType(CurrentCSVFile.currentFileID, fieldIndex, newType);
+        
+        string? json = HttpContext.Session.GetString("TableDTO");
+        if (json is null) return NotFound();
+        TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
+        if (tabledto is null) return NotFound();
+        
+        if (fieldIndex < 0 || fieldIndex >= tabledto.FieldIDs.Count) return BadRequest("Invalid field index");
+        int fieldId = tabledto.FieldIDs[fieldIndex];
+
+        var res = await _csvService.ChangeFieldType(CurrentCSVFile.currentFileID, fieldId, newType);
         if (res) return Json("Field updated");
         return Json("Field not updated");
     }

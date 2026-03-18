@@ -591,10 +591,10 @@ public class CSVService : ICSVService
         return _lqDbService.GetCSVFile(analystid, filename);
     }
 
-    public async Task<bool> ChangeFieldType(int csvFileId, int fieldIndex, string newType)
+    public async Task<bool> ChangeFieldType(int csvFileId, int fieldId, string newType)
     {
         if (!TypeNameMap.Map.ContainsKey(newType)) return false;
-        return await _lqDbService.ChangeFieldType(csvFileId, fieldIndex, 
+        return await _lqDbService.ChangeFieldType(csvFileId, fieldId, 
             TypeNameMap.Map[newType]);
     }
 }

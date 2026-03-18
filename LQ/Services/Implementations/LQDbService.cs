@@ -373,12 +373,12 @@ public class LQDbService : ILQDbService
         });
     }
     
-    public async Task<bool> ChangeFieldType(int csvFileId, int fieldIndex, Type newType)
+    public async Task<bool> ChangeFieldType(int csvFileId, int fieldId, Type newType)
     {
         var target = await _lqdbContext.Fields
-            .SingleOrDefaultAsync(f => f.CSVFile.ID == csvFileId && f.Index == fieldIndex);
-        Console.WriteLine($"Target: {target.TypeName}\nNew: {newType.AssemblyQualifiedName}");
+            .SingleOrDefaultAsync(f => f.ID == fieldId);
         if (target is null) return false;
+        Console.WriteLine($"Target: {target.TypeName}\nNew: {newType.AssemblyQualifiedName}");
         if (target.Type == newType) return true;
         target.Type = newType;
         await _lqdbContext.SaveChangesAsync();
