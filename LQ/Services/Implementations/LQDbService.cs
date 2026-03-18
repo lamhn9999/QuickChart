@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using EFCore.BulkExtensions;
 using LQ.Data.Database;
 using LQ.Models.AnalystModels;
@@ -371,7 +372,19 @@ public class LQDbService : ILQDbService
             SetOutputIdentity = true
         });
     }
-
+    
+    public async Task<bool> ChangeFieldType(int csvFileId, int fieldIndex, Type newType)
+    {
+        var target = await _lqdbContext.Fields
+            .SingleOrDefaultAsync(f => f.CSVFile.ID == csvFileId && f.Index == fieldIndex);
+        Console.WriteLine($"Target: {target.TypeName}\nNew: {newType.AssemblyQualifiedName}");
+        if (target is null) return false;
+        if (target.Type == newType) return true;
+        target.Type = newType;
+        await _lqdbContext.SaveChangesAsync();
+        return true;
+    }
+    
     public bool SearchFileByAnalyst(Analyst analyst, string fileName)
     {
         return _lqdbContext.CSVFiles.Any(a => a.AnalystID == analyst.Id && a.Name == fileName);

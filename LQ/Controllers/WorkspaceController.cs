@@ -114,4 +114,14 @@ public class WorkspaceController : Controller
         // Console.WriteLine(tablejson);
         return Json(table.GetDisplay());
     }
+
+    [HttpPost("changeFieldType")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> ChangeFieldType(int fieldIndex, string newType)
+    {
+        if (CurrentCSVFile is null) return NotFound();
+        var res = await _csvService.ChangeFieldType(CurrentCSVFile.currentFileID, fieldIndex, newType);
+        if (res) return Json("Field updated");
+        return Json("Field not updated");
+    }
 }

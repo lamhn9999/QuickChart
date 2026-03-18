@@ -13,8 +13,8 @@ public class Field
     public const double CATEGORICAL_THRESHOLD = 0.1;
     public const double IDENTIFIER_LIST_THRESHOLD = 0.6;
     public int ID { get; private set; }
-    public string? Name { get; set; }
-    public int Index { get; set; }
+    public string? Name { get; init; }
+    public int Index { get; init; }
     
     private string? _typeName;
     public string? TypeName 

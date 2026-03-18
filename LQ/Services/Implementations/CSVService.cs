@@ -1,11 +1,25 @@
 using System.Globalization;
 using LQ.Data.Database;
 using System.Diagnostics;
+using System.Reflection.Metadata;
 using LQ.Models.TableModels;
 using LQ.Models.AnalystModels;
 using LQ.Services.Interfaces;
 
 namespace LQ.Services.Implementations;
+
+static class TypeNameMap
+{
+    public static Dictionary<string, Type> Map = new Dictionary<string, Type>
+    {
+        { "string",  typeof(string) },
+        { "int",     typeof(int) },
+        { "double",  typeof(double) },
+        { "datetime", typeof(DateTime) },
+        { "bool",    typeof(bool) },
+        { "list", typeof(List<string>) }
+    };
+}
 
 public class CSVService : ICSVService
 {
@@ -575,5 +589,12 @@ public class CSVService : ICSVService
     public CSVFile? GetCSVFile(string analystid, string filename)
     {
         return _lqDbService.GetCSVFile(analystid, filename);
+    }
+
+    public async Task<bool> ChangeFieldType(int csvFileId, int fieldIndex, string newType)
+    {
+        if (!TypeNameMap.Map.ContainsKey(newType)) return false;
+        return await _lqDbService.ChangeFieldType(csvFileId, fieldIndex, 
+            TypeNameMap.Map[newType]);
     }
 }
