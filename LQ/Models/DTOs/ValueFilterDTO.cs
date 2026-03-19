@@ -4,6 +4,16 @@ using LQ.Models.TableModels;
 
 namespace LQ.Models.DTOs;
 
+public enum FilterFieldType
+{
+    String,
+    Int,
+    Double,
+    DateTime,
+    Bool,
+    ListString
+}
+
 public struct RangeBound<T>
 {
     public T leftBound { get; set; }
@@ -12,6 +22,7 @@ public struct RangeBound<T>
 
 public class ValueFilterDTO
 {
+    public FilterFieldType FieldType { get; init; }
     public bool IsPartialMatch { get; init; } = false;
     public bool IsNot { get; init; } = false;
     [Required]

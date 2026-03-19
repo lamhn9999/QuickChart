@@ -6,6 +6,7 @@ using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
 using LQ.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace LQ.Services.Implementations;
 
@@ -203,7 +204,7 @@ public class LQDbService : ILQDbService
 
     private IQueryable<int> GetFilteredRowIndexesQuery(int csvfileid, List<ValueFilterDTO> filters)
     {
-        if (filters.Count == 0)
+        if (filters == null || filters.Count == 0)
         {
             return _lqdbContext.Values.Where(v => v.Field.CSVFile.ID == csvfileid).Select(v => v.RowIndex).Distinct();
         }
@@ -212,42 +213,96 @@ public class LQDbService : ILQDbService
 
         foreach (var filter in filters)
         {
-            var targetField =
-                _lqdbContext.Fields.SingleOrDefault(f => f.CSVFile.ID == csvfileid && f.Index == filter.FieldIndex);
             var filterQuery = _lqdbContext.Values.Where(v => v.Field.CSVFile.ID == csvfileid && v.Field.Index == filter.FieldIndex);
    
-            if (targetField.Type == typeof(int))
+            switch (filter.FieldType)
             {
-                var allowedList = filter.FilteringValuesInt;
-                var bound = filter.IntBound;
-                bool isNot = filter.IsNot;
+                case FilterFieldType.Int:
+                    var listInt = filter.FilteringValuesInt;
+                    var boundInt = filter.IntBound;
+                    bool isNotInt = filter.IsNot;
 
-                filterQuery = filterQuery.Where(v => v.ValueStringFormatted != null && v.ValueStringFormatted != "" && (
-                    (allowedList != null && (isNot 
-                        ? !allowedList.Contains(Convert.ToInt32(v.ValueStringFormatted)) 
-                        :  allowedList.Contains(Convert.ToInt32(v.ValueStringFormatted)))) 
-                    || 
-                    (bound != null && (isNot 
-                        ? !(Convert.ToInt32(v.ValueStringFormatted) >= bound.Value.leftBound && Convert.ToInt32(v.ValueStringFormatted) <= bound.Value.rightBound)
-                        :  (Convert.ToInt32(v.ValueStringFormatted) >= bound.Value.leftBound && Convert.ToInt32(v.ValueStringFormatted) <= bound.Value.rightBound)))
-                ));
-            }
-            else if (targetField.Type == typeof(string))
-            {
-                if (filter.IsPartialMatch)
-                {
-                    filterQuery = filterQuery.Where(v =>
-                        filter.IsNot
-                            ? !filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s))
-                            :  filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s)));
-                }
-                else
-                {
-                    filterQuery = filterQuery.Where(v =>
-                        filter.IsNot
-                            ? !filter.FilteringValues.Contains(v.ValueString)
-                            :  filter.FilteringValues.Contains(v.ValueString));
-                }
+                    filterQuery = filterQuery.Where(v => v.ValueStringFormatted != null && v.ValueStringFormatted != "");
+
+                    if (listInt != null && listInt.Count > 0)
+                    {
+                        filterQuery = isNotInt 
+                            ? filterQuery.Where(v => !listInt.Contains(Convert.ToInt32(v.ValueStringFormatted)))
+                            : filterQuery.Where(v => listInt.Contains(Convert.ToInt32(v.ValueStringFormatted)));
+                    }
+
+                    if (boundInt != null)
+                    {
+                        filterQuery = isNotInt 
+                            ? filterQuery.Where(v => !(Convert.ToInt32(v.ValueStringFormatted) >= boundInt.Value.leftBound && Convert.ToInt32(v.ValueStringFormatted) <= boundInt.Value.rightBound))
+                            : filterQuery.Where(v => Convert.ToInt32(v.ValueStringFormatted) >= boundInt.Value.leftBound && Convert.ToInt32(v.ValueStringFormatted) <= boundInt.Value.rightBound);
+                    }
+                    break;
+
+                case FilterFieldType.Double:
+                    var listDouble = filter.FilteringValuesDouble;
+                    var boundDouble = filter.DoubleBound;
+                    bool isNotDouble = filter.IsNot;
+
+                    filterQuery = filterQuery.Where(v => v.ValueStringFormatted != null && v.ValueStringFormatted != "");
+
+                    if (listDouble != null && listDouble.Count > 0)
+                    {
+                        filterQuery = isNotDouble 
+                            ? filterQuery.Where(v => !listDouble.Contains(Convert.ToDouble(v.ValueStringFormatted)))
+                            : filterQuery.Where(v => listDouble.Contains(Convert.ToDouble(v.ValueStringFormatted)));
+                    }
+
+                    if (boundDouble != null)
+                    {
+                        filterQuery = isNotDouble 
+                            ? filterQuery.Where(v => !(Convert.ToDouble(v.ValueStringFormatted) >= boundDouble.Value.leftBound && Convert.ToDouble(v.ValueStringFormatted) <= boundDouble.Value.rightBound))
+                            : filterQuery.Where(v => Convert.ToDouble(v.ValueStringFormatted) >= boundDouble.Value.leftBound && Convert.ToDouble(v.ValueStringFormatted) <= boundDouble.Value.rightBound);
+                    }
+                    break;
+
+                case FilterFieldType.DateTime:
+                    if (filter.DateTimeBound != null)
+                    {
+                        var boundDt = filter.DateTimeBound.Value;
+                        bool isNotDt = filter.IsNot;
+
+                        var localDates = filterQuery.Select(v => new { v.RowIndex, v.ValueStringFormatted }).AsEnumerable();
+                        var validDateRows = localDates.Where(v => {
+                            if (string.IsNullOrEmpty(v.ValueStringFormatted)) return false;
+                            if (DateTime.TryParse(v.ValueStringFormatted, out var dt)) {
+                                bool inRange = dt >= boundDt.leftBound && dt <= boundDt.rightBound;
+                                return isNotDt ? !inRange : inRange;
+                            }
+                            return false;
+                        }).Select(v => v.RowIndex).ToList();
+
+                        filterQuery = filterQuery.Where(v => validDateRows.Contains(v.RowIndex));
+                    }
+                    break;
+
+                case FilterFieldType.ListString:
+                    if (filter.FilteringValues != null && filter.FilteringValues.Count > 0)
+                    {
+                        filterQuery = filterQuery.Where(BuildStringExpression(filter.FilteringValues, filter.IsNot, filter.IsPartialMatch, true));
+                    }
+                    break;
+
+                case FilterFieldType.Bool:
+                    if (filter.FilteringValues != null && filter.FilteringValues.Count > 0)
+                    {
+                        filterQuery = filter.IsNot
+                            ? filterQuery.Where(v => !filter.FilteringValues.Contains(v.ValueStringFormatted))
+                            : filterQuery.Where(v => filter.FilteringValues.Contains(v.ValueStringFormatted));
+                    }
+                    break;
+                    
+                case FilterFieldType.String:
+                    if (filter.FilteringValues != null && filter.FilteringValues.Count > 0)
+                    {
+                        filterQuery = filterQuery.Where(BuildStringExpression(filter.FilteringValues, filter.IsNot, filter.IsPartialMatch, false));
+                    }
+                    break;
             }
 
             var matchingRowIndexes = filterQuery.Select(v => v.RowIndex);
@@ -263,6 +318,35 @@ public class LQDbService : ILQDbService
         }
 
         return finalQuery!;
+    }
+
+    private Expression<Func<Value, bool>> BuildStringExpression(List<string> list, bool isNot, bool isPartial, bool isListStr)
+    {
+        var vParam = Expression.Parameter(typeof(Value), "v");
+        var property = Expression.Property(vParam, isListStr ? "ValueStringFormatted" : "ValueString");
+        var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) })!;
+        
+        Expression? aggregate = null;
+        foreach (var s in list)
+        {
+            Expression check;
+            if (isPartial || isListStr) 
+                check = Expression.Call(property, containsMethod, Expression.Constant(s));
+            else 
+                check = Expression.Equal(property, Expression.Constant(s));
+
+            aggregate = aggregate == null 
+                ? check 
+                : (isPartial ? Expression.OrElse(aggregate, check) : Expression.AndAlso(aggregate, check));
+        }
+
+        if (aggregate == null) return v => false;
+
+        var nullCheck = Expression.NotEqual(property, Expression.Constant(null, typeof(string)));
+        Expression combined = Expression.AndAlso(nullCheck, aggregate);
+        if (isNot) combined = Expression.Not(combined);
+
+        return Expression.Lambda<Func<Value, bool>>(combined, vParam);
     }
 
     public Table? GetTableWithFilter(int csvfileid, List<ValueFilterDTO> filters)

@@ -97,9 +97,10 @@ async function filterInputKey(event, input) {
         const value = input.value;
         const columnHeader = input.closest("th");
         const index = columnHeader.dataset.index;
-        const isNotCheckboxValue = input.nextElementSibling.querySelector("input").checked;
+        const popup = input.closest(".filterPopup");
+        const isNotCheckboxValue = popup.querySelector('input[name="IsNot"]')?.checked || false;
 
-        await sendFilterRequest(value.trim(), isNotCheckboxValue, index);
+        await sendFilterRequest(value.trim(), isNotCheckboxValue, index, popup);
         appendFilterValue(input, index);
     }
 }
@@ -107,6 +108,13 @@ function appendFilterValue(input, index) {
     const container = input.previousElementSibling; // chip container above input
     const value = input.value.trim();
     if (!value) return;
+
+    if (Array.from(container.children).some(c => c.textContent.replace('✕', '').trim() === value)) {
+        input.value = "";
+        return;
+    }
+
+    const popup = input.closest(".filterPopup");
 
     const chip = document.createElement("div");
     chip.className =
@@ -123,7 +131,7 @@ function appendFilterValue(input, index) {
     removeBtn.onclick = async (e) => {
         e.stopPropagation();
 
-        if (filters[index].filteringValues) {
+        if (filters[index] && filters[index].filteringValues) {
             filters[index].filteringValues =
                 filters[index].filteringValues.filter(v => v !== value);
 
@@ -133,8 +141,8 @@ function appendFilterValue(input, index) {
         }
 
         chip.remove();
-        const isNotCheckboxValue = input.nextElementSibling.querySelector("input").checked;
-        await sendFilterRequest("", isNotCheckboxValue, index);
+        const isNotCheckboxValue = popup.querySelector('input[name="IsNot"]')?.checked || false;
+        await sendFilterRequest("", isNotCheckboxValue, index, popup);
     };
 
     chip.onclick = () => {
@@ -157,8 +165,19 @@ function updateFilterChipUI(index) {
     const chip = th.querySelector('.filter-chip');
     if (!chip) return;
 
-    if (filter && filter.filteringValues && filter.filteringValues.length > 0) {
-        chip.textContent = filter.filteringValues.length;
+    // Use a custom length if possible
+    let len = 0;
+    if (filter) {
+        if (filter.filteringValues) len += filter.filteringValues.length;
+        if (filter.filteringValuesInt) len += filter.filteringValuesInt.length;
+        if (filter.filteringValuesDouble) len += filter.filteringValuesDouble.length;
+        if (filter.intBound) len++;
+        if (filter.doubleBound) len++;
+        if (filter.dateTimeBound) len++;
+    }
+
+    if (len > 0) {
+        chip.textContent = len;
         chip.classList.remove('hidden');
     } else {
         chip.classList.add('hidden');
@@ -167,23 +186,36 @@ function updateFilterChipUI(index) {
 
 async function excludeCheckboxClicked(event, checkbox) {
     event.stopPropagation();
-
     const columnHeader = checkbox.closest("th");
     const index = columnHeader.dataset.index;
     const isNotCheckboxValue = checkbox.checked;
+    const popup = checkbox.closest('.filterPopup');
 
-    await sendFilterRequest("", isNotCheckboxValue, index);
+    await sendFilterRequest("", isNotCheckboxValue, index, popup);
 }
 
-async function sendFilterRequest(value, isNotCheckboxValue, index) {
+const enumMap = {
+    "String": 0, "Int": 1, "Double": 2, "DateTime": 3, "Bool": 4, "ListString": 5
+};
+
+async function sendFilterRequest(value, isNotCheckboxValue, index, popup) {
+    const fieldType = enumMap[popup.dataset.fieldType] || 0;
+    const isPartialMatch = popup.querySelector('input[name="IsPartialMatch"]')?.checked || false;
+
     if (value !== "") {
         if (!filters[index]) {
             filters[index] = {
-                isPartialMatch: true,
-                fieldIndex: index,
+                isPartialMatch: isPartialMatch,
+                fieldIndex: parseInt(index),
+                fieldType: fieldType,
                 filteringValues: []
             };
+        } else {
+            filters[index].fieldType = fieldType;
+            filters[index].isPartialMatch = isPartialMatch;
         }
+
+        if (!filters[index].filteringValues) filters[index].filteringValues = [];
         if (!filters[index].filteringValues.includes(value)) {
             filters[index].filteringValues.push(value);
         }
@@ -191,25 +223,15 @@ async function sendFilterRequest(value, isNotCheckboxValue, index) {
     }
     else if (filters[index]) {
         filters[index].isNot = isNotCheckboxValue;
-        if (filters[index].filteringValues.length === 0) {
+        filters[index].isPartialMatch = isPartialMatch;
+        filters[index].fieldType = fieldType;
+        if (!filters[index].filteringValues || filters[index].filteringValues.length === 0) {
             filters[index] = undefined;
         }
     }
 
     updateFilterChipUI(index);
-
-    controller = new AbortController();
-    const response = await fetch("/workspace/filter", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(filters.filter(f => f !== undefined)),
-        signal: controller.signal
-    });
-    const result = await response.json();
-
-    updateTable(result);
+    if (!popup.classList.contains("executing")) await executeFilterRequest();
 }
 
 function updateTable(rows) {
@@ -725,8 +747,8 @@ function fieldClicked(fieldindex) {
 async function filterIntSpecificKey(event, input) {
     if (event.key === "Enter") {
         event.preventDefault();
-        const value = parseInt(input.value);
-        if (isNaN(value)) return;
+        const value = input.value;
+        if (value.trim() === "") return;
 
         const columnHeader = input.closest("th");
         const index = columnHeader.dataset.index;
@@ -737,22 +759,43 @@ async function filterIntSpecificKey(event, input) {
     }
 }
 
-async function sendIntSpecificFilterRequest(value, isNot, index, input) {
+async function sendIntSpecificFilterRequest(rawVal, isNot, index, input) {
+    const popup = input.closest(".filterPopup");
+    const fieldType = enumMap[popup.dataset.fieldType];
+
     if (!filters[index]) {
-        filters[index] = { fieldIndex: parseInt(index), filteringValuesInt: [], intBound: null, isNot: isNot };
+        filters[index] = { fieldIndex: parseInt(index), fieldType: fieldType, filteringValuesInt: [], filteringValuesDouble: [], intBound: null, doubleBound: null, isNot: isNot };
     }
 
-    // Clear range if we're using specific values
     filters[index].intBound = null;
-    if (!filters[index].filteringValuesInt) filters[index].filteringValuesInt = [];
+    filters[index].doubleBound = null;
+    filters[index].fieldType = fieldType;
 
-    if (value !== null && !filters[index].filteringValuesInt.includes(value)) {
-        filters[index].filteringValuesInt.push(value);
+    let displayVal = null;
+    if (fieldType === 1) { // Int
+        const value = parseInt(rawVal);
+        if (!isNaN(value)) {
+            if (!filters[index].filteringValuesInt) filters[index].filteringValuesInt = [];
+            if (!filters[index].filteringValuesInt.includes(value)) {
+                filters[index].filteringValuesInt.push(value);
+                displayVal = value;
+            }
+        }
+    } else { // Double
+        const value = parseFloat(rawVal);
+        if (!isNaN(value)) {
+            if (!filters[index].filteringValuesDouble) filters[index].filteringValuesDouble = [];
+            if (!filters[index].filteringValuesDouble.includes(value)) {
+                filters[index].filteringValuesDouble.push(value);
+                displayVal = value;
+            }
+        }
     }
+
     filters[index].isNot = isNot;
 
     updateFilterChipUI(index);
-    if (value !== null) appendIntFilterValue(input, index, value);
+    if (displayVal !== null) appendIntFilterValue(input, index, displayVal);
 
     await executeFilterRequest();
 }
@@ -773,7 +816,10 @@ function appendIntFilterValue(input, index, value) {
         e.stopPropagation();
         if (filters[index]) {
             filters[index].filteringValuesInt = (filters[index].filteringValuesInt || []).filter(v => v !== value);
-            if (filters[index].filteringValuesInt.length === 0 && !filters[index].intBound) {
+            filters[index].filteringValuesDouble = (filters[index].filteringValuesDouble || []).filter(v => v !== value);
+            if ((!filters[index].filteringValuesInt || filters[index].filteringValuesInt.length === 0) &&
+                (!filters[index].filteringValuesDouble || filters[index].filteringValuesDouble.length === 0) &&
+                !filters[index].intBound && !filters[index].doubleBound) {
                 filters[index] = undefined;
             }
         }
@@ -807,6 +853,7 @@ async function applyIntRangeFilter(event, btn) {
     if (!columnHeader) return;
     const index = columnHeader.dataset.index;
     const popup = btn.closest(".filterPopup");
+    const fieldType = enumMap[popup.dataset.fieldType];
 
     const minInput = popup.querySelector(".int-range-min").value;
     const maxInput = popup.querySelector(".int-range-max").value;
@@ -814,15 +861,25 @@ async function applyIntRangeFilter(event, btn) {
 
     if (minInput === "" && maxInput === "") return; // Do nothing if both empty
 
-    const minVal = minInput === "" ? -2147483648 : parseInt(minInput);
-    const maxVal = maxInput === "" ? 2147483647 : parseInt(maxInput);
-
     if (!filters[index]) {
-        filters[index] = { fieldIndex: parseInt(index), filteringValuesInt: [], isNot: isNot };
+        filters[index] = { fieldIndex: parseInt(index), fieldType: fieldType, filteringValuesInt: null, filteringValuesDouble: null, isNot: isNot };
     }
 
+    filters[index].fieldType = fieldType;
     filters[index].filteringValuesInt = null;
-    filters[index].intBound = { leftBound: minVal, rightBound: maxVal };
+    filters[index].filteringValuesDouble = null;
+
+    let minVal, maxVal;
+    if (fieldType === 1) { // Int
+        minVal = minInput === "" ? -2147483648 : parseInt(minInput);
+        maxVal = maxInput === "" ? 2147483647 : parseInt(maxInput);
+        filters[index].intBound = { leftBound: minVal, rightBound: maxVal };
+    } else { // Double
+        minVal = minInput === "" ? -1.7976931348623157E+308 : parseFloat(minInput);
+        maxVal = maxInput === "" ? 1.7976931348623157E+308 : parseFloat(maxInput);
+        filters[index].doubleBound = { leftBound: minVal, rightBound: maxVal };
+    }
+
     filters[index].isNot = isNot;
 
     updateFilterChipUI(index);
@@ -835,8 +892,11 @@ async function applyIntRangeFilter(event, btn) {
 
     chip.querySelector("button").onclick = async (e) => {
         e.stopPropagation();
-        if (filters[index]) filters[index].intBound = null;
-        if (!filters[index] || (!filters[index].filteringValuesInt || filters[index].filteringValuesInt.length === 0)) {
+        if (filters[index]) {
+            filters[index].intBound = null;
+            filters[index].doubleBound = null;
+        }
+        if (!filters[index] || ((!filters[index].filteringValuesInt || filters[index].filteringValuesInt.length === 0) && (!filters[index].filteringValuesDouble || filters[index].filteringValuesDouble.length === 0))) {
             filters[index] = undefined;
         }
         chip.remove();
@@ -852,6 +912,137 @@ async function applyIntRangeFilter(event, btn) {
     await executeFilterRequest();
 }
 
+async function applyDtRangeFilter(event, btn) {
+    event.stopPropagation();
+    const columnHeader = btn.closest("th");
+    if (!columnHeader) return;
+    const index = columnHeader.dataset.index;
+    const popup = btn.closest(".filterPopup");
+    const fieldType = enumMap[popup.dataset.fieldType];
+
+    const minInput = popup.querySelector(".dt-range-min").value;
+    const maxInput = popup.querySelector(".dt-range-max").value;
+    const isNot = popup.querySelector('input[name="IsNot"]').checked;
+
+    if (minInput === "" && maxInput === "") return;
+
+    const minDt = minInput === "" ? "0001-01-01T00:00:00" : minInput;
+    const maxDt = maxInput === "" ? "9999-12-31T23:59:59" : maxInput;
+
+    if (!filters[index]) {
+        filters[index] = { fieldIndex: parseInt(index), fieldType: fieldType, isNot: isNot, dateTimeBound: null };
+    }
+
+    filters[index].fieldType = fieldType;
+    filters[index].dateTimeBound = { leftBound: minDt, rightBound: maxDt };
+    filters[index].isNot = isNot;
+
+    updateFilterChipUI(index);
+
+    const container = popup.querySelector(".filterValues");
+    container.innerHTML = "";
+    const chip = document.createElement("div");
+    chip.className = "filterValue rounded-xl bg-[#E9967A] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
+    const minDpy = minInput === "" ? "-inf" : new Date(minInput).toLocaleString();
+    const maxDpy = maxInput === "" ? "+inf" : new Date(maxInput).toLocaleString();
+    chip.innerHTML = `<span class="truncate min-w-0">${minDpy} to <br> ${maxDpy}</span><button class="ml-1 font-bold hover:cursor-pointer">✕</button>`;
+
+    chip.querySelector("button").onclick = async (e) => {
+        e.stopPropagation();
+        if (filters[index]) filters[index].dateTimeBound = null;
+        filters[index] = undefined;
+        chip.remove();
+
+        popup.querySelector(".dt-range-min").value = "";
+        popup.querySelector(".dt-range-max").value = "";
+
+        await executeFilterRequest();
+    };
+
+    container.appendChild(chip);
+    await executeFilterRequest();
+}
+
+async function excludeDtCheckboxClicked(event, checkbox) {
+    event.stopPropagation();
+    const columnHeader = checkbox.closest("th");
+    if (!columnHeader) return;
+    const index = columnHeader.dataset.index;
+    if (filters[index]) {
+        filters[index].isNot = checkbox.checked;
+        await executeFilterRequest();
+    }
+}
+
+async function applyBoolFilter(event, btn, val) {
+    event.stopPropagation();
+    const columnHeader = btn.closest("th");
+    if (!columnHeader) return;
+    const index = columnHeader.dataset.index;
+    const popup = btn.closest(".filterPopup");
+    const fieldType = enumMap[popup.dataset.fieldType];
+    const isNot = popup.querySelector('input[name="IsNot"]')?.checked || false;
+
+    if (!filters[index]) {
+        filters[index] = { fieldIndex: parseInt(index), fieldType: fieldType, filteringValues: [], isNot: isNot };
+    }
+    filters[index].fieldType = fieldType;
+
+    // Strict toggle: overwrite array
+    filters[index].filteringValues = [val];
+    filters[index].isNot = isNot;
+
+    // Clear UI chips
+    const container = popup.querySelector(".filterValues");
+    container.innerHTML = "";
+    appendBoolFilterValue(popup, index, val);
+
+    updateFilterChipUI(index);
+    await executeFilterRequest();
+}
+
+function appendBoolFilterValue(popup, index, value) {
+    const container = popup.querySelector(".filterValues");
+    const chip = document.createElement("div");
+    chip.className = "filterValue rounded-xl bg-[#E9967A] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
+    chip.innerHTML = `<span class="truncate min-w-0">${value}</span><button class="ml-1 font-bold hover:cursor-pointer">✕</button>`;
+
+    chip.querySelector("button").onclick = async (e) => {
+        e.stopPropagation();
+        if (filters[index] && filters[index].filteringValues) {
+            filters[index].filteringValues = filters[index].filteringValues.filter(v => v !== value);
+            if (filters[index].filteringValues.length === 0) {
+                filters[index] = undefined;
+            }
+        }
+        chip.remove();
+        await executeFilterRequest();
+    };
+    container.appendChild(chip);
+}
+
+async function excludeBoolCheckboxClicked(event, checkbox) {
+    event.stopPropagation();
+    const columnHeader = checkbox.closest("th");
+    if (!columnHeader) return;
+    const index = columnHeader.dataset.index;
+    if (filters[index]) {
+        filters[index].isNot = checkbox.checked;
+        await executeFilterRequest();
+    }
+}
+
+async function partialMatchStrCheckboxClicked(event, checkbox) {
+    event.stopPropagation();
+    const columnHeader = checkbox.closest("th");
+    if (!columnHeader) return;
+    const index = columnHeader.dataset.index;
+    if (filters[index]) {
+        filters[index].isPartialMatch = checkbox.checked;
+        await executeFilterRequest();
+    }
+}
+
 async function excludeIntCheckboxClicked(event, checkbox) {
     event.stopPropagation();
     const columnHeader = checkbox.closest("th");
@@ -864,18 +1055,26 @@ async function excludeIntCheckboxClicked(event, checkbox) {
     }
 }
 
+let executingFilterController = null;
 async function executeFilterRequest() {
-    controller = new AbortController();
-    console.log(filters)
+    if (executingFilterController) {
+        executingFilterController.abort();
+    }
+    executingFilterController = new AbortController();
+    controller = executingFilterController;
     const activeFilters = filters.filter(f => f !== undefined);
-    const response = await fetch("/workspace/filter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(activeFilters),
-        signal: controller.signal
-    });
-    const result = await response.json();
-    updateTable(result);
+    try {
+        const response = await fetch("/workspace/filter", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(activeFilters),
+            signal: executingFilterController.signal
+        });
+        const result = await response.json();
+        updateTable(result);
+    } catch (e) {
+        if (e.name !== 'AbortError') console.error(e);
+    }
 }
 
 document.addEventListener("DOMContentLoaded", () => {

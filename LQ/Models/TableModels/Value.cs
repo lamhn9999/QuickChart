@@ -52,7 +52,7 @@ public class Value
         if (Field.Type == typeof(DateTime)) 
             return DateTime.Parse(value, CultureInfo.InvariantCulture).ToUniversalTime().Year;
         if (Field.Type == typeof(List<string>))
-            return ValueStringFormatted is null ? null : ValueStringFormatted.Split(',').ToList();
+            return ValueStringFormatted?.Split(',').ToList();
         return null;
     }
 }
