@@ -446,10 +446,7 @@ public class AutoChartService : IAutoChartService
                 valueList.Add(Convert.ToDouble(value.ValueCasted));
             }
             valueList.Sort();
-            double q1 = valueList[Math.Max((valueList.Count + 1) / 4 - 1, 0)];
-            double q3 = valueList[valueList.Count - 1 - (valueList.Count + 1) / 4];
-            double iqr = q3 - q1;
-            double gap = (iqr <= 0) ? (valueList[valueList.Count - 1] - valueList[0]) / Math.Max(1, (int)Math.Sqrt(valueList.Count)) : 2.0 * iqr / Math.Pow(valueList.Count, 1.0 / 3.0);
+            double gap = (valueList[valueList.Count - 1] - valueList[0]) / ((int)Math.Sqrt(valueList.Count) + 1);
             if (gap == 0) gap = 1;
             Chart histogramChart = new Chart();
             histogramChart.ChartType = ChartType.Histogram;
@@ -1137,8 +1134,10 @@ public class AutoChartService : IAutoChartService
             // X categorical, Y Numeric, Z Numeric
             for (int numericIndex = 0; numericIndex < numericList.Count; numericIndex++)
             {
+                if (categorical[categoricalIndex] == numericList[numericIndex]) continue;
                 for (int numericSubIndex = numericIndex + 1; numericSubIndex < numericList.Count; numericSubIndex++)
                 {
+                    if (categorical[categoricalIndex] == numericList[numericSubIndex]) continue;
                     List<FieldValues> chartTable = new List<FieldValues>
                     {
                         categorical[categoricalIndex],

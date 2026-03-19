@@ -50,7 +50,7 @@
         <!-- Table Panel (Removed transition classes so dragging is 100% instant) -->
         <div
             id="tablePanel"
-            class="overflow-auto w-full md:w-1/2 md:min-w-1/5 group-[.is-collapsed]:md:!w-80 group-[.is-collapsed]:md:!min-w-[20rem] group-[.is-collapsed]:md:!max-w-[20rem] group-[.is-collapsed]:md:!flex-none">
+            class="overflow-auto w-full md:w-1/2 md:min-w-1/5 group-[.is-collapsed]:md:!w-80 group-[.is-collapsed]:md:!min-w-[20rem] group-[.is-collapsed]:md:!max-w-[20rem] group-[.is-collapsed]:md:!flex-none relative z-20">
             
             <table id="dataTable" class="w-full border-separate border-spacing-0 group-[.is-collapsed]:block">
                 <thead class="sticky top-0 group-[.is-collapsed]:block group-[.is-collapsed]:static">
@@ -83,13 +83,13 @@
                                                 </button>
                                                 
                                                 <div class="hidden gearPopup fixed border border-white/20 bg-zinc-900/90 backdrop-blur-xl shadow-2xl rounded-xl p-1 z-[9999] text-left font-normal" onclick="event.stopPropagation()">
-                                                    <div class="relative group/changeType">
-                                                        <div class="px-3 py-2 hover:bg-white/10 rounded-lg cursor-pointer text-sm text-zinc-100 font-medium transition-colors flex items-center justify-between gap-3">
+                                                    <div class="relative">
+                                                        <div class="type-menu-btn px-3 py-2 hover:bg-white/10 rounded-lg cursor-pointer text-sm text-zinc-100 font-medium transition-colors flex items-center justify-between gap-3" onclick="toggleFieldTypeMenu(this)">
                                                             Change Field Type
-                                                            <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                                            <svg class="w-3.5 h-3.5 opacity-60 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                                                         </div>
                                                         
-                                                        <div class="hidden group-hover/changeType:flex absolute top-0 left-full w-max min-w-[120px] bg-zinc-900/95 backdrop-blur-3xl border border-white/20 rounded-xl p-1 shadow-2xl flex-col gap-0.5 z-[9999]">
+                                                        <div class="hidden type-menu-popup absolute top-0 left-full ml-1 w-max min-w-[120px] bg-zinc-900/95 backdrop-blur-3xl border border-white/20 rounded-xl p-1 shadow-2xl flex flex-col gap-0.5 z-[9999]">
                                                             @{
                                                                 string ctName = "";
                                                                 if (fv.Field.Type == typeof(string)) { ctName = "string"; }
@@ -122,38 +122,48 @@
                                         <button class="filter-btn hover:cursor-pointer relative z-40" onclick="filterClicked(event, this)">
                                             <span class="filter-chip hidden absolute -top-1.5 -left-1.5 bg-[#E9967A] text-black text-[10px] font-bold h-4 min-w-[16px] flex items-center justify-center rounded-full pointer-events-none z-10 px-1"></span>
                                             <svg width="20" height="20" viewBox="0 0 24 24">
-                                                <path d="M3 5H21L14 13V19L10 21V13L3 5Z"
-                                                      stroke="currentColor"
-                                                      stroke-width="1.8"
-                                                      stroke-linecap="round"
-                                                      stroke-linejoin="round"/>
+                                                <path d="M3 5H21L14 13V19L10 21V13L3 5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                                             </svg>
                                         </button>
                                         
-                                        <!-- Filter Popup (Added text-left and font-normal so it doesn't inherit TH bolding) -->
-                                        <div class="hidden filterPopup absolute top-full left-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal"
-                                             onclick="filterPopupClicked(event, this)">
-                                            <label class="block text-xs text-zinc-400 mb-1">
-                                                Search in @fv.Field.Name
-                                            </label>
-                                            <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
-                                            <input
-                                                type="text"
-                                                placeholder="Type to filter..."
-                                                onkeydown="filterInputKey(event, this)"
-                                                class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 roundedtext-zinc-200 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] focus:border-[#E9967A] transition"
-                                            />
-                                            <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
-                                                <input
-                                                    type="checkbox"
-                                                    name="IsNot"
-                                                    value="true"
-                                                    class="w-1.5 h-1.5 hover: hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]"
-                                                    onclick="excludeCheckboxClicked(event, this)"
-                                                />
-                                                Exclude results
-                                            </label>
-                                        </div>
+                                        @if (fv.Field.Type == typeof(int))
+                                        {
+                                            <div class="hidden filterPopup absolute top-full left-full mt-2 w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal" onclick="filterPopupClicked(event, this)">
+                                                <div class="flex flex-col gap-3">
+                                                    <div>
+                                                        <label class="block text-xs text-zinc-400 mb-1">Specific Values</label>
+                                                        <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                        <input type="number" placeholder="Add specific number..." class="int-specific-input rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntSpecificKey(event, this)" />
+                                                    </div>
+                                                    <div class="text-xs text-zinc-500 text-center uppercase tracking-widest font-semibold mt-1">OR</div>
+                                                    <div>
+                                                        <label class="block text-xs text-zinc-400 mb-1">Range</label>
+                                                        <div class="flex items-center gap-2">
+                                                            <input type="number" placeholder="Min" class="int-range-min rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntRangeKey(event, this)" />
+                                                            <span class="text-zinc-500 text-xs">to</span>
+                                                            <input type="number" placeholder="Max" class="int-range-max rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntRangeKey(event, this)" />
+                                                        </div>
+                                                        <button class="mt-2 text-xs w-full font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white py-1.5 rounded transition" onclick="applyIntRangeFilter(event, this)">Apply Range</button>
+                                                    </div>
+                                                    <label class="flex items-center gap-1.5 mt-1 cursor-pointer text-xs text-zinc-400">
+                                                        <input type="checkbox" name="IsNot" value="true" class="w-1.5 h-1.5 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeIntCheckboxClicked(event, this)" />
+                                                        Exclude results
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="hidden filterPopup absolute top-full left-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal" onclick="filterPopupClicked(event, this)">
+                                                <label class="block text-xs text-zinc-400 mb-1">Search in @fv.Field.Name</label>
+                                                <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 roundedtext-zinc-200 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] focus:border-[#E9967A] transition" />
+                                                <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
+                                                    <input type="checkbox" name="IsNot" value="true" class="w-1.5 h-1.5 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeCheckboxClicked(event, this)" />
+                                                    Exclude results
+                                                </label>
+                                            </div>
+                                        }
                                     </div>
                                 </div>
                             </th>
@@ -181,7 +191,7 @@
             id="drag"
             class="hidden md:block mx-1 w-1 rounded-full cursor-col-resize bg-gray-500 transition-opacity duration-500 group-[.is-collapsed]:opacity-0 group-[.is-collapsed]:pointer-events-none"
         ></div>
-        <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto" id="plotPanel">
+        <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto relative z-10" id="plotPanel">
             <div class="flex-1 border-2 border-gray-500 content-center" id="selPlot">
                 <p class="p-10 text-3xl text-center text-gray-500">Please click a table header to select a column. We will generate appropriate plots based on your selection.</p>
             </div>

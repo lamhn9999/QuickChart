@@ -26,6 +26,12 @@ public class WorkspaceController : Controller
         _lqDbService = lqDbService;
         _logger = logger;
     }
+
+    private void WriteDto(object dto)
+    {
+        var csdto = JsonSerializer.Serialize(dto);
+        Console.WriteLine(csdto);
+    }
     
     private AnalystDTO? CurrentAnalyst
     {
@@ -42,6 +48,15 @@ public class WorkspaceController : Controller
         {
             var json = HttpContext.Session.GetString("CSVFileDTO");
             return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CSVFileDTO>(json);
+        }
+    }
+
+    private TableDTO? CurrentTable
+    {
+        get
+        {
+            var json = HttpContext.Session.GetString("TableDTO");
+            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<TableDTO>(json);
         }
     }
 
@@ -76,15 +91,11 @@ public class WorkspaceController : Controller
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> AutoChart([FromBody] List<int> fieldindexes)
     {
-        string? json = HttpContext.Session.GetString("TableDTO");
-        if (json is null) return NotFound();
-        TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
-        if (tabledto is null) return NotFound();
-        
+        if (CurrentTable is null) return NotFound();
         _stopwatch.Start();
         var returnCharts = CurrentFilters is null
-            ? await _autoChartService.DetectChartAsync(tabledto.CSVFileID, fieldindexes)
-            : _autoChartService.DetectChart(tabledto.CSVFileID, fieldindexes, CurrentFilters);
+            ? await _autoChartService.DetectChartAsync(CurrentTable.CSVFileID, fieldindexes)
+            : _autoChartService.DetectChart(CurrentTable.CSVFileID, fieldindexes, CurrentFilters);
         _stopwatch.Stop();
         TimeSpan ts = _stopwatch.Elapsed;
         string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
@@ -97,20 +108,14 @@ public class WorkspaceController : Controller
     [IgnoreAntiforgeryToken]
     public IActionResult FilterTable([FromBody] List<ValueFilterDTO> filters)
     {
-        string? json = HttpContext.Session.GetString("TableDTO");
-        if (json is null) return NotFound();
-        TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
-        if (tabledto is null) return NotFound();
+        if (CurrentTable is null) return NotFound();
+        var table = _lqDbService.GetTableWithFilterLimited(CurrentTable.CSVFileID, filters, 200);
         
-        var table = _lqDbService.GetTableWithFilterLimited(tabledto.CSVFileID, filters, 200);
+        WriteDto(filters);
         
-        if (table is null) return NotFound();
+        if (table is null) return BadRequest("Bad filter request.");
         HttpContext.Session.SetString("ListValueFilterDTO", JsonSerializer.Serialize(filters));
 
-        // var filtersjson = JsonSerializer.Serialize(filters);
-        // Console.WriteLine(filtersjson);
-        // var tablejson = JsonSerializer.Serialize(table.GetDisplay());
-        // Console.WriteLine(tablejson);
         return Json(table.GetDisplay());
     }
 
@@ -118,15 +123,10 @@ public class WorkspaceController : Controller
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> ChangeFieldType(int fieldIndex, string newType)
     {
-        if (CurrentCSVFile is null) return NotFound();
+        if (CurrentCSVFile is null || CurrentTable is null) return NotFound();
         
-        string? json = HttpContext.Session.GetString("TableDTO");
-        if (json is null) return NotFound();
-        TableDTO? tabledto = JsonSerializer.Deserialize<TableDTO>(json);
-        if (tabledto is null) return NotFound();
-        
-        if (fieldIndex < 0 || fieldIndex >= tabledto.FieldIDs.Count) return BadRequest("Invalid field index");
-        int fieldId = tabledto.FieldIDs[fieldIndex];
+        if (fieldIndex < 0 || fieldIndex >= CurrentTable.FieldIDs.Count) return BadRequest("Invalid field index");
+        int fieldId = CurrentTable.FieldIDs[fieldIndex];
 
         var res = await _csvService.ChangeFieldType(CurrentCSVFile.currentFileID, fieldId, newType);
         if (res) return Json("Field updated");

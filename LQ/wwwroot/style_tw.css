@@ -287,15 +287,6 @@
   .z-\[60\] {
     z-index: 60;
   }
-  .z-\[70\] {
-    z-index: 70;
-  }
-  .z-\[100\] {
-    z-index: 100;
-  }
-  .z-\[150\] {
-    z-index: 150;
-  }
   .z-\[9999\] {
     z-index: 9999;
   }
@@ -505,12 +496,6 @@
   }
   .min-w-\[120px\] {
     min-width: 120px;
-  }
-  .min-w-full {
-    min-width: 100%;
-  }
-  .min-w-max {
-    min-width: max-content;
   }
   .flex-1 {
     flex: 1;
@@ -791,12 +776,6 @@
     background-color: color-mix(in srgb, oklch(21% 0.006 285.885) 40%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--color-zinc-900) 40%, transparent);
-    }
-  }
-  .bg-zinc-900\/60 {
-    background-color: color-mix(in srgb, oklch(21% 0.006 285.885) 60%, transparent);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--color-zinc-900) 60%, transparent);
     }
   }
   .bg-zinc-900\/90 {
@@ -1218,13 +1197,6 @@
     &:is(:where(.group):hover *) {
       @media (hover: hover) {
         opacity: 100%;
-      }
-    }
-  }
-  .group-hover\/changeType\:flex {
-    &:is(:where(.group\/changeType):hover *) {
-      @media (hover: hover) {
-        display: flex;
       }
     }
   }

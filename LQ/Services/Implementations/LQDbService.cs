@@ -212,21 +212,42 @@ public class LQDbService : ILQDbService
 
         foreach (var filter in filters)
         {
+            var targetField =
+                _lqdbContext.Fields.SingleOrDefault(f => f.CSVFile.ID == csvfileid && f.Index == filter.FieldIndex);
             var filterQuery = _lqdbContext.Values.Where(v => v.Field.CSVFile.ID == csvfileid && v.Field.Index == filter.FieldIndex);
+   
+            if (targetField.Type == typeof(int))
+            {
+                var allowedList = filter.FilteringValuesInt;
+                var bound = filter.IntBound;
+                bool isNot = filter.IsNot;
 
-            if (filter.IsPartialMatch)
-            {
-                filterQuery = filterQuery.Where(v =>
-                    filter.IsNot
-                        ? !filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s))
-                        :  filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s)));
+                filterQuery = filterQuery.Where(v => v.ValueStringFormatted != null && v.ValueStringFormatted != "" && (
+                    (allowedList != null && (isNot 
+                        ? !allowedList.Contains(Convert.ToInt32(v.ValueStringFormatted)) 
+                        :  allowedList.Contains(Convert.ToInt32(v.ValueStringFormatted)))) 
+                    || 
+                    (bound != null && (isNot 
+                        ? !(Convert.ToInt32(v.ValueStringFormatted) >= bound.Value.leftBound && Convert.ToInt32(v.ValueStringFormatted) <= bound.Value.rightBound)
+                        :  (Convert.ToInt32(v.ValueStringFormatted) >= bound.Value.leftBound && Convert.ToInt32(v.ValueStringFormatted) <= bound.Value.rightBound)))
+                ));
             }
-            else
+            else if (targetField.Type == typeof(string))
             {
-                filterQuery = filterQuery.Where(v =>
-                    filter.IsNot
-                        ? !filter.FilteringValues.Contains(v.ValueString)
-                        :  filter.FilteringValues.Contains(v.ValueString));
+                if (filter.IsPartialMatch)
+                {
+                    filterQuery = filterQuery.Where(v =>
+                        filter.IsNot
+                            ? !filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s))
+                            :  filter.FilteringValues.Any(s => EF.Functions.Like(v.ValueString, s)));
+                }
+                else
+                {
+                    filterQuery = filterQuery.Where(v =>
+                        filter.IsNot
+                            ? !filter.FilteringValues.Contains(v.ValueString)
+                            :  filter.FilteringValues.Contains(v.ValueString));
+                }
             }
 
             var matchingRowIndexes = filterQuery.Select(v => v.RowIndex);

@@ -478,7 +478,7 @@ async function autoChart() {
 
             wrappers.forEach((wrapper, sIdx) => {
                 const header = document.createElement("div");
-                header.className = "flex justify-end p-2 border-b border-zinc-800 bg-zinc-900/30";
+                header.className = "flex justify-end p-2 border-b border-zinc-800 bg-zinc-900/30 relative z-50";
 
                 const container = document.createElement("div");
                 container.className = "flex items-center justify-end gap-2";
@@ -650,6 +650,19 @@ function gearBtnClicked(event, button) {
     }
 }
 
+function toggleFieldTypeMenu(btn) {
+    const popup = btn.nextElementSibling;
+    const isHidden = popup.classList.contains('hidden');
+
+    document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
+
+    if (isHidden) {
+        popup.classList.remove('hidden');
+        btn.querySelector('svg').classList.add('rotate-180');
+    }
+}
+
 async function changeFieldType(event, fieldIndex, newType) {
     event.stopPropagation();
 
@@ -682,7 +695,7 @@ async function changeFieldType(event, fieldIndex, newType) {
                 span.textContent = typeMapping[newType] || newType;
                 const header = span.closest('th');
                 if (header) {
-                    const buttonsContainer = header.querySelector('.group-hover\\\\/changeType\\\\:flex');
+                    const buttonsContainer = header.querySelector('.type-menu-popup');
                     if (buttonsContainer) {
                         const buttonsHtml = Object.keys(typeMapping)
                             .filter(t => t !== newType)
@@ -708,6 +721,161 @@ function fieldClicked(fieldindex) {
     if (listIndexes.has(fieldindex)) listIndexes.delete(fieldindex);
     else listIndexes.add(fieldindex);
     autoChart();
+}
+async function filterIntSpecificKey(event, input) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        const value = parseInt(input.value);
+        if (isNaN(value)) return;
+
+        const columnHeader = input.closest("th");
+        const index = columnHeader.dataset.index;
+        const popup = input.closest(".filterPopup");
+        const isNotCheckboxValue = popup.querySelector('input[name="IsNot"]').checked;
+
+        await sendIntSpecificFilterRequest(value, isNotCheckboxValue, index, input);
+    }
+}
+
+async function sendIntSpecificFilterRequest(value, isNot, index, input) {
+    if (!filters[index]) {
+        filters[index] = { fieldIndex: parseInt(index), filteringValuesInt: [], intBound: null, isNot: isNot };
+    }
+
+    // Clear range if we're using specific values
+    filters[index].intBound = null;
+    if (!filters[index].filteringValuesInt) filters[index].filteringValuesInt = [];
+
+    if (value !== null && !filters[index].filteringValuesInt.includes(value)) {
+        filters[index].filteringValuesInt.push(value);
+    }
+    filters[index].isNot = isNot;
+
+    updateFilterChipUI(index);
+    if (value !== null) appendIntFilterValue(input, index, value);
+
+    await executeFilterRequest();
+}
+
+function appendIntFilterValue(input, index, value) {
+    const container = input.previousElementSibling; // filterValues block
+
+    // Clear any existing range chips
+    Array.from(container.children).forEach(child => {
+        if (child.textContent.includes(" to ")) child.remove();
+    });
+
+    const chip = document.createElement("div");
+    chip.className = "filterValue rounded-xl bg-[#E9967A] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
+    chip.innerHTML = `<span class="truncate min-w-0">${value}</span><button class="ml-1 font-bold hover:cursor-pointer">✕</button>`;
+
+    chip.querySelector("button").onclick = async (e) => {
+        e.stopPropagation();
+        if (filters[index]) {
+            filters[index].filteringValuesInt = (filters[index].filteringValuesInt || []).filter(v => v !== value);
+            if (filters[index].filteringValuesInt.length === 0 && !filters[index].intBound) {
+                filters[index] = undefined;
+            }
+        }
+        chip.remove();
+
+        const popup = input.closest(".filterPopup");
+        if (popup) {
+            const isNotCheckboxValue = popup.querySelector('input[name="IsNot"]').checked;
+            if (filters[index]) filters[index].isNot = isNotCheckboxValue;
+        }
+
+        await executeFilterRequest();
+    };
+
+    container.appendChild(chip);
+    input.value = "";
+}
+
+async function filterIntRangeKey(event, input) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        const popup = input.closest(".filterPopup");
+        const btn = popup.querySelector("button");
+        await applyIntRangeFilter(event, btn);
+    }
+}
+
+async function applyIntRangeFilter(event, btn) {
+    event.stopPropagation();
+    const columnHeader = btn.closest("th");
+    if (!columnHeader) return;
+    const index = columnHeader.dataset.index;
+    const popup = btn.closest(".filterPopup");
+
+    const minInput = popup.querySelector(".int-range-min").value;
+    const maxInput = popup.querySelector(".int-range-max").value;
+    const isNot = popup.querySelector('input[name="IsNot"]').checked;
+
+    if (minInput === "" && maxInput === "") return; // Do nothing if both empty
+
+    const minVal = minInput === "" ? -2147483648 : parseInt(minInput);
+    const maxVal = maxInput === "" ? 2147483647 : parseInt(maxInput);
+
+    if (!filters[index]) {
+        filters[index] = { fieldIndex: parseInt(index), filteringValuesInt: [], isNot: isNot };
+    }
+
+    filters[index].filteringValuesInt = null;
+    filters[index].intBound = { leftBound: minVal, rightBound: maxVal };
+    filters[index].isNot = isNot;
+
+    updateFilterChipUI(index);
+
+    const container = popup.querySelector(".filterValues");
+    container.innerHTML = ""; // Clear specific value chips
+    const chip = document.createElement("div");
+    chip.className = "filterValue rounded-xl bg-[#E9967A] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
+    chip.innerHTML = `<span class="truncate min-w-0">${minInput === "" ? "-inf" : minVal} to ${maxInput === "" ? "+inf" : maxVal}</span><button class="ml-1 font-bold hover:cursor-pointer">✕</button>`;
+
+    chip.querySelector("button").onclick = async (e) => {
+        e.stopPropagation();
+        if (filters[index]) filters[index].intBound = null;
+        if (!filters[index] || (!filters[index].filteringValuesInt || filters[index].filteringValuesInt.length === 0)) {
+            filters[index] = undefined;
+        }
+        chip.remove();
+
+        popup.querySelector(".int-range-min").value = "";
+        popup.querySelector(".int-range-max").value = "";
+
+        await executeFilterRequest();
+    };
+
+    container.appendChild(chip);
+
+    await executeFilterRequest();
+}
+
+async function excludeIntCheckboxClicked(event, checkbox) {
+    event.stopPropagation();
+    const columnHeader = checkbox.closest("th");
+    if (!columnHeader) return;
+    const index = columnHeader.dataset.index;
+
+    if (filters[index]) {
+        filters[index].isNot = checkbox.checked;
+        await executeFilterRequest();
+    }
+}
+
+async function executeFilterRequest() {
+    controller = new AbortController();
+    console.log(filters)
+    const activeFilters = filters.filter(f => f !== undefined);
+    const response = await fetch("/workspace/filter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(activeFilters),
+        signal: controller.signal
+    });
+    const result = await response.json();
+    updateTable(result);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -737,6 +905,8 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
         document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
         document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
+        document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
     });
 
     if (left) {
@@ -744,6 +914,8 @@ document.addEventListener("DOMContentLoaded", () => {
             document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
             document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
             document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
+            document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
         });
     }
 
@@ -763,7 +935,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.addEventListener('mousemove', e => {
             if (!isDragging) return;
             const dx = e.clientX - startX;
-            left.style.width = `${startWidth + dx} px`;
+            left.style.width = `${startWidth + dx}px`;
         });
 
         document.addEventListener('mouseup', () => {
