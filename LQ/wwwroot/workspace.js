@@ -570,37 +570,98 @@ async function autoChart() {
 // ---------------------------------------------------------------------------
 // appendChart
 // Responsible for everything that happens AFTER a panel's charts are created:
-//   1. Build the header toolbar for each chart variant wrapper
+//   1. Build ONE panel-level header toolbar (always in the DOM, never hidden)
 //   2. Wrap the panel content in a Muuri grid item shell
 //   3. Register the item with muuriGrid
+//
+// KEY DESIGN: The drag-handle lives on the single panel header, NOT on the
+// individual chart wrappers. Previously each wrapper had its own header with
+// drag-handle, so hiding a wrapper also hid its header. Muuri's querySelector
+// could then resolve to a hidden element and treat the item as immovable.
+// With one persistent header the drag-handle is always present and visible.
 // ---------------------------------------------------------------------------
 function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
-    // ── 1. Build headers ──────────────────────────────────────────────────
-    wrappers.forEach((wrapper, sIdx) => {
-        const header = document.createElement("div");
-        // drag-handle class marks this bar as the Muuri drag trigger
-        header.className = "drag-handle flex justify-between items-center p-2 border-b border-zinc-800 bg-zinc-900/30 relative z-50 select-none cursor-grab active:cursor-grabbing";
+    // ── 1. Build ONE panel-level header (always visible, owns drag-handle) ─
+    const header = document.createElement("div");
+    header.className = "drag-handle flex justify-between items-center p-2 border-b border-zinc-800 bg-zinc-900/30 relative z-50 select-none cursor-grab active:cursor-grabbing";
 
-        // Drag grip icon (left side — visual affordance)
-        const grip = document.createElement("div");
-        grip.className = "text-zinc-600 hover:text-zinc-400 transition-colors pl-1 pointer-events-none";
-        grip.innerHTML = `
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="9"  cy="5"  r="1.5"/><circle cx="15" cy="5"  r="1.5"/>
-                <circle cx="9"  cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-                <circle cx="9"  cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
-            </svg>`;
+    // Drag grip icon (left side — visual affordance)
+    const grip = document.createElement("div");
+    grip.className = "text-zinc-600 hover:text-zinc-400 transition-colors pl-1 pointer-events-none";
+    grip.innerHTML = `
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <circle cx="9"  cy="5"  r="1.5"/><circle cx="15" cy="5"  r="1.5"/>
+            <circle cx="9"  cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+            <circle cx="9"  cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+        </svg>`;
 
-        const container = document.createElement("div");
-        container.className = "flex items-center justify-end gap-2";
+    const container = document.createElement("div");
+    container.className = "flex items-center justify-end gap-2";
 
-        const btnWrapper   = document.createElement("div");
+    // ── Background color button ───────────────────────────────────────────
+    const bgbtnWrapper = document.createElement("div");
+    bgbtnWrapper.className = "relative flex flex-col items-end";
+
+    const bgbtn = document.createElement("button");
+    bgbtn.className = "hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5 focus:outline-none";
+    bgbtn.innerHTML = `
+        Background color
+        <svg class="w-2.5 h-2.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>`;
+
+    const colormap = document.createElement("div");
+    colormap.className = "hidden absolute top-full right-0 mt-1 min-w-[150px] p-3 bg-zinc-900 border border-zinc-800 rounded shadow-2xl z-30 flex flex-col gap-2";
+    colormap.innerHTML = `
+        <input type="color" id="hiddenPicker-${pIdx}" class="w-full h-10 cursor-pointer rounded border-0 border-none bg-transparent" value="#000000">
+        <input id="hexInput-${pIdx}" class="w-full bg-zinc-800 text-white px-3 py-2 rounded-lg outline-none text-sm text-center" placeholder="#000000">`;
+
+    colormap.onclick = (e) => e.stopPropagation();
+
+    const hiddenPicker = colormap.querySelector('input[type="color"]');
+    const hexInput     = colormap.querySelector(`#hexInput-${pIdx}`);
+
+    // Always apply color to whichever wrapper is currently visible
+    const getActiveCanvas = () => {
+        const active = wrappers.find(w => w.style.display !== 'none') ?? wrappers[0];
+        return active.querySelector('canvas');
+    };
+
+    hiddenPicker.oninput = (e) => {
+        const color = e.target.value;
+        hexInput.value = color;
+        reformatColor(color, getActiveCanvas());
+    };
+    hexInput.oninput = (e) => {
+        const color = e.target.value;
+        if (/^#[0-9A-F]{6}$/i.test(color)) {
+            hiddenPicker.value = color;
+            reformatColor(color, getActiveCanvas());
+        }
+    };
+
+    colormap.classList.add('plot-colormap');
+    bgbtn.classList.add('plot-bgbtn');
+
+    bgbtn.onclick = (e) => {
+        e.stopPropagation();
+        const isHidden = colormap.classList.contains("hidden");
+        document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
+        document.querySelectorAll('.plot-btn svg, .plot-bgbtn svg').forEach(s => s.classList.remove('rotate-180'));
+        if (isHidden) {
+            colormap.classList.remove("hidden");
+            bgbtn.querySelector('svg').classList.add('rotate-180');
+        }
+    };
+
+    bgbtnWrapper.appendChild(bgbtn);
+    bgbtnWrapper.appendChild(colormap);
+
+    // ── "Turn into" button (only when panel has multiple chart variants) ──
+    if (panelSamples.length > 1) {
+        const btnWrapper = document.createElement("div");
         btnWrapper.className = "relative flex flex-col items-end";
 
-        const bgbtnWrapper = document.createElement("div");
-        bgbtnWrapper.className = "relative flex flex-col items-end";
-
-        // Turn into button
         const btn = document.createElement("button");
         btn.className = "hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5";
         btn.innerHTML = `
@@ -611,56 +672,34 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
 
         const menu = document.createElement("div");
         menu.className = "hidden absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-800 rounded shadow-2xl py-1 z-30";
+
         panelSamples.forEach((targetSample, tIdx) => {
             const item = document.createElement("button");
-            item.className = `w-full text-left px-3 py-1.5 text-sm transition-colors truncate ${tIdx === sIdx ? 'text-[#E9967A] font-semibold bg-zinc-800/50' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`;
+            item.className = `w-full text-left px-3 py-1.5 text-sm transition-colors truncate ${tIdx === 0 ? 'text-[#E9967A] font-semibold bg-zinc-800/50' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`;
             item.innerText = targetSample.title || `Chart ${tIdx + 1}`;
             item.onclick = (e) => {
                 e.stopPropagation();
-                wrapper.style.display = 'none';
-                wrappers[tIdx].style.display = 'flex';
+
+                // Show the target wrapper, hide all others
+                wrappers.forEach((w, i) => { w.style.display = i === tIdx ? 'flex' : 'none'; });
+
+                // Sync active-item styles in the dropdown
+                menu.querySelectorAll('button').forEach((b, i) => {
+                    b.className = `w-full text-left px-3 py-1.5 text-sm transition-colors truncate ${i === tIdx ? 'text-[#E9967A] font-semibold bg-zinc-800/50' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`;
+                });
+
                 menu.classList.add("hidden");
+                btn.querySelector('svg').classList.remove('rotate-180');
+
+                // Resize the newly visible chart so it fills the panel correctly
+                const chart = Chart.getChart(wrappers[tIdx].querySelector('canvas'));
+                if (chart) setTimeout(() => chart.resize(), 0);
             };
             menu.appendChild(item);
         });
 
-        // Background color button
-        const bgbtn = document.createElement("button");
-        bgbtn.className = "hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5 focus:outline-none";
-        bgbtn.innerHTML = `
-            Background color
-            <svg class="w-2.5 h-2.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-            </svg>`;
-
-        const colormap = document.createElement("div");
-        colormap.className = "hidden absolute top-full right-0 mt-1 min-w-[150px] p-3 bg-zinc-900 border border-zinc-800 rounded shadow-2xl z-30 flex flex-col gap-2";
-        colormap.innerHTML = `
-            <input type="color" id="hiddenPicker-${pIdx}-${sIdx}" class="w-full h-10 cursor-pointer rounded border-0 border-none bg-transparent" value="#000000">
-            <input id="hexInput-${pIdx}-${sIdx}" class="w-full bg-zinc-800 text-white px-3 py-2 rounded-lg outline-none text-sm text-center" placeholder="#000000">`;
-
-        colormap.onclick = (e) => e.stopPropagation();
-
-        const hiddenPicker = colormap.querySelector('input[type="color"]');
-        const hexInput     = colormap.querySelector(`#hexInput-${pIdx}-${sIdx}`);
-
-        hiddenPicker.oninput = (e) => {
-            const color = e.target.value;
-            hexInput.value = color;
-            reformatColor(color, wrapper.querySelector('canvas'));
-        };
-        hexInput.oninput = (e) => {
-            const color = e.target.value;
-            if (/^#[0-9A-F]{6}$/i.test(color)) {
-                hiddenPicker.value = color;
-                reformatColor(color, wrapper.querySelector('canvas'));
-            }
-        };
-
         menu.classList.add('plot-menu');
         btn.classList.add('plot-btn');
-        bgbtn.classList.add('plot-bgbtn');
-        colormap.classList.add('plot-colormap');
 
         btn.onclick = (e) => {
             e.stopPropagation();
@@ -673,31 +712,17 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
             }
         };
 
-        bgbtn.onclick = (e) => {
-            e.stopPropagation();
-            const isHidden = colormap.classList.contains("hidden");
-            document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
-            document.querySelectorAll('.plot-btn svg, .plot-bgbtn svg').forEach(s => s.classList.remove('rotate-180'));
-            if (isHidden) {
-                colormap.classList.remove("hidden");
-                bgbtn.querySelector('svg').classList.add('rotate-180');
-            }
-        };
+        btnWrapper.appendChild(btn);
+        btnWrapper.appendChild(menu);
+        container.appendChild(btnWrapper);
+    }
 
-        if (panelSamples.length > 1) {
-            btnWrapper.appendChild(btn);
-            btnWrapper.appendChild(menu);
-            container.appendChild(btnWrapper);
-        }
+    container.appendChild(bgbtnWrapper);
+    header.appendChild(grip);
+    header.appendChild(container);
 
-        bgbtnWrapper.appendChild(bgbtn);
-        bgbtnWrapper.appendChild(colormap);
-
-        container.appendChild(bgbtnWrapper);
-        header.appendChild(grip);
-        header.appendChild(container);
-        wrapper.prepend(header);
-    });
+    // Prepend the single header to the panel div (before all chart wrappers)
+    panelDivCopy.prepend(header);
 
     // ── 2. Wrap in Muuri grid item shell ──────────────────────────────────
     // Structure: .grid-item > .grid-item-content > panelDivCopy
@@ -707,7 +732,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     gridItem.className = "grid-item";
 
     const gridItemContent = document.createElement("div");
-    gridItemContent.className = "grid-item-content";
+    gridItemContent.className = "grid-item-content rounded-2xl border   ";
     gridItemContent.appendChild(panelDivCopy);
     gridItem.appendChild(gridItemContent);
 

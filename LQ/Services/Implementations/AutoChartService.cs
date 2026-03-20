@@ -1,16 +1,7 @@
-using System.Text.Json;
-using System;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using System.Net;
 using LQ.Models.ChartModels;
 using LQ.Models.DTOs;
 using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
-using Microsoft.AspNetCore.Mvc.TagHelpers;
-using Microsoft.Data.SqlClient.DataClassification;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Table = LQ.Models.TableModels.Table;
 
 namespace LQ.Services.Implementations;
