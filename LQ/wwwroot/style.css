@@ -726,3 +726,44 @@ th {
     font-size: 12px;
     margin-top: 2px;
 }
+
+/*--- MUURI ---*/
+/* ── Muuri grid container ───────────────────────────────────────── */
+#chartGrid {
+    position: relative;   /* required by Muuri for absolute children */
+    --grid-cols: 2;       /* updated by ResizeObserver in workspace.js */
+}
+
+/* ── Each draggable grid cell ───────────────────────────────────── */
+.grid-item {
+    position: absolute;   /* Muuri sets top/left; we set width */
+    width: calc(100% / var(--grid-cols));
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+/* Card shell inside each cell */
+.grid-item-content {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgb(63 63 70);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background: rgb(24 24 27 / 0.6);
+    min-height: 320px;
+}
+
+/* ── Drag states ────────────────────────────────────────────────── */
+.muuri-item-dragging  { z-index: 999 !important; opacity: 0.85; }
+.muuri-item-dragging .grid-item-content {
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    border-color: #E9967A;
+}
+.muuri-item-releasing { z-index: 2; }
+.muuri-item-hidden    { z-index: 0; opacity: 0; }
+
+.muuri-item-placeholder .grid-item-content {
+    background: rgb(39 39 42 / 0.5);
+    border: 1px dashed #E9967A;
+    border-radius: 0.75rem;
+}

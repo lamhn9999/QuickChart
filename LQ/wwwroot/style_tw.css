@@ -374,12 +374,6 @@
   .table {
     display: table;
   }
-  .h-1\.5 {
-    height: calc(var(--spacing) * 1.5);
-  }
-  .h-2 {
-    height: calc(var(--spacing) * 2);
-  }
   .h-2\.5 {
     height: calc(var(--spacing) * 2.5);
   }
@@ -436,12 +430,6 @@
   }
   .w-1 {
     width: calc(var(--spacing) * 1);
-  }
-  .w-1\.5 {
-    width: calc(var(--spacing) * 1.5);
-  }
-  .w-2 {
-    width: calc(var(--spacing) * 2);
   }
   .w-2\.5 {
     width: calc(var(--spacing) * 2.5);
@@ -1567,9 +1555,9 @@
       scale: var(--tw-scale-x) var(--tw-scale-y);
     }
   }
-  .has-\[\.filterPopup\:not\(\.hidden\)\]\:z-\[100\] {
+  .has-\[\.filterPopup\:not\(\.hidden\)\]\:z-\[101\] {
     &:has(*:is(.filterPopup:not(.hidden))) {
-      z-index: 100;
+      z-index: 101;
     }
   }
   .has-\[\.gearPopup\:not\(\.hidden\)\]\:z-\[100\] {
@@ -2193,6 +2181,45 @@ td, th {
   color: red;
   font-size: 12px;
   margin-top: 2px;
+}
+#chartGrid {
+  position: relative;
+  --grid-cols: 2;
+}
+.grid-item {
+  position: absolute;
+  width: calc(100% / var(--grid-cols));
+  padding: 6px;
+  box-sizing: border-box;
+}
+.grid-item-content {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(63 63 70);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: rgb(24 24 27 / 0.6);
+  min-height: 320px;
+}
+.muuri-item-dragging {
+  z-index: 999 !important;
+  opacity: 0.85;
+}
+.muuri-item-dragging .grid-item-content {
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  border-color: #E9967A;
+}
+.muuri-item-releasing {
+  z-index: 2;
+}
+.muuri-item-hidden {
+  z-index: 0;
+  opacity: 0;
+}
+.muuri-item-placeholder .grid-item-content {
+  background: rgb(39 39 42 / 0.5);
+  border: 1px dashed #E9967A;
+  border-radius: 0.75rem;
 }
 @property --tw-border-spacing-x {
   syntax: "<length>";

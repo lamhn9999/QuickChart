@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
     <script src="/node_modules/chart.js/dist/chart.umd.min.js"></script>
+    <script src="/node_modules/muuri/dist/muuri.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0"></script>
     <style>
         body { font-family: 'Playfair Display', serif; }
@@ -60,7 +61,7 @@
                         foreach (FieldValues fv in Model.Columns)
                         {
                             <!-- The TH becomes a larger, block-level card when collapsed -->
-                            <th onclick="fieldClicked(@fv.Field.Index)" class="relative align-top p-2 focus-within:z-[100] has-[.filterPopup:not(.hidden)]:z-[100] has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@fv.Field.Index">
+                            <th onclick="fieldClicked(@fv.Field.Index)" class="relative align-top p-2 focus-within:z-[100] has-[.filterPopup:not(.hidden)]:z-[101] has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@fv.Field.Index">
                                 <!-- Flex container: Column in expanded, Row in collapsed -->
                                 <div class="flex flex-col h-full min-h-[64px] justify-between group-[.is-collapsed]:flex-row group-[.is-collapsed]:items-center group-[.is-collapsed]:min-h-0">
                                     
@@ -128,7 +129,7 @@
                                         
                                         @if (fv.Field.Type == typeof(int) || fv.Field.Type == typeof(double))
                                         {
-                                            <div class="hidden filterPopup absolute top-full left-full mt-2 w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal" data-field-type="@(fv.Field.Type == typeof(int) ? "Int" : "Double")" onclick="filterPopupClicked(event, this)">
+                                            <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="@(fv.Field.Type == typeof(int) ? "Int" : "Double")" onclick="filterPopupClicked(event, this)">
                                                 <div class="flex flex-col gap-3">
                                                     <div>
                                                         <label class="block text-xs text-zinc-400 mb-1">Specific Values</label>
@@ -154,7 +155,7 @@
                                         }
                                         else if (fv.Field.Type == typeof(DateTime))
                                         {
-                                            <div class="hidden filterPopup absolute top-full left-full mt-2 w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal" data-field-type="DateTime" onclick="filterPopupClicked(event, this)">
+                                            <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="DateTime" onclick="filterPopupClicked(event, this)">
                                                 <div class="flex flex-col gap-3">
                                                     <div>
                                                         <label class="block text-xs text-zinc-400 mb-1">Date Range</label>
@@ -175,7 +176,7 @@
                                         }
                                         else if (fv.Field.Type == typeof(bool))
                                         {
-                                            <div class="hidden filterPopup absolute top-full left-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal" data-field-type="Bool" onclick="filterPopupClicked(event, this)">
+                                            <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="Bool" onclick="filterPopupClicked(event, this)">
                                                 <label class="block text-xs text-zinc-400 mb-2">Filter @fv.Field.Name</label>
                                                 <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
                                                 <div class="flex gap-2 mb-2">
@@ -186,7 +187,7 @@
                                         }
                                         else if (fv.Field.Type == typeof(System.Collections.Generic.List<string>))
                                         {
-                                            <div class="hidden filterPopup absolute top-full left-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal" data-field-type="ListString" onclick="filterPopupClicked(event, this)">
+                                            <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="ListString" onclick="filterPopupClicked(event, this)">
                                                 <label class="block text-xs text-zinc-400 mb-1">Search items in @fv.Field.Name</label>
                                                 <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
                                                 <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
@@ -203,7 +204,7 @@
                                         }
                                         else
                                         {
-                                            <div class="hidden filterPopup absolute top-full left-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-50 text-left font-normal" data-field-type="String" onclick="filterPopupClicked(event, this)">
+                                            <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="String" onclick="filterPopupClicked(event, this)">
                                                 <label class="block text-xs text-zinc-400 mb-1">Search in @fv.Field.Name</label>
                                                 <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
                                                 <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
@@ -246,6 +247,9 @@
             class="hidden md:block mx-1 w-1 rounded-full cursor-col-resize bg-gray-500 transition-opacity duration-500 group-[.is-collapsed]:opacity-0 group-[.is-collapsed]:pointer-events-none"
         ></div>
         <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto relative z-10" id="plotPanel">
+            <div class="chartGrid" id = "chartGrid">
+                @* MUURI CHART GRID *@
+            </div>
             <div class="flex-1 border-2 border-gray-500 content-center" id="selPlot">
                 <p class="p-10 text-3xl text-center text-gray-500">Please click a table header to select a column. We will generate appropriate plots based on your selection.</p>
             </div>
