@@ -4,6 +4,11 @@ const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 
 let controller;
 let muuriGrid = null;
 let filters = [];
+// Zoom state
+let _zoomedWrapper  = null;
+let _zoomedParent   = null;
+let _zoomedSibling  = null;
+let _zoomedCssText  = '';
 
 const axisStyle = {
     ticks: { color: "white" },
@@ -424,6 +429,8 @@ async function autoChart() {
                 wrapper.className = "flex flex-col flex-1 relative";
                 if (sIdx > 0) wrapper.style.display = 'none';
 
+                wrapper.dataset.chartTitle = sample.title || `Chart ${sIdx + 1}`;
+
                 const ctx = document.createElement("canvas");
                 wrapper.appendChild(ctx);
                 panelDivCopy.appendChild(wrapper);
@@ -567,6 +574,61 @@ async function autoChart() {
     }
 }
 
+function openZoom(wrapper) {
+    // Close any open menus first
+    document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
+
+    const overlay = document.getElementById('zoomOverlay');
+    const content = document.getElementById('zoomContent');
+
+    _zoomedWrapper  = wrapper;
+    _zoomedParent   = wrapper.parentElement;
+    _zoomedSibling  = wrapper.nextElementSibling;
+    _zoomedCssText  = wrapper.style.cssText;          // snapshot all inline styles
+
+    document.getElementById('zoomTitle').textContent =
+        wrapper.dataset.chartTitle || 'Chart';
+
+    content.appendChild(wrapper);
+    wrapper.style.cssText = 'display:flex; flex-direction:column; width:100%; height:100%;';
+
+    overlay.classList.remove('hidden');
+    document.addEventListener('keydown', _onEscClose);
+
+    requestAnimationFrame(() => {
+        const chart = Chart.getChart(wrapper.querySelector('canvas'));
+        chart?.resize();
+    });
+}
+
+function closeZoom() {
+    if (!_zoomedWrapper) return;
+
+    document.getElementById('zoomOverlay').classList.add('hidden');
+    document.removeEventListener('keydown', _onEscClose);
+
+    if (_zoomedSibling) {
+        _zoomedParent.insertBefore(_zoomedWrapper, _zoomedSibling);
+    } else {
+        _zoomedParent.appendChild(_zoomedWrapper);
+    }
+    _zoomedWrapper.style.cssText = _zoomedCssText;
+
+    const wrapper = _zoomedWrapper; // ← capture before nullifying
+
+    _zoomedWrapper = _zoomedParent = _zoomedSibling = null;
+    _zoomedCssText = '';
+
+    requestAnimationFrame(() => {
+        const chart = Chart.getChart(wrapper.querySelector('canvas')); // ← safe local ref
+        chart?.resize();
+        if (muuriGrid) muuriGrid.refreshItems().layout();
+    });
+}
+
+function _onEscClose(e) {
+    if (e.key === 'Escape') closeZoom();
+}
 // ---------------------------------------------------------------------------
 // appendChart
 // Responsible for everything that happens AFTER a panel's charts are created:
@@ -681,7 +743,10 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
                 e.stopPropagation();
 
                 // Show the target wrapper, hide all others
-                wrappers.forEach((w, i) => { w.style.display = i === tIdx ? 'flex' : 'none'; });
+                wrappers.forEach((w, i) => { 
+                    w.style.display = i === tIdx ? 'flex' : 'none'; 
+                    
+                });
 
                 // Sync active-item styles in the dropdown
                 menu.querySelectorAll('button').forEach((b, i) => {
@@ -716,7 +781,24 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
         btnWrapper.appendChild(menu);
         container.appendChild(btnWrapper);
     }
-
+    
+    // --- ZOOM BUTTON ---
+    const zoomBtn = document.createElement("button");
+    zoomBtn.className = "hover:cursor-pointer px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center";
+    zoomBtn.title = "Fullscreen";
+    zoomBtn.innerHTML = `
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5
+                 M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+    </svg>`;
+    zoomBtn.onclick = (e) => {
+        e.stopPropagation();
+        const activeWrapper = wrappers.find(w => w.style.display !== 'none') ?? wrappers[0];
+        openZoom(activeWrapper);
+    };
+    
+    container.appendChild(zoomBtn);
     container.appendChild(bgbtnWrapper);
     header.appendChild(grip);
     header.appendChild(container);
@@ -1229,7 +1311,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (muuriGrid) {
                     muuriGrid.refreshItems().layout();
                     chartInstances.forEach(c => c.resize());
-                    console.log(`[ResizeObserver] chartGrid width=${Math.round(w)}px → ${cols} col(s).`);
+                    // console.log(`[ResizeObserver] chartGrid width=${Math.round(w)}px → ${cols} col(s).`);
                 }
             }
         });

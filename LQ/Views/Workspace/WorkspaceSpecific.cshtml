@@ -346,5 +346,35 @@
         </div>
     </div>
 </div>
+<!-- ── Chart zoom overlay ─────────────────────────────────────── -->
+<div id="zoomOverlay"
+     class="hidden fixed inset-0 z-[400] bg-zinc-950/95 backdrop-blur-lg flex flex-col">
+
+    <!-- Header bar -->
+    <div class="flex items-center justify-between shrink-0 px-6 py-3 border-b border-zinc-800 bg-zinc-900/60">
+        <span id="zoomTitle"
+              class="text-lg font-semibold italic text-[#E9967A] tracking-tight truncate pr-4 text-center"></span>
+
+        <div class="flex items-center gap-3 text-xs text-zinc-500 shrink-0">
+            <span class="hidden sm:block">Press <kbd class="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-zinc-400">Esc</kbd> to exit</span>
+            <button onclick="closeZoom()"
+                    class="hover:cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+                           text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h6V4m0 6-7-7"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 10h-6V4m0 6 7-7"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 14h6v6m0-6-7 7"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 14h-6v6m0-6 7 7"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Chart container — wrapper is moved here by openZoom() -->
+    <div class="flex flex-1 min-h-0">
+        <div id="zoomContent" class="flex-5/6 min-h-0 flex flex-col border"></div>
+        <div id="zoomOptionPane" class="flex-1/6 min-h-0 border"></div>
+    </div>
+</div>
 </body>
 </html>
