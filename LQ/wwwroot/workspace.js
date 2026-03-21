@@ -574,11 +574,6 @@ async function autoChart() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Navigator — compact range-selector shown only while a chart is zoomed.
-// Renders a mini overview of the active chart and lets the user drag a
-// selection window to pan / zoom the main chart's x-axis.
-// ---------------------------------------------------------------------------
 let _navChartInst = null;   // Chart.js instance for the mini overview
 let _navDragState  = null;  // active drag: { type, startX, startLeft, startWidth }
 
