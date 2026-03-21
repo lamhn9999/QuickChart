@@ -1,6 +1,6 @@
 let chartInstances = [];
 const listIndexes = new Set();
-const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar'];
+const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
 let controller;
 let muuriGrid = null;
 let filters = [];
@@ -44,6 +44,15 @@ function buildMatrixDataset(sample) {
     const xCount = new Set(heatmapData.map(d => d.x)).size;
     const yCount = new Set(heatmapData.map(d => d.y)).size;
 
+    // Detect correlation matrix by title — uses diverging scale (-1 → teal, 0 → neutral, +1 → coral)
+    const isCorr = (sample.title || '').toLowerCase().includes('correlation');
+
+    function divergingColor(v) {
+        const t = Math.max(-1, Math.min(1, v));
+        if (t >= 0) return `rgba(233,150,122,${(t * 0.88 + 0.05).toFixed(2)})`;  // coral
+        else        return `rgba(82,200,155,${((-t) * 0.88 + 0.05).toFixed(2)})`; // teal
+    }
+
     return [{
         type: 'matrix',
         label: sample.title ?? 'Heatmap',
@@ -53,6 +62,7 @@ function buildMatrixDataset(sample) {
 
         backgroundColor(ctx) {
             const v = ctx.raw.v;
+            if (isCorr) return divergingColor(v);
             const t = (v - minVal) / (maxVal - minVal || 1);
             return `rgba(0,123,255,${t})`;
         },
@@ -439,21 +449,61 @@ async function autoChart() {
                 const isMatrix          = chartArray[sample.chartType] === 'matrix';
                 const isMixed           = sample.chartType === 7;
                 const isMixed_notStacked = sample.chartType === 9;
+                const isBubble          = sample.chartType === 10;
+
+                // Box plot: backend emits exactly 5 Y datasets named Min/Q1/Median/Q3/Max
+                const isBoxPlot = !isMatrix && !isBubble
+                    && sample.y.length >= 5
+                    && sample.y[2]?.label === 'Median';
 
                 const datasets = isMatrix
                     ? buildMatrixDataset(sample)
-                    : [
-                        ...sample.y.map(ds => ({
-                            ...((isMixed || isMixed_notStacked) && {
-                                type: chartArray[ds.chartType]
-                            }),
+                    : isBubble
+                        // Bubble: no labels array, type on each dataset
+                        ? sample.y.map(ds => ({
+                            type: 'bubble',
                             label: ds.label,
                             data: ds.data,
-                            yAxisID: 'y',
                         }))
-                    ];
+                        : [
+                            ...sample.y.map(ds => {
+                                const base = {
+                                    ...((isMixed || isMixed_notStacked) && {
+                                        type: chartArray[ds.chartType]
+                                    }),
+                                    label: ds.label,
+                                    data: ds.data,
+                                    yAxisID: 'y',
+                                };
+                                // Regression trend line: showLine scatter, dashed, no points
+                                if (typeof ds.label === 'string' && ds.label.startsWith('Trend:')) {
+                                    return {
+                                        ...base,
+                                        type: 'scatter',
+                                        showLine: true,
+                                        pointRadius: 0,
+                                        pointHoverRadius: 0,
+                                        borderDash: [6, 4],
+                                    };
+                                }
+                                return base;
+                            })
+                        ];
 
-                if (!isMatrix && sample.z?.length > 0) {
+                // Box plot: assign distinctive point styles per statistic
+                if (isBoxPlot) {
+                    const styles = ['dash', 'line', 'crossRot', 'line', 'dash'];
+                    const sizes  = [6, 5, 9, 5, 6];
+                    datasets.forEach((ds, i) => {
+                        if (i < styles.length) {
+                            ds.pointStyle  = styles[i];
+                            ds.pointRadius = sizes[i];
+                            ds.showLine    = false;
+                        }
+                    });
+                }
+
+                if (!isMatrix && !isBubble && sample.z?.length > 0) {
                     datasets.push(
                         ...sample.z.map(ds => ({
                             ...((isMixed || isMixed_notStacked) && {
@@ -467,12 +517,14 @@ async function autoChart() {
                 }
 
                 const cfg = {
-                    ...(!(isMixed || isMixed_notStacked) && {
+                    // Bubble: type lives on each dataset, not at root
+                    ...(!isBubble && !(isMixed || isMixed_notStacked) && {
                         type: chartArray[sample.chartType]
                     }),
 
                     data: {
-                        ...(isMatrix ? {} : { labels: sample.x }),
+                        // Bubble and pure scatter use {x,y,r} — no labels array
+                        ...(isMatrix || isBubble ? {} : { labels: sample.x }),
                         datasets
                     },
 
@@ -485,7 +537,8 @@ async function autoChart() {
                             },
                             title: {
                                 display: true,
-                                text: "My Chart",
+                                // Backend now populates sample.title for new chart types
+                                text: sample.title || "My Chart",
                                 color: "white"
                             }
                         },
@@ -505,21 +558,33 @@ async function autoChart() {
                                     ...axisStyle
                                 }
                             }
-                            : isMixed
+                            : isBubble
+                                // Bubble needs linear x+y, no category axis
                                 ? {
-                                    x: stackedAxis,
-                                    y: {
-                                        position: "left",
-                                        ...stackedAxis
-                                    }
+                                    x: { type: 'linear', ...axisStyle },
+                                    y: { type: 'linear', ...axisStyle }
                                 }
-                                : {
-                                    x: axisStyle,
-                                    y: {
-                                        position: "left",
-                                        ...axisStyle
+                                : isBoxPlot
+                                    // Box plot: {x: "CategoryName", y: value} — must use category x-axis
+                                    ? {
+                                        x: { type: 'category', labels: sample.x, ...axisStyle },
+                                        y: { position: 'left', ...axisStyle }
                                     }
-                                }
+                                    : isMixed
+                                        ? {
+                                            x: stackedAxis,
+                                            y: {
+                                                position: "left",
+                                                ...stackedAxis
+                                            }
+                                        }
+                                        : {
+                                            x: axisStyle,
+                                            y: {
+                                                position: "left",
+                                                ...axisStyle
+                                            }
+                                        }
                     }
                 };
 
@@ -535,12 +600,13 @@ async function autoChart() {
                     };
 
                     cfg.options.plugins.tooltip.callbacks.label = (ctx) => {
-                        const d = ctx.raw;
-                        return `Value: ${d.v}`;
+                        const v = ctx.raw.v;
+                        const isCorr = (sample.title || '').toLowerCase().includes('correlation');
+                        return isCorr ? `R = ${v}` : `Value: ${v}`;
                     };
                 }
 
-                if (!isMatrix && sample.z?.length > 0) {
+                if (!isMatrix && !isBubble && sample.z?.length > 0) {
                     cfg.options.scales.z = {
                         position: 'right',
                         ...axisStyle,
@@ -574,212 +640,6 @@ async function autoChart() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Navigator — compact range-selector shown only while a chart is zoomed.
-// Renders a mini overview of the active chart and lets the user drag a
-// selection window to pan / zoom the main chart's x-axis.
-// ---------------------------------------------------------------------------
-let _navChartInst = null;   // Chart.js instance for the mini overview
-let _navDragState  = null;  // active drag: { type, startX, startLeft, startWidth }
-
-/** Normalise a dataset's data array so the navigator always gets plain numbers. */
-function _navNormalise(data) {
-    return data.map(d =>
-        d === null || d === undefined ? null
-            : typeof d === 'object' && 'y' in d ? d.y
-                : typeof d === 'number'           ? d
-                    : null
-    );
-}
-
-/** Returns the pixel width of the navigator track. */
-function _navTrackWidth() {
-    return document.getElementById('navTrack').getBoundingClientRect().width;
-}
-
-/**
- * Apply a new selection window (both % values 0-100) and update the
- * main chart's x.min / x.max accordingly.
- */
-function _navUpdate(leftPct, widthPct, mainChart) {
-    // Clamp
-    widthPct = Math.max(4, widthPct);
-    leftPct  = Math.max(0, leftPct);
-    if (leftPct + widthPct > 100) {
-        if (_navDragState?.type === 'left') leftPct  = 100 - widthPct;
-        else                                widthPct = 100 - leftPct;
-    }
-    leftPct = Math.max(0, leftPct);
-
-    // Reposition DOM elements
-    const win = document.getElementById('navWindow');
-    win.style.left  = `${leftPct}%`;
-    win.style.width = `${widthPct}%`;
-    document.getElementById('navMaskLeft').style.width  = `${leftPct}%`;
-    document.getElementById('navMaskRight').style.width = `${100 - leftPct - widthPct}%`;
-
-    // Drive the main chart's x-axis
-    const labels = mainChart?.data?.labels;
-    if (!labels?.length) return;
-
-    const n   = labels.length;
-    const lo  = Math.round(leftPct / 100 * n);
-    const hi  = Math.min(n - 1, Math.round((leftPct + widthPct) / 100 * n) - 1);
-    mainChart.options.scales.x.min = lo;
-    mainChart.options.scales.x.max = Math.max(lo, hi);
-    mainChart.update('none');
-}
-
-/**
- * Wire up mouse drag events for the navigator window and handles.
- * Must be called once per openZoom(); cleaned up by _navDestroy().
- */
-function _navSetupDrag(mainChart) {
-    const win         = document.getElementById('navWindow');
-    const leftHandle  = document.getElementById('navHandleLeft');
-    const rightHandle = document.getElementById('navHandleRight');
-    const track       = document.getElementById('navTrack');
-
-    function curPos() {
-        return {
-            leftPct:  parseFloat(win.style.left)  || 0,
-            widthPct: parseFloat(win.style.width) || 100,
-        };
-    }
-
-    function startDrag(type, e) {
-        e.stopPropagation();
-        e.preventDefault();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const { leftPct, widthPct } = curPos();
-        _navDragState = { type, startX: clientX, startLeft: leftPct, startWidth: widthPct };
-        document.body.style.setProperty('user-select', 'none', 'important');
-    }
-
-    const onMove = (e) => {
-        if (!_navDragState) return;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const dx = (clientX - _navDragState.startX) / _navTrackWidth() * 100;
-        const { startLeft, startWidth, type } = _navDragState;
-
-        if      (type === 'move')  _navUpdate(startLeft + dx, startWidth,       mainChart);
-        else if (type === 'left')  _navUpdate(startLeft + dx, startWidth - dx,  mainChart);
-        else if (type === 'right') _navUpdate(startLeft,       startWidth + dx, mainChart);
-    };
-
-    const onUp = () => {
-        _navDragState = null;
-        document.body.style.removeProperty('user-select');
-    };
-
-    // Click on the masked areas to jump the window centre
-    const onTrackClick = (e) => {
-        if (_navDragState) return;
-        const id = e.target?.id;
-        if (id !== 'navMaskLeft' && id !== 'navMaskRight' && id !== 'navTrack') return;
-        const rect    = track.getBoundingClientRect();
-        const clickPct = (e.clientX - rect.left) / rect.width * 100;
-        const { widthPct } = curPos();
-        _navUpdate(clickPct - widthPct / 2, widthPct, mainChart);
-    };
-
-    leftHandle.addEventListener('mousedown',  (e) => startDrag('left',  e));
-    rightHandle.addEventListener('mousedown', (e) => startDrag('right', e));
-    win.addEventListener('mousedown', (e) => {
-        if (e.target === leftHandle || leftHandle.contains(e.target))  return;
-        if (e.target === rightHandle || rightHandle.contains(e.target)) return;
-        startDrag('move', e);
-    });
-    track.addEventListener('click', onTrackClick);
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup',   onUp);
-
-    // Store cleanup so _navDestroy can remove global listeners
-    _navChartInst._cleanupNav = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup',   onUp);
-        track.removeEventListener('click', onTrackClick);
-    };
-}
-
-/**
- * Create the navigator mini-chart and show the navigator bar.
- * Call this from openZoom() after the main chart has been resized.
- */
-function _navInit(mainChart) {
-    const container = document.getElementById('zoomNavigator');
-    const canvas    = document.getElementById('navigatorCanvas');
-    const labels    = mainChart?.data?.labels;
-
-    // Navigator only makes sense for labelled (category) charts
-    if (!labels?.length || mainChart.config.type === 'matrix') {
-        container.classList.add('hidden');
-        return;
-    }
-
-    if (_navChartInst) {
-        _navChartInst._cleanupNav?.();
-        _navChartInst.destroy();
-        _navChartInst = null;
-    }
-
-    // Build simplified datasets — always line/area regardless of original type
-    const navDatasets = mainChart.data.datasets.map(ds => ({
-        type:            'line',
-        label:           ds.label,
-        data:            _navNormalise(Array.isArray(ds.data) ? ds.data : []),
-        borderColor:     'rgba(233,150,122,0.75)',
-        backgroundColor: 'rgba(233,150,122,0.12)',
-        borderWidth:     1.5,
-        pointRadius:     0,
-        fill:            true,
-        tension:         0.35,
-    }));
-
-    _navChartInst = new Chart(canvas, {
-        type: 'line',
-        data: { labels, datasets: navDatasets },
-        options: {
-            responsive:           true,
-            maintainAspectRatio:  false,
-            animation:            false,
-            plugins: {
-                legend:  { display: false },
-                tooltip: { enabled: false },
-            },
-            scales: {
-                x: { ticks: { display: false }, grid: { display: false }, border: { display: false } },
-                y: { ticks: { display: false }, grid: { display: false }, border: { display: false } },
-            },
-        },
-    });
-
-    // Full-range selection on open
-    _navUpdate(0, 100, mainChart);
-    container.classList.remove('hidden');
-    _navSetupDrag(mainChart);
-}
-
-/** Tear down the navigator and reset the main chart's x-axis constraints. */
-function _navDestroy(mainChart) {
-    if (_navChartInst) {
-        _navChartInst._cleanupNav?.();
-        _navChartInst.destroy();
-        _navChartInst = null;
-    }
-    _navDragState = null;
-    document.getElementById('zoomNavigator').classList.add('hidden');
-
-    // Remove x-axis clamps so the chart renders fully when returned to the grid
-    if (mainChart?.options?.scales?.x) {
-        delete mainChart.options.scales.x.min;
-        delete mainChart.options.scales.x.max;
-    }
-}
-
-// ---------------------------------------------------------------------------
-
 function openZoom(wrapper) {
     // Close any open menus first
     document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
@@ -803,19 +663,12 @@ function openZoom(wrapper) {
 
     requestAnimationFrame(() => {
         const chart = Chart.getChart(wrapper.querySelector('canvas'));
-        if (chart) {
-            chart.resize();
-            _navInit(chart);   // show the navigator now that the chart is live
-        }
+        chart?.resize();
     });
 }
 
 function closeZoom() {
     if (!_zoomedWrapper) return;
-
-    // Capture the chart reference before we move the wrapper back
-    const chartBeforeMove = Chart.getChart(_zoomedWrapper.querySelector('canvas'));
-    _navDestroy(chartBeforeMove);   // tear down navigator + reset x-axis clamps
 
     document.getElementById('zoomOverlay').classList.add('hidden');
     document.removeEventListener('keydown', _onEscClose);
@@ -833,7 +686,7 @@ function closeZoom() {
     _zoomedCssText = '';
 
     requestAnimationFrame(() => {
-        const chart = Chart.getChart(wrapper.querySelector('canvas'));
+        const chart = Chart.getChart(wrapper.querySelector('canvas')); // ← safe local ref
         chart?.resize();
         if (muuriGrid) muuriGrid.refreshItems().layout();
     });
