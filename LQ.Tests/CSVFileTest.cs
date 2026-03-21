@@ -162,10 +162,4 @@ public sealed class CSVFileTest
             Debug.WriteLine("");
         }
     }
-
-    [TestMethod]
-    public void ChangeFieldTypeTest()
-    {
-        _csvService.ChangeFieldType(68, 7, "list");
-    }
 }

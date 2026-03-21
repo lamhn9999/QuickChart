@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Reflection.Metadata;
 using LQ.Models.TableModels;
 using LQ.Models.AnalystModels;
+using LQ.Models.DTOs;
 using LQ.Services.Interfaces;
 
 namespace LQ.Services.Implementations;
@@ -25,8 +26,8 @@ public class CSVService : ICSVService
 {
     private readonly ILQDbService _lqDbService;
     private readonly IAutoChartService _autoChartService;
-    private static char[] possibleOpen = new[] { '\"', '[' };
-    private static char[] possibleEnd = new[] { '\"', ']' };
+    public static readonly char[] possibleOpen = new[] { '\"', '[' };
+    public static readonly char[] possibleEnd = new[] { '\"', ']' };
 
     private const double TOLERANCE = 0.000000001;
     
@@ -591,10 +592,9 @@ public class CSVService : ICSVService
         return _lqDbService.GetCSVFile(analystid, filename);
     }
 
-    public async Task<bool> ChangeFieldType(int csvFileId, int fieldId, string newType)
+    public async Task<TryChangeFieldTypeDTO> ChangeFieldType(int fieldId, string newType, char? listSplitChar)
     {
-        if (!TypeNameMap.Map.ContainsKey(newType)) return false;
-        return await _lqDbService.ChangeFieldType(csvFileId, fieldId, 
-            TypeNameMap.Map[newType]);
+        if (!TypeNameMap.Map.ContainsKey(newType)) throw new BadHttpRequestException("We do not deal with this type.");
+        return await _lqDbService.ChangeFieldType(new ChangeFieldTypeDTO(fieldId, TypeNameMap.Map[newType], listSplitChar));
     }
 }

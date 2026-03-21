@@ -478,8 +478,9 @@ public class LQDbService : ILQDbService
         });
     }
 
-    private async Task<ChangeFieldTypeDTO> TryChangeFieldType(Field targetField, Type newType)
+    private async Task<TryChangeFieldTypeDTO> TryChangeFieldType(Field targetField, Type newType)
     {
+        if (targetField.Type == newType) return new TryChangeFieldTypeDTO(null);
         var rawStrings = await _lqdbContext.Values
             .Where(v => v.Field == targetField && v.ValueStringFormatted != null)
             .OrderBy(v => v.RowIndex)
@@ -490,7 +491,7 @@ public class LQDbService : ILQDbService
             .Where(val => !CanConvert(val!, newType))
             .ToList();
 
-        return new ChangeFieldTypeDTO(failedValues!);
+        return new TryChangeFieldTypeDTO(failedValues!);
     }
 
     private bool CanConvert(string value, Type targetType)
@@ -507,17 +508,54 @@ public class LQDbService : ILQDbService
             _ => false
         };
     }
+
+    private async Task ReformatListType(ChangeFieldTypeDTO changeFieldTypeDto)
+    {
+        if (changeFieldTypeDto.ListSplitChar is null)
+            throw new BadHttpRequestException("Null list split character.");
+        var valuesToUpdate = await _lqdbContext.Values
+            .Where(v => v.FieldID == changeFieldTypeDto.FieldId)
+            .ToListAsync();
+
+        foreach (var v in valuesToUpdate)
+        {
+            if (string.IsNullOrWhiteSpace(v.ValueString))
+            {
+                v.ValueStringFormatted = null;
+            }
+            else
+            {
+                v.ValueStringFormatted = string.Join(',',
+                    v.ValueString
+                        .Trim()
+                        .TrimStart(CSVService.possibleOpen)
+                        .TrimEnd(CSVService.possibleEnd)
+                        .Split((char)changeFieldTypeDto.ListSplitChar)
+                        .Select(s => s.Trim())
+                        .Where(s => !string.IsNullOrEmpty(s))
+                );
+            }
+        }
+        var bulkConfig = new BulkConfig { PropertiesToInclude = new List<string> { nameof(Value.ValueStringFormatted) } };
+        await _lqdbContext.BulkUpdateAsync(valuesToUpdate, bulkConfig);
+    }
     
-    public async Task<bool> ChangeFieldType(int csvFileId, int fieldId, Type newType)
+    public async Task<TryChangeFieldTypeDTO> ChangeFieldType(ChangeFieldTypeDTO changeFieldTypeDto)
     {
         var target = await _lqdbContext.Fields
-            .SingleOrDefaultAsync(f => f.ID == fieldId);
-        if (target is null) return false;
-        // Console.WriteLine($"Target: {target.TypeName}\nNew: {newType.AssemblyQualifiedName}");
-        if (target.Type == newType) return true;
-        target.Type = newType;
-        await _lqdbContext.SaveChangesAsync();
-        return true;
+            .SingleOrDefaultAsync(f => f.ID == changeFieldTypeDto.FieldId);
+        if (target is null) throw new BadHttpRequestException("Field not found.");
+        
+        var tryResult = await TryChangeFieldType(target, changeFieldTypeDto.NewType);
+        if (tryResult.Status)
+        {
+            target.Type = changeFieldTypeDto.NewType;
+            if (changeFieldTypeDto.NewType == typeof(List<string>)) 
+                await ReformatListType(changeFieldTypeDto);
+            await _lqdbContext.SaveChangesAsync();
+        }
+
+        return tryResult;
     }
     
     public bool SearchFileByAnalyst(Analyst analyst, string fileName)

@@ -121,15 +121,21 @@ public class WorkspaceController : Controller
 
     [HttpPost("changeFieldType")]
     [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> ChangeFieldType(int fieldIndex, string newType)
+    public async Task<IActionResult> ChangeFieldType(int fieldIndex, string newType, char? listSplitChar)
     {
         if (CurrentCSVFile is null || CurrentTable is null) return NotFound();
         
         if (fieldIndex < 0 || fieldIndex >= CurrentTable.FieldIDs.Count) return BadRequest("Invalid field index");
         int fieldId = CurrentTable.FieldIDs[fieldIndex];
-
-        var res = await _csvService.ChangeFieldType(CurrentCSVFile.currentFileID, fieldId, newType);
-        if (res) return Json("Field updated");
-        return Json("Field not updated");
+        
+        try
+        {
+            var res = await _csvService.ChangeFieldType(fieldId, newType, listSplitChar);
+            return Json(res);
+        }
+        catch (Exception ex)
+        {
+            return Json(ex.Message);
+        }
     }
 }
