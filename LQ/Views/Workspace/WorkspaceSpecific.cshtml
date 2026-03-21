@@ -372,7 +372,59 @@
 
     <!-- Chart container — wrapper is moved here by openZoom() -->
     <div class="flex flex-1 min-h-0">
-        <div id="zoomContent" class="flex-5/6 min-h-0 flex flex-col border"></div>
+
+        <!-- Left column: main chart + navigator stacked -->
+        <div class="flex-5/6 min-h-0 flex flex-col">
+            <div id="zoomContent" class="flex-1 min-h-0 flex flex-col border items-center"></div>
+
+            <!-- ── Navigator (only visible in zoom mode) ── -->
+            <div id="zoomNavigator"
+                 class="hidden h-[76px] shrink-0 border-t border-zinc-700 bg-zinc-900/70 px-5 py-2.5 select-none">
+                <div id="navTrack" class="relative h-full rounded overflow-hidden cursor-crosshair">
+
+                    <!-- Mini overview chart -->
+                    <canvas id="navigatorCanvas" class="absolute inset-0 w-full h-full"></canvas>
+
+                    <!-- Dark masks outside the selection window -->
+                    <div id="navMaskLeft"
+                         class="absolute top-0 left-0 h-full bg-zinc-950/65 pointer-events-none"
+                         style="width:0%"></div>
+                    <div id="navMaskRight"
+                         class="absolute top-0 right-0 h-full bg-zinc-950/65 pointer-events-none"
+                         style="width:0%"></div>
+
+                    <!-- Selection window -->
+                    <div id="navWindow"
+                         class="absolute top-0 h-full cursor-grab active:cursor-grabbing"
+                         style="left:0%;width:100%;">
+
+                        <!-- Top / bottom accent lines -->
+                        <div class="absolute inset-x-0 top-0 h-px bg-[#E9967A]/60 pointer-events-none"></div>
+                        <div class="absolute inset-x-0 bottom-0 h-px bg-[#E9967A]/60 pointer-events-none"></div>
+
+                        <!-- Left drag handle -->
+                        <div id="navHandleLeft"
+                             class="absolute left-0 top-0 h-full w-3.5 -translate-x-1/2
+                                    bg-[#E9967A] cursor-ew-resize z-10
+                                    flex items-center justify-center gap-px rounded-sm">
+                            <div class="h-4 w-px bg-white/60 rounded"></div>
+                            <div class="h-4 w-px bg-white/60 rounded"></div>
+                        </div>
+
+                        <!-- Right drag handle -->
+                        <div id="navHandleRight"
+                             class="absolute right-0 top-0 h-full w-3.5 translate-x-1/2
+                                    bg-[#E9967A] cursor-ew-resize z-10
+                                    flex items-center justify-center gap-px rounded-sm">
+                            <div class="h-4 w-px bg-white/60 rounded"></div>
+                            <div class="h-4 w-px bg-white/60 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ── End Navigator ── -->
+        </div>
+
         <div id="zoomOptionPane" class="flex-1/6 min-h-0 border"></div>
     </div>
 </div>

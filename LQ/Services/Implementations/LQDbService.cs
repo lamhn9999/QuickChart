@@ -477,13 +477,43 @@ public class LQDbService : ILQDbService
             SetOutputIdentity = true
         });
     }
+
+    private async Task<ChangeFieldTypeDTO> TryChangeFieldType(Field targetField, Type newType)
+    {
+        var rawStrings = await _lqdbContext.Values
+            .Where(v => v.Field == targetField && v.ValueStringFormatted != null)
+            .OrderBy(v => v.RowIndex)
+            .Select(v => v.ValueStringFormatted)
+            .ToListAsync();
+
+        var failedValues = rawStrings
+            .Where(val => !CanConvert(val!, newType))
+            .ToList();
+
+        return new ChangeFieldTypeDTO(failedValues!);
+    }
+
+    private bool CanConvert(string value, Type targetType)
+    {
+        if (targetType == typeof(string)) return true;
+        return targetType switch
+        {
+            { } t when t == typeof(int) => int.TryParse(value, out _),
+            { } t when t == typeof(double) => double.TryParse(value, out _),
+            { } t when t == typeof(DateTime) => DateTime.TryParse(value, out _),
+
+            { } t when t == typeof(List<string>) => true,
+
+            _ => false
+        };
+    }
     
     public async Task<bool> ChangeFieldType(int csvFileId, int fieldId, Type newType)
     {
         var target = await _lqdbContext.Fields
             .SingleOrDefaultAsync(f => f.ID == fieldId);
         if (target is null) return false;
-        Console.WriteLine($"Target: {target.TypeName}\nNew: {newType.AssemblyQualifiedName}");
+        // Console.WriteLine($"Target: {target.TypeName}\nNew: {newType.AssemblyQualifiedName}");
         if (target.Type == newType) return true;
         target.Type = newType;
         await _lqdbContext.SaveChangesAsync();
