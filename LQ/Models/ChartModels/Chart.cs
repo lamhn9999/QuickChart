@@ -14,6 +14,7 @@ public enum ChartType
     Mixed,
     Matrix,
     MixedBar,
+    Bubble,
 }
 
 public class LabelData
@@ -25,6 +26,7 @@ public class LabelData
 
 public class Chart
 {
+    public string Title { get; set; }
     public ChartType ChartType {get; set;}
     public List<object> X { get; set; } = new();
     public List<LabelData> Y { get; set; } = new();

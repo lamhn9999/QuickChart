@@ -1,6 +1,6 @@
 let chartInstances = [];
 const listIndexes = new Set();
-const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar'];
+const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
 let controller;
 let muuriGrid = null;
 let filters = [];
@@ -44,6 +44,15 @@ function buildMatrixDataset(sample) {
     const xCount = new Set(heatmapData.map(d => d.x)).size;
     const yCount = new Set(heatmapData.map(d => d.y)).size;
 
+    // Detect correlation matrix by title — uses diverging scale (-1 → teal, 0 → neutral, +1 → coral)
+    const isCorr = (sample.title || '').toLowerCase().includes('correlation');
+
+    function divergingColor(v) {
+        const t = Math.max(-1, Math.min(1, v));
+        if (t >= 0) return `rgba(233,150,122,${(t * 0.88 + 0.05).toFixed(2)})`;  // coral
+        else        return `rgba(82,200,155,${((-t) * 0.88 + 0.05).toFixed(2)})`; // teal
+    }
+
     return [{
         type: 'matrix',
         label: sample.title ?? 'Heatmap',
@@ -53,6 +62,7 @@ function buildMatrixDataset(sample) {
 
         backgroundColor(ctx) {
             const v = ctx.raw.v;
+            if (isCorr) return divergingColor(v);
             const t = (v - minVal) / (maxVal - minVal || 1);
             return `rgba(0,123,255,${t})`;
         },
@@ -439,21 +449,61 @@ async function autoChart() {
                 const isMatrix          = chartArray[sample.chartType] === 'matrix';
                 const isMixed           = sample.chartType === 7;
                 const isMixed_notStacked = sample.chartType === 9;
+                const isBubble          = sample.chartType === 10;
+
+                // Box plot: backend emits exactly 5 Y datasets named Min/Q1/Median/Q3/Max
+                const isBoxPlot = !isMatrix && !isBubble
+                    && sample.y.length >= 5
+                    && sample.y[2]?.label === 'Median';
 
                 const datasets = isMatrix
                     ? buildMatrixDataset(sample)
-                    : [
-                        ...sample.y.map(ds => ({
-                            ...((isMixed || isMixed_notStacked) && {
-                                type: chartArray[ds.chartType]
-                            }),
+                    : isBubble
+                        // Bubble: no labels array, type on each dataset
+                        ? sample.y.map(ds => ({
+                            type: 'bubble',
                             label: ds.label,
                             data: ds.data,
-                            yAxisID: 'y',
                         }))
-                    ];
+                        : [
+                            ...sample.y.map(ds => {
+                                const base = {
+                                    ...((isMixed || isMixed_notStacked) && {
+                                        type: chartArray[ds.chartType]
+                                    }),
+                                    label: ds.label,
+                                    data: ds.data,
+                                    yAxisID: 'y',
+                                };
+                                // Regression trend line: showLine scatter, dashed, no points
+                                if (typeof ds.label === 'string' && ds.label.startsWith('Trend:')) {
+                                    return {
+                                        ...base,
+                                        type: 'scatter',
+                                        showLine: true,
+                                        pointRadius: 0,
+                                        pointHoverRadius: 0,
+                                        borderDash: [6, 4],
+                                    };
+                                }
+                                return base;
+                            })
+                        ];
 
-                if (!isMatrix && sample.z?.length > 0) {
+                // Box plot: assign distinctive point styles per statistic
+                if (isBoxPlot) {
+                    const styles = ['dash', 'line', 'crossRot', 'line', 'dash'];
+                    const sizes  = [6, 5, 9, 5, 6];
+                    datasets.forEach((ds, i) => {
+                        if (i < styles.length) {
+                            ds.pointStyle  = styles[i];
+                            ds.pointRadius = sizes[i];
+                            ds.showLine    = false;
+                        }
+                    });
+                }
+
+                if (!isMatrix && !isBubble && sample.z?.length > 0) {
                     datasets.push(
                         ...sample.z.map(ds => ({
                             ...((isMixed || isMixed_notStacked) && {
@@ -467,12 +517,14 @@ async function autoChart() {
                 }
 
                 const cfg = {
-                    ...(!(isMixed || isMixed_notStacked) && {
+                    // Bubble: type lives on each dataset, not at root
+                    ...(!isBubble && !(isMixed || isMixed_notStacked) && {
                         type: chartArray[sample.chartType]
                     }),
 
                     data: {
-                        ...(isMatrix ? {} : { labels: sample.x }),
+                        // Bubble and pure scatter use {x,y,r} — no labels array
+                        ...(isMatrix || isBubble ? {} : { labels: sample.x }),
                         datasets
                     },
 
@@ -485,7 +537,8 @@ async function autoChart() {
                             },
                             title: {
                                 display: true,
-                                text: "My Chart",
+                                // Backend now populates sample.title for new chart types
+                                text: sample.title || "My Chart",
                                 color: "white"
                             }
                         },
@@ -505,21 +558,33 @@ async function autoChart() {
                                     ...axisStyle
                                 }
                             }
-                            : isMixed
+                            : isBubble
+                                // Bubble needs linear x+y, no category axis
                                 ? {
-                                    x: stackedAxis,
-                                    y: {
-                                        position: "left",
-                                        ...stackedAxis
-                                    }
+                                    x: { type: 'linear', ...axisStyle },
+                                    y: { type: 'linear', ...axisStyle }
                                 }
-                                : {
-                                    x: axisStyle,
-                                    y: {
-                                        position: "left",
-                                        ...axisStyle
+                                : isBoxPlot
+                                    // Box plot: {x: "CategoryName", y: value} — must use category x-axis
+                                    ? {
+                                        x: { type: 'category', labels: sample.x, ...axisStyle },
+                                        y: { position: 'left', ...axisStyle }
                                     }
-                                }
+                                    : isMixed
+                                        ? {
+                                            x: stackedAxis,
+                                            y: {
+                                                position: "left",
+                                                ...stackedAxis
+                                            }
+                                        }
+                                        : {
+                                            x: axisStyle,
+                                            y: {
+                                                position: "left",
+                                                ...axisStyle
+                                            }
+                                        }
                     }
                 };
 
@@ -535,12 +600,13 @@ async function autoChart() {
                     };
 
                     cfg.options.plugins.tooltip.callbacks.label = (ctx) => {
-                        const d = ctx.raw;
-                        return `Value: ${d.v}`;
+                        const v = ctx.raw.v;
+                        const isCorr = (sample.title || '').toLowerCase().includes('correlation');
+                        return isCorr ? `R = ${v}` : `Value: ${v}`;
                     };
                 }
 
-                if (!isMatrix && sample.z?.length > 0) {
+                if (!isMatrix && !isBubble && sample.z?.length > 0) {
                     cfg.options.scales.z = {
                         position: 'right',
                         ...axisStyle,
@@ -828,7 +894,7 @@ function closeZoom() {
     _zoomedCssText = '';
 
     requestAnimationFrame(() => {
-        const chart = Chart.getChart(wrapper.querySelector('canvas'));
+        const chart = Chart.getChart(wrapper.querySelector('canvas')); // ← safe local ref
         chart?.resize();
         if (muuriGrid) muuriGrid.refreshItems().layout();
     });
