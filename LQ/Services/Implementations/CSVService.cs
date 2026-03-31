@@ -446,6 +446,32 @@ public class CSVService : ICSVService
         }
         return typeof(string);
     }
+
+    private List<String> SplitField(string line)
+    {
+        List<string> splits = new List<string>();
+        int cntQuotes = 0;
+        string temp = "";
+        foreach (char c in line)
+        {
+            if (c == ',')
+            {
+                if (cntQuotes == 0)
+                {
+                    splits.Add(temp);
+                    temp = "";
+                }
+                else temp += c;
+            }
+            else
+            {
+                temp += c;
+                if (c == '"') cntQuotes ^= 1;
+            }
+        }
+        splits.Add(temp);
+        return splits;
+    }
     
     private Table? Interpret(CSVFile csvFile, StreamReader reader)
     {
@@ -463,7 +489,7 @@ public class CSVService : ICSVService
     
         if (headerLine == null) return null;
     
-        fields = headerLine.Split(',').Select(f => f.Trim()).ToList();
+        fields = SplitField(headerLine);
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
