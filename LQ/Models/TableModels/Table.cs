@@ -24,9 +24,7 @@ public class Table
     {
         for (int i = 0; i < Columns.Count; i++)
         {
-            Console.WriteLine(Columns[i].Field.Name);
             Value newValue = new Value{ValueString = valuestrings[i],  RowIndex = index, Field = Columns[i].Field};
-            Console.WriteLine($"{i}, {newValue.ValueString}, {Columns.Count}");
             Columns[i].Values.Add(newValue);
         }
 
