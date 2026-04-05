@@ -1,14 +1,9 @@
-let chartInstances = [];
-const listIndexes = new Set();
-const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
-let controller;
-let muuriGrid = null;
-let filters = [];
-// Zoom state
-let _zoomedWrapper  = null;
-let _zoomedParent   = null;
-let _zoomedSibling  = null;
-let _zoomedCssText  = '';
+import { listIndexes, appState } from './workspace.js';
+
+// ── Chart globals ─────────────────────────────────────────────────────────────
+export let chartInstances = [];
+export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
+export let muuriGrid = null;
 
 const axisStyle = {
     ticks: { color: "white" },
@@ -20,9 +15,17 @@ const stackedAxis = {
     stacked: true
 };
 
-function backHome() {
-    window.location.href = '/';
-}
+// ── Zoom state ────────────────────────────────────────────────────────────────
+let _zoomedWrapper  = null;
+let _zoomedParent   = null;
+let _zoomedSibling  = null;
+let _zoomedCssText  = '';
+
+// ── Navigator state ───────────────────────────────────────────────────────────
+let _navChartInst = null;   // Chart.js instance for the mini overview
+let _navDragState  = null;  // active drag: { type, startX, startLeft, startWidth }
+
+// ── Matrix helpers ────────────────────────────────────────────────────────────
 
 function buildHeatmapData(xLabels, ySeries) {
     return ySeries.flatMap(row =>
@@ -79,246 +82,7 @@ function buildMatrixDataset(sample) {
     }];
 }
 
-function positionDropdown(popup, anchorEl) {
-    const MARGIN = 8; // min gap from viewport edges (px)
-    const GAP    = 4; // gap between anchor bottom and popup top (px)
-
-    popup.style.visibility = 'hidden';
-    popup.style.position   = 'fixed';
-    popup.style.top        = '0px';
-    popup.style.left       = '0px';
-    popup.style.transform  = 'none'; // neutralise any Tailwind translate classes
-    popup.classList.remove('hidden');
-
-    const pw = popup.offsetWidth;
-    const ph = popup.offsetHeight;
-
-    popup.classList.add('hidden');
-    popup.style.visibility = '';
-
-    const rect = anchorEl.getBoundingClientRect();
-    const vw   = window.innerWidth;
-    const vh   = window.innerHeight;
-
-    let top  = rect.bottom + GAP;
-    let left = rect.left;
-
-    if (left < MARGIN)            left = MARGIN;
-    if (left + pw > vw - MARGIN)  left = vw - pw - MARGIN;
-
-    // Flip above anchor if not enough space below
-    if (top + ph > vh - MARGIN) {
-        top = rect.top - ph - GAP;
-    }
-    // Last resort: pin to top margin
-    if (top < MARGIN) top = MARGIN;
-
-    popup.style.top    = `${top}px`;
-    popup.style.left   = `${left}px`;
-    popup.style.zIndex = '9999';
-}
-
-function filterClicked(event, filterbtn) {
-    event.stopPropagation();
-
-    const popup   = filterbtn.parentElement.querySelector(".filterPopup");
-    const wasOpen = !popup.classList.contains("hidden");
-
-    // Close all open dropdowns first
-    document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
-    document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
-    document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
-
-    if (!wasOpen) {
-        // Position using fixed coords before revealing — escapes overflow:auto clipping
-        positionDropdown(popup, filterbtn);
-        popup.classList.remove('hidden');
-        console.log(`[filterClicked] Opened filter popup for field index=${filterbtn.closest('th')?.dataset?.index}`);
-    }
-
-    // Not all filter variants have a text input (e.g. Bool only has buttons)
-    popup.querySelector("input")?.focus();
-}
-
-function filterPopupClicked(event, filterpopup) {
-    event.stopPropagation();
-    filterpopup.querySelector("input")?.focus();
-}
-
-async function filterInputKey(event, input) {
-    if (event.key === "Enter") {
-        event.preventDefault();
-
-        const value = input.value;
-        const columnHeader = input.closest("th");
-        const index = columnHeader.dataset.index;
-        const popup = input.closest(".filterPopup");
-        const isNotCheckboxValue = popup.querySelector('input[name="IsNot"]')?.checked || false;
-
-        await sendFilterRequest(value.trim(), isNotCheckboxValue, index, popup);
-        appendFilterValue(input, index);
-    }
-}
-
-function appendFilterValue(input, index) {
-    const container = input.previousElementSibling; // chip container above input
-    const value = input.value.trim();
-    if (!value) return;
-
-    if (Array.from(container.children).some(c => c.textContent.replace('✕', '').trim() === value)) {
-        input.value = "";
-        return;
-    }
-
-    const popup = input.closest(".filterPopup");
-
-    const chip = document.createElement("div");
-    chip.className =
-        "filterValue rounded-xl bg-[darksalmon] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
-
-    const text = document.createElement("span");
-    text.textContent = value;
-    text.className = "truncate min-w-0";
-
-    const removeBtn = document.createElement("button");
-    removeBtn.textContent = "✕";
-    removeBtn.className = "ml-1 font-bold hover:cursor-pointer";
-
-    removeBtn.onclick = async (e) => {
-        e.stopPropagation();
-
-        if (filters[index] && filters[index].filteringValues) {
-            filters[index].filteringValues =
-                filters[index].filteringValues.filter(v => v !== value);
-
-            if (filters[index].filteringValues.length === 0) {
-                filters[index] = undefined;
-            }
-        }
-
-        chip.remove();
-        const isNotCheckboxValue = popup.querySelector('input[name="IsNot"]')?.checked || false;
-        await sendFilterRequest("", isNotCheckboxValue, index, popup);
-    };
-
-    chip.onclick = () => {
-        input.value = value;
-        input.focus();
-    };
-
-    chip.appendChild(text);
-    chip.appendChild(removeBtn);
-    container.appendChild(chip);
-
-    input.value = "";
-}
-
-function updateFilterChipUI(index) {
-    const th = document.querySelector(`th[data-index="${index}"]`);
-    if (!th) return;
-    const filter = filters[index];
-    const chip = th.querySelector('.filter-chip');
-    if (!chip) return;
-
-    let len = 0;
-    if (filter) {
-        if (filter.filteringValues)       len += filter.filteringValues.length;
-        if (filter.filteringValuesInt)    len += filter.filteringValuesInt.length;
-        if (filter.filteringValuesDouble) len += filter.filteringValuesDouble.length;
-        if (filter.intBound)              len++;
-        if (filter.doubleBound)           len++;
-        if (filter.dateTimeBound)         len++;
-    }
-
-    if (len > 0) {
-        chip.textContent = len;
-        chip.classList.remove('hidden');
-    } else {
-        chip.classList.add('hidden');
-    }
-}
-
-async function excludeCheckboxClicked(event, checkbox) {
-    event.stopPropagation();
-    const columnHeader = checkbox.closest("th");
-    const index = columnHeader.dataset.index;
-    const isNotCheckboxValue = checkbox.checked;
-    const popup = checkbox.closest('.filterPopup');
-
-    await sendFilterRequest("", isNotCheckboxValue, index, popup);
-}
-
-const enumMap = {
-    "String": 0, "Int": 1, "Double": 2, "DateTime": 3, "Bool": 4, "ListString": 5
-};
-
-async function sendFilterRequest(value, isNotCheckboxValue, index, popup) {
-    const fieldType = enumMap[popup.dataset.fieldType] || 0;
-    const isPartialMatch = popup.querySelector('input[name="IsPartialMatch"]')?.checked || false;
-
-    if (value !== "") {
-        if (!filters[index]) {
-            filters[index] = {
-                isPartialMatch: isPartialMatch,
-                fieldIndex: parseInt(index),
-                fieldType: fieldType,
-                filteringValues: []
-            };
-        } else {
-            filters[index].fieldType = fieldType;
-            filters[index].isPartialMatch = isPartialMatch;
-        }
-
-        if (!filters[index].filteringValues) filters[index].filteringValues = [];
-        if (!filters[index].filteringValues.includes(value)) {
-            filters[index].filteringValues.push(value);
-        }
-        filters[index].isNot = isNotCheckboxValue;
-    }
-    else if (filters[index]) {
-        filters[index].isNot = isNotCheckboxValue;
-        filters[index].isPartialMatch = isPartialMatch;
-        filters[index].fieldType = fieldType;
-        if (!filters[index].filteringValues || filters[index].filteringValues.length === 0) {
-            filters[index] = undefined;
-        }
-    }
-
-    updateFilterChipUI(index);
-    if (!popup.classList.contains("executing")) await executeFilterRequest();
-}
-
-function updateTable(rows) {
-    const tbody = document.querySelector("#dataTable tbody");
-    let trs = tbody.querySelectorAll("tr");
-
-    const dataRows = rows.slice(1); // skip header row if server includes it
-
-    dataRows.forEach((row, i) => {
-        let tr;
-
-        if (trs[i]) {
-            tr = trs[i];
-        } else {
-            tr = document.createElement("tr");
-            tbody.appendChild(tr);
-            row.forEach(() => {
-                const td = document.createElement("td");
-                tr.appendChild(td);
-            });
-        }
-
-        const tds = tr.querySelectorAll("td");
-        row.forEach((cell, j) => {
-            tds[j].textContent = cell;
-        });
-    });
-
-    // Remove surplus rows
-    for (let i = dataRows.length; i < trs.length; i++) {
-        trs[i].remove();
-    }
-}
+// ── Color helpers ─────────────────────────────────────────────────────────────
 
 function getContrastTextColor(color) {
     const temp = document.createElement("div");
@@ -357,7 +121,9 @@ function reformatColor(color, canvas) {
     chart.update();
 }
 
-async function autoChart() {
+// ── autoChart ─────────────────────────────────────────────────────────────────
+
+export async function autoChart() {
     const selPlot   = document.getElementById("selPlot");
     const noPlot    = document.getElementById("noPlot");
     const loader    = document.getElementById("loader");
@@ -389,13 +155,13 @@ async function autoChart() {
     const panelDivTemplate = document.createElement("div");
     panelDivTemplate.classList.add("flex", "flex-col", "h-full");
 
-    controller = new AbortController();
+    appState.controller = new AbortController();
     try {
         const response = await fetch("/workspace", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify([...listIndexes].map(Number)),
-            signal: controller.signal
+            signal: appState.controller.signal
         });
         const result = await response.json();
 
@@ -433,7 +199,6 @@ async function autoChart() {
 
             const wrappers = [];
 
-            // ── Chart generation logic (UNCHANGED) ───────────────────────
             panelSamples.forEach((sample, sIdx) => {
                 const wrapper = document.createElement("div");
                 wrapper.className = "flex flex-col flex-1 relative";
@@ -450,6 +215,8 @@ async function autoChart() {
                 const isMixed           = sample.chartType === 7;
                 const isMixed_notStacked = sample.chartType === 9;
                 const isBubble          = sample.chartType === 10;
+                const isBar             = chartArray[sample.chartType] === 'bar';
+                const isPie             = chartArray[sample.chartType] === 'pie';
 
                 // Box plot: backend emits exactly 5 Y datasets named Min/Q1/Median/Q3/Max
                 const isBoxPlot = !isMatrix && !isBubble
@@ -578,13 +345,18 @@ async function autoChart() {
                                                 ...stackedAxis
                                             }
                                         }
-                                        : {
-                                            x: axisStyle,
-                                            y: {
-                                                position: "left",
-                                                ...axisStyle
+                                        : isPie
+                                            ? {
+                                                x: { display: false },
+                                                y: { display: false }
                                             }
-                                        }
+                                            : {
+                                                x: axisStyle,
+                                                y: {
+                                                    position: "left",
+                                                    ...axisStyle
+                                                }
+                                            }
                     }
                 };
 
@@ -620,7 +392,6 @@ async function autoChart() {
                 const chartInstance = new Chart(ctx, cfg);
                 chartInstances.push(chartInstance);
             });
-            // ── END chart generation logic ────────────────────────────────
 
             // Delegate DOM append + header wiring + grid registration
             appendChart(panelSamples, pIdx, wrappers, panelDivCopy);
@@ -640,8 +411,7 @@ async function autoChart() {
     }
 }
 
-let _navChartInst = null;   // Chart.js instance for the mini overview
-let _navDragState  = null;  // active drag: { type, startX, startLeft, startWidth }
+// ── Navigator ─────────────────────────────────────────────────────────────────
 
 /** Normalise a dataset's data array so the navigator always gets plain numbers. */
 function _navNormalise(data) {
@@ -839,9 +609,9 @@ function _navDestroy(mainChart) {
     }
 }
 
-// ---------------------------------------------------------------------------
+// ── Zoom overlay ──────────────────────────────────────────────────────────────
 
-function openZoom(wrapper) {
+export function openZoom(wrapper) {
     // Close any open menus first
     document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
 
@@ -871,7 +641,7 @@ function openZoom(wrapper) {
     });
 }
 
-function closeZoom() {
+export function closeZoom() {
     if (!_zoomedWrapper) return;
 
     // Capture the chart reference before we move the wrapper back
@@ -903,8 +673,8 @@ function closeZoom() {
 function _onEscClose(e) {
     if (e.key === 'Escape') closeZoom();
 }
-// ---------------------------------------------------------------------------
-// appendChart
+
+// ── appendChart ───────────────────────────────────────────────────────────────
 // Responsible for everything that happens AFTER a panel's charts are created:
 //   1. Build ONE panel-level header toolbar (always in the DOM, never hidden)
 //   2. Wrap the panel content in a Muuri grid item shell
@@ -915,7 +685,6 @@ function _onEscClose(e) {
 // drag-handle, so hiding a wrapper also hid its header. Muuri's querySelector
 // could then resolve to a hidden element and treat the item as immovable.
 // With one persistent header the drag-handle is always present and visible.
-// ---------------------------------------------------------------------------
 function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     // ── 1. Build ONE panel-level header (always visible, owns drag-handle) ─
     const header = document.createElement("div");
@@ -1019,7 +788,6 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
                 // Show the target wrapper, hide all others
                 wrappers.forEach((w, i) => {
                     w.style.display = i === tIdx ? 'flex' : 'none';
-
                 });
 
                 // Sync active-item styles in the dropdown
@@ -1056,7 +824,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
         container.appendChild(btnWrapper);
     }
 
-    // --- ZOOM BUTTON ---
+    // ── Zoom button ───────────────────────────────────────────────────────
     const zoomBtn = document.createElement("button");
     zoomBtn.className = "hover:cursor-pointer px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center";
     zoomBtn.title = "Fullscreen";
@@ -1099,563 +867,3 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     muuriGrid.add(gridItem, { layout: false }); // layout:false — batch; called once after all panels
     console.log(`[appendChart] Panel ${pIdx} added to grid (${panelSamples.length} variant(s)).`);
 }
-
-function showToast(message, isError = false) {
-    const toast = document.createElement("div");
-    toast.className = `fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-2xl backdrop-blur-xl border ${isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-green-500/10 border-green-500/20 text-green-400'} text-sm font-medium transition-all duration-300 transform scale-95 opacity-0 flex items-center gap-2`;
-    toast.innerHTML = `
-        ${isError
-        ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>'
-        : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}
-        <span>${message}</span>
-    `;
-    document.body.appendChild(toast);
-
-    requestAnimationFrame(() => {
-        toast.classList.remove('scale-95', 'opacity-0');
-        toast.classList.add('scale-100', 'opacity-100');
-    });
-
-    setTimeout(() => {
-        toast.classList.remove('scale-100', 'opacity-100');
-        toast.classList.add('scale-95', 'opacity-0');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-function gearBtnClicked(event, button) {
-    event.stopPropagation();
-
-    const popup   = button.parentElement.querySelector('.gearPopup');
-    const wasOpen = !popup.classList.contains('hidden');
-
-    document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
-    document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
-    document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
-
-    if (!wasOpen) {
-        // Reuse shared positionDropdown — same fix as filterPopup
-        positionDropdown(popup, button);
-        popup.classList.remove('hidden');
-        button.querySelector('svg').classList.add('rotate-180');
-        console.log(`[gearBtnClicked] Opened gear popup`);
-    }
-}
-
-function toggleFieldTypeMenu(btn) {
-    const popup    = btn.nextElementSibling;
-    const isHidden = popup.classList.contains('hidden');
-
-    document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
-    document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
-
-    if (isHidden) {
-        popup.classList.remove('hidden');
-        btn.querySelector('svg').classList.add('rotate-180');
-    }
-}
-
-async function changeFieldType(event, fieldIndex, newType) {
-    event.stopPropagation();
-
-    document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
-    document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
-
-    try {
-        const formData = new FormData();
-        formData.append('fieldIndex', fieldIndex);
-        formData.append('newType', newType);
-
-        const response = await fetch('/workspace/changeFieldType', {
-            method: 'POST',
-            body: formData
-        });
-        const result = await response.json();
-
-        if (result === "Field updated") {
-            const typeMapping = {
-                "string":   "String",
-                "int":      "Int32",
-                "double":   "Double",
-                "datetime": "DateTime",
-                "bool":     "Boolean",
-                "list":     "List`1"
-            };
-            const span = document.getElementById(`fieldType-${fieldIndex}`);
-            if (span) {
-                span.textContent = typeMapping[newType] || newType;
-                const header = span.closest('th');
-                if (header) {
-                    const buttonsContainer = header.querySelector('.type-menu-popup');
-                    if (buttonsContainer) {
-                        const buttonsHtml = Object.keys(typeMapping)
-                            .filter(t => t !== newType)
-                            .map(t => `<button onclick="changeFieldType(event, ${fieldIndex}, '${t}')" class="text-left px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors w-full tracking-wide">${t}</button>`)
-                            .join('');
-                        buttonsContainer.innerHTML = buttonsHtml;
-                    }
-                }
-            }
-            showToast(`Field type successfully changed to ${newType}.`);
-            console.log(`[changeFieldType] Field ${fieldIndex} → ${newType}`);
-        } else {
-            showToast("Failed to update field type.", true);
-            console.warn(`[changeFieldType] Server rejected update for field ${fieldIndex}`);
-        }
-    } catch (e) {
-        showToast("Error updating field type.", true);
-        console.error("[changeFieldType] Fetch error:", e);
-    }
-}
-
-function fieldClicked(fieldindex) {
-    if (controller) {
-        controller.abort("New fetch!");
-    }
-    if (listIndexes.has(fieldindex)) listIndexes.delete(fieldindex);
-    else listIndexes.add(fieldindex);
-    autoChart();
-}
-
-async function filterIntSpecificKey(event, input) {
-    if (event.key === "Enter") {
-        event.preventDefault();
-        const value = input.value;
-        if (value.trim() === "") return;
-
-        const columnHeader = input.closest("th");
-        const index = columnHeader.dataset.index;
-        const popup = input.closest(".filterPopup");
-        const isNotCheckboxValue = popup.querySelector('input[name="IsNot"]').checked;
-
-        await sendIntSpecificFilterRequest(value, isNotCheckboxValue, index, input);
-    }
-}
-
-async function sendIntSpecificFilterRequest(rawVal, isNot, index, input) {
-    const popup     = input.closest(".filterPopup");
-    const fieldType = enumMap[popup.dataset.fieldType];
-
-    if (!filters[index]) {
-        filters[index] = {
-            fieldIndex: parseInt(index),
-            fieldType,
-            filteringValuesInt:    [],
-            filteringValuesDouble: [],
-            intBound:    null,
-            doubleBound: null,
-            isNot
-        };
-    }
-
-    filters[index].intBound    = null;
-    filters[index].doubleBound = null;
-    filters[index].fieldType   = fieldType;
-
-    let displayVal = null;
-    if (fieldType === 1) { // Int
-        const value = parseInt(rawVal);
-        if (!isNaN(value)) {
-            if (!filters[index].filteringValuesInt) filters[index].filteringValuesInt = [];
-            if (!filters[index].filteringValuesInt.includes(value)) {
-                filters[index].filteringValuesInt.push(value);
-                displayVal = value;
-            }
-        }
-    } else { // Double
-        const value = parseFloat(rawVal);
-        if (!isNaN(value)) {
-            if (!filters[index].filteringValuesDouble) filters[index].filteringValuesDouble = [];
-            if (!filters[index].filteringValuesDouble.includes(value)) {
-                filters[index].filteringValuesDouble.push(value);
-                displayVal = value;
-            }
-        }
-    }
-
-    filters[index].isNot = isNot;
-
-    updateFilterChipUI(index);
-    if (displayVal !== null) appendIntFilterValue(input, index, displayVal);
-
-    await executeFilterRequest();
-}
-
-function appendIntFilterValue(input, index, value) {
-    const container = input.previousElementSibling; // filterValues block
-
-    // Clear any existing range chips before adding a specific-value chip
-    Array.from(container.children).forEach(child => {
-        if (child.textContent.includes(" to ")) child.remove();
-    });
-
-    const chip = document.createElement("div");
-    chip.className = "filterValue rounded-xl bg-[#E9967A] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
-    chip.innerHTML = `<span class="truncate min-w-0">${value}</span><button class="ml-1 font-bold hover:cursor-pointer">✕</button>`;
-
-    chip.querySelector("button").onclick = async (e) => {
-        e.stopPropagation();
-        if (filters[index]) {
-            filters[index].filteringValuesInt    = (filters[index].filteringValuesInt    || []).filter(v => v !== value);
-            filters[index].filteringValuesDouble = (filters[index].filteringValuesDouble || []).filter(v => v !== value);
-            if (
-                (!filters[index].filteringValuesInt    || filters[index].filteringValuesInt.length    === 0) &&
-                (!filters[index].filteringValuesDouble || filters[index].filteringValuesDouble.length === 0) &&
-                !filters[index].intBound && !filters[index].doubleBound
-            ) {
-                filters[index] = undefined;
-            }
-        }
-        chip.remove();
-
-        const popup = input.closest(".filterPopup");
-        if (popup) {
-            const isNotCheckboxValue = popup.querySelector('input[name="IsNot"]').checked;
-            if (filters[index]) filters[index].isNot = isNotCheckboxValue;
-        }
-
-        await executeFilterRequest();
-    };
-
-    container.appendChild(chip);
-    input.value = "";
-}
-
-async function filterIntRangeKey(event, input) {
-    if (event.key === "Enter") {
-        event.preventDefault();
-        const popup = input.closest(".filterPopup");
-        const btn   = popup.querySelector("button");
-        await applyIntRangeFilter(event, btn);
-    }
-}
-
-async function applyIntRangeFilter(event, btn) {
-    event.stopPropagation();
-    const columnHeader = btn.closest("th");
-    if (!columnHeader) return;
-    const index     = columnHeader.dataset.index;
-    const popup     = btn.closest(".filterPopup");
-    const fieldType = enumMap[popup.dataset.fieldType];
-
-    const minInput = popup.querySelector(".int-range-min").value;
-    const maxInput = popup.querySelector(".int-range-max").value;
-    const isNot    = popup.querySelector('input[name="IsNot"]').checked;
-
-    if (minInput === "" && maxInput === "") return;
-
-    if (!filters[index]) {
-        filters[index] = {
-            fieldIndex: parseInt(index),
-            fieldType,
-            filteringValuesInt:    null,
-            filteringValuesDouble: null,
-            isNot
-        };
-    }
-
-    filters[index].fieldType           = fieldType;
-    filters[index].filteringValuesInt  = null;
-    filters[index].filteringValuesDouble = null;
-
-    let minVal, maxVal;
-    if (fieldType === 1) { // Int
-        minVal = minInput === "" ? -2147483648          : parseInt(minInput);
-        maxVal = maxInput === "" ? 2147483647           : parseInt(maxInput);
-        filters[index].intBound = { leftBound: minVal, rightBound: maxVal };
-    } else { // Double
-        minVal = minInput === "" ? -1.7976931348623157E+308 : parseFloat(minInput);
-        maxVal = maxInput === "" ?  1.7976931348623157E+308 : parseFloat(maxInput);
-        filters[index].doubleBound = { leftBound: minVal, rightBound: maxVal };
-    }
-    filters[index].isNot = isNot;
-
-    updateFilterChipUI(index);
-
-    const container = popup.querySelector(".filterValues");
-    container.innerHTML = "";
-    const chip = document.createElement("div");
-    chip.className = "filterValue rounded-xl bg-[#E9967A] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
-    chip.innerHTML = `<span class="truncate min-w-0">${minInput === "" ? "-inf" : minVal} to ${maxInput === "" ? "+inf" : maxVal}</span><button class="ml-1 font-bold hover:cursor-pointer">✕</button>`;
-
-    chip.querySelector("button").onclick = async (e) => {
-        e.stopPropagation();
-        if (filters[index]) {
-            filters[index].intBound    = null;
-            filters[index].doubleBound = null;
-        }
-        if (!filters[index] || (
-            (!filters[index].filteringValuesInt    || filters[index].filteringValuesInt.length    === 0) &&
-            (!filters[index].filteringValuesDouble || filters[index].filteringValuesDouble.length === 0)
-        )) {
-            filters[index] = undefined;
-        }
-        chip.remove();
-
-        popup.querySelector(".int-range-min").value = "";
-        popup.querySelector(".int-range-max").value = "";
-
-        await executeFilterRequest();
-    };
-
-    container.appendChild(chip);
-    await executeFilterRequest();
-}
-
-async function applyDtRangeFilter(event, btn) {
-    event.stopPropagation();
-    const columnHeader = btn.closest("th");
-    if (!columnHeader) return;
-    const index     = columnHeader.dataset.index;
-    const popup     = btn.closest(".filterPopup");
-    const fieldType = enumMap[popup.dataset.fieldType];
-
-    const minInput = popup.querySelector(".dt-range-min").value;
-    const maxInput = popup.querySelector(".dt-range-max").value;
-    const isNot    = popup.querySelector('input[name="IsNot"]').checked;
-
-    if (minInput === "" && maxInput === "") return;
-
-    const minDt = minInput === "" ? "0001-01-01T00:00:00" : minInput;
-    const maxDt = maxInput === "" ? "9999-12-31T23:59:59" : maxInput;
-
-    if (!filters[index]) {
-        filters[index] = { fieldIndex: parseInt(index), fieldType, isNot, dateTimeBound: null };
-    }
-
-    filters[index].fieldType     = fieldType;
-    filters[index].dateTimeBound = { leftBound: minDt, rightBound: maxDt };
-    filters[index].isNot         = isNot;
-
-    updateFilterChipUI(index);
-
-    const container = popup.querySelector(".filterValues");
-    container.innerHTML = "";
-    const chip = document.createElement("div");
-    chip.className = "filterValue rounded-xl bg-[#E9967A] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
-    const minDpy = minInput === "" ? "-inf" : new Date(minInput).toLocaleString();
-    const maxDpy = maxInput === "" ? "+inf" : new Date(maxInput).toLocaleString();
-    chip.innerHTML = `<span class="truncate min-w-0">${minDpy} to <br> ${maxDpy}</span><button class="ml-1 font-bold hover:cursor-pointer">✕</button>`;
-
-    chip.querySelector("button").onclick = async (e) => {
-        e.stopPropagation();
-        if (filters[index]) filters[index].dateTimeBound = null;
-        filters[index] = undefined;
-        chip.remove();
-
-        popup.querySelector(".dt-range-min").value = "";
-        popup.querySelector(".dt-range-max").value = "";
-
-        await executeFilterRequest();
-    };
-
-    container.appendChild(chip);
-    await executeFilterRequest();
-}
-
-async function excludeDtCheckboxClicked(event, checkbox) {
-    event.stopPropagation();
-    const columnHeader = checkbox.closest("th");
-    if (!columnHeader) return;
-    const index = columnHeader.dataset.index;
-    if (filters[index]) {
-        filters[index].isNot = checkbox.checked;
-        await executeFilterRequest();
-    }
-}
-
-async function applyBoolFilter(event, btn, val) {
-    event.stopPropagation();
-    const columnHeader = btn.closest("th");
-    if (!columnHeader) return;
-    const index     = columnHeader.dataset.index;
-    const popup     = btn.closest(".filterPopup");
-    const fieldType = enumMap[popup.dataset.fieldType];
-    const isNot     = popup.querySelector('input[name="IsNot"]')?.checked || false;
-
-    if (!filters[index]) {
-        filters[index] = { fieldIndex: parseInt(index), fieldType, filteringValues: [], isNot };
-    }
-    filters[index].fieldType = fieldType;
-
-    // Strict toggle: overwrite to single value
-    filters[index].filteringValues = [val];
-    filters[index].isNot = isNot;
-
-    const container = popup.querySelector(".filterValues");
-    container.innerHTML = "";
-    appendBoolFilterValue(popup, index, val);
-
-    updateFilterChipUI(index);
-    await executeFilterRequest();
-}
-
-function appendBoolFilterValue(popup, index, value) {
-    const container = popup.querySelector(".filterValues");
-    const chip = document.createElement("div");
-    chip.className = "filterValue rounded-xl bg-[#E9967A] text-black px-2 py-1 text-xs flex items-center gap-1 max-w-full";
-    chip.innerHTML = `<span class="truncate min-w-0">${value}</span><button class="ml-1 font-bold hover:cursor-pointer">✕</button>`;
-
-    chip.querySelector("button").onclick = async (e) => {
-        e.stopPropagation();
-        if (filters[index] && filters[index].filteringValues) {
-            filters[index].filteringValues = filters[index].filteringValues.filter(v => v !== value);
-            if (filters[index].filteringValues.length === 0) {
-                filters[index] = undefined;
-            }
-        }
-        chip.remove();
-        await executeFilterRequest();
-    };
-    container.appendChild(chip);
-}
-
-async function excludeBoolCheckboxClicked(event, checkbox) {
-    event.stopPropagation();
-    const columnHeader = checkbox.closest("th");
-    if (!columnHeader) return;
-    const index = columnHeader.dataset.index;
-    if (filters[index]) {
-        filters[index].isNot = checkbox.checked;
-        await executeFilterRequest();
-    }
-}
-
-async function partialMatchStrCheckboxClicked(event, checkbox) {
-    event.stopPropagation();
-    const columnHeader = checkbox.closest("th");
-    if (!columnHeader) return;
-    const index = columnHeader.dataset.index;
-    if (filters[index]) {
-        filters[index].isPartialMatch = checkbox.checked;
-        await executeFilterRequest();
-    }
-}
-
-async function excludeIntCheckboxClicked(event, checkbox) {
-    event.stopPropagation();
-    const columnHeader = checkbox.closest("th");
-    if (!columnHeader) return;
-    const index = columnHeader.dataset.index;
-    if (filters[index]) {
-        filters[index].isNot = checkbox.checked;
-        await executeFilterRequest();
-    }
-}
-
-let executingFilterController = null;
-async function executeFilterRequest() {
-    if (executingFilterController) {
-        executingFilterController.abort();
-    }
-    executingFilterController = new AbortController();
-    controller = executingFilterController;
-    const activeFilters = filters.filter(f => f !== undefined);
-    console.log(`[executeFilterRequest] Sending ${activeFilters.length} active filter(s).`);
-    try {
-        const response = await fetch("/workspace/filter", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(activeFilters),
-            signal: executingFilterController.signal
-        });
-        const result = await response.json();
-        updateTable(result);
-    } catch (e) {
-        if (e.name !== 'AbortError') console.error("[executeFilterRequest] Fetch error:", e);
-    }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    const resizer   = document.getElementById('drag');
-    const left      = document.getElementById('tablePanel');
-    const table     = document.getElementById("dataTable");
-    const chartGrid = document.getElementById("chartGrid");
-
-    // ── Responsive column switching via ResizeObserver ────────────────────
-    // Muuri items are sized by the CSS --grid-cols variable.
-    // Switch to 1 column when the grid container is narrower than 500px.
-    if (chartGrid) {
-        const colObserver = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                const w = entry.contentRect.width;
-                const cols = w < 500 ? 1 : 2;
-                chartGrid.style.setProperty('--grid-cols', cols);
-                // Reflow Muuri and resize Chart.js canvases after column change
-                if (muuriGrid) {
-                    muuriGrid.refreshItems().layout();
-                    chartInstances.forEach(c => c.resize());
-                    // console.log(`[ResizeObserver] chartGrid width=${Math.round(w)}px → ${cols} col(s).`);
-                }
-            }
-        });
-        colObserver.observe(chartGrid);
-    }
-
-    if (table) {
-        table.addEventListener("click", e => {
-            const th = e.target.closest("th");
-            if (!th) return;
-
-            const colIndex = th.cellIndex;
-
-            table.querySelectorAll("tr").forEach(row => {
-                const cell = row.children[colIndex];
-                if (cell) {
-                    cell.classList.toggle("col-selected");
-                }
-            });
-        });
-    }
-
-    document.addEventListener("click", () => {
-        document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
-        document.querySelectorAll('.plot-btn svg, .plot-bgbtn svg').forEach(s => s.classList.remove('rotate-180'));
-        document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
-        document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
-        document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
-        document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
-        document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
-    });
-
-    if (left) {
-        left.addEventListener('scroll', () => {
-            document.querySelectorAll('.filterPopup').forEach(fm => fm.classList.add('hidden'));
-            document.querySelectorAll('.gearPopup').forEach(m => m.classList.add('hidden'));
-            document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
-            document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
-            document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
-        });
-    }
-
-    if (resizer && left) {
-        let startX = 0;
-        let startWidth = 0;
-        let isDragging = false;
-
-        resizer.addEventListener('mousedown', e => {
-            isDragging = true;
-            startX = e.clientX;
-            startWidth = left.getBoundingClientRect().width;
-            document.body.style.cursor = 'col-resize';
-            document.body.style.userSelect = 'none';
-        });
-
-        document.addEventListener('mousemove', e => {
-            if (!isDragging) return;
-            const dx = e.clientX - startX;
-            left.style.width = `${startWidth + dx}px`;
-            // Keep Muuri layout and Chart.js canvases in sync while resizing
-            if (muuriGrid) {
-                muuriGrid.refreshItems().layout(true); // true = instant, no animation
-                chartInstances.forEach(c => c.resize());
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        });
-    }
-});

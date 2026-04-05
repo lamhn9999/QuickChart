@@ -1,7 +1,5 @@
 using System.Globalization;
-using LQ.Data.Database;
 using System.Diagnostics;
-using System.Reflection.Metadata;
 using LQ.Models.TableModels;
 using LQ.Models.AnalystModels;
 using LQ.Models.DTOs;
@@ -25,16 +23,12 @@ static class TypeNameMap
 public class CSVService : ICSVService
 {
     private readonly ILQDbService _lqDbService;
-    private readonly IAutoChartService _autoChartService;
     public static readonly char[] possibleOpen = new[] { '\"', '[' };
     public static readonly char[] possibleEnd = new[] { '\"', ']' };
-
-    private const double TOLERANCE = 0.000000001;
     
-    public CSVService(ILQDbService lqdbService, IAutoChartService autoChartService)
+    public CSVService(ILQDbService lqdbService)
     {
         _lqDbService = lqdbService;
-        _autoChartService = autoChartService;
     }
     
     private bool Validate(Analyst analyst, StreamReader reader)
@@ -447,9 +441,9 @@ public class CSVService : ICSVService
         return typeof(string);
     }
 
-    private List<String> SplitField(string line)
+    private List<string?> SplitField(string line)
     {
-        List<string> splits = new List<string>();
+        List<string?> splits = new();
         int cntQuotes = 0;
         string temp = "";
         foreach (char c in line)
@@ -476,8 +470,6 @@ public class CSVService : ICSVService
     private Table? Interpret(CSVFile csvFile, StreamReader reader)
     {
         Table newTable = new Table(csvFile);
-
-        List<string> fields = new List<string>();
         List<string> lines = new List<string>();
         
         string? headerLine = null;
@@ -489,9 +481,8 @@ public class CSVService : ICSVService
     
         if (headerLine == null) return null;
     
-        fields = SplitField(headerLine);
-        string? line;
-        while ((line = reader.ReadLine()) != null)
+        var fields = SplitField(headerLine);
+        while (reader.ReadLine() is { } line)
         {
             if (!string.IsNullOrWhiteSpace(line))
                 lines.Add(line);
@@ -500,7 +491,6 @@ public class CSVService : ICSVService
         for (int i = 0; i < fields.Count; i++)
         {
             string trimmedfield = fields[i].Trim();
-            // if (trimmedfield == "") 
             Field newField = new Field()
                 { Name = trimmedfield, CSVFile = csvFile, Index = i, Categories = new List<Category>() };
             newTable.Columns.Add(new FieldValues{Field = newField, Values = new List<Value>()});
@@ -508,32 +498,11 @@ public class CSVService : ICSVService
         
         for (int i = 0; i < lines.Count; i++)
         {
-            List<string> splits = new List<string>();
-            int cntQuotes = 0;
-            string temp = "";
-            foreach (char c in lines[i])
-            {
-                if (c == ',')
-                {
-                    if (cntQuotes == 0)
-                    {
-                        splits.Add(temp);
-                        temp = "";
-                    }
-                    else temp += c;
-                }
-                else
-                {
-                    temp += c;
-                    if (c == '"') cntQuotes ^= 1;
-                }
-            }
-            splits.Add(temp);
+            List<string?> splits = SplitField(lines[i]);
             List<string?> newValues = new List<string?>();
-            foreach (string split in splits)
+            foreach (string? split in splits)
             {
-                if(string.IsNullOrEmpty(split)) newValues.Add(null);
-                else newValues.Add(split);
+                newValues.Add(split);
             }
             newTable.AddRow(i, newValues);
         }

@@ -121,6 +121,7 @@ public class HomeController : Controller
 
     [HttpPost]
     [IgnoreAntiforgeryToken]
+    [RequestSizeLimit(209715200)]
     public async Task<IActionResult> Upload(IFormFile file)
     {
         var analystdto = CurrentAnalyst;

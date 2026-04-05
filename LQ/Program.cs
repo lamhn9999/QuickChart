@@ -2,6 +2,7 @@ using LQ.Data.Database;
 using LQ.Models.AnalystModels;
 using LQ.Services.Implementations;
 using LQ.Services.Interfaces;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -38,6 +39,12 @@ builder.Services.AddIdentityCore<Analyst>(options =>
     })
     .AddEntityFrameworkStores<LQDbContext>()
     .AddSignInManager();
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    // Set limit to 200MB
+    options.MultipartBodyLengthLimit = 209715200;
+});
 
 // Authen, Author
 builder.Services.AddAuthorization();
