@@ -6,14 +6,6 @@ using Table = LQ.Models.TableModels.Table;
 
 namespace LQ.Services.Implementations;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// REQUIRED MODEL ADDITIONS before running:
-//
-//  1.  ChartType enum:   add  Bubble = 10
-//  2.  Chart model:      add  public string? Title { get; set; }
-//  3.  workspace.js:     chartArray[10] = 'bubble'  (already in new workspace.js)
-// ─────────────────────────────────────────────────────────────────────────────
-
 public class AutoChartService : IAutoChartService
 {
     private readonly ILQDbService _lqDbService;
@@ -59,7 +51,7 @@ public class AutoChartService : IAutoChartService
     private TimeGranularity DetectGranularity(List<Value> values)
     {
         var dates = values.Where(v => v.ValueCasted != null)
-                          .Select(v => ConvertToDateTime(Convert.ToInt64(v.ValueCasted))).ToList();
+                          .Select(v => (DateTime)v.ValueCasted!).ToList();
         if (dates.Count < 2) return TimeGranularity.Day;
         var span = dates.Max() - dates.Min();
         if (span.TotalDays <= 2)    return TimeGranularity.Hour;
@@ -360,7 +352,7 @@ public class AutoChartService : IAutoChartService
             var c = new Chart { ChartType = ChartType.Histogram };
             var listXVal = new List<double>();
             double xv = valueList.First();
-            while (xv < valueList.Last())
+            while (c.X.Count == 0 || xv < valueList.Last())
             {
                 listXVal.Add(xv);
                 c.X.Add(table[0].Field.Type == typeof(DateTime)
@@ -587,6 +579,43 @@ public class AutoChartService : IAutoChartService
 
     // ─── NEW detectors ────────────────────────────────────────────────────────
 
+    /// <summary>Line chart binned by auto-detected granularity — replaces raw-datetime DetectLineChart for DateTime fields.</summary>
+    private Chart? DetectTimeSeriesLine(List<FieldValues> table)
+    {
+        if (table.Count < 2 || table[0].Field.Type != typeof(DateTime)) return null;
+        var numericFields = table.Skip(1).Where(f => f.Field.Categories.Contains(Category.Numeric)).ToList();
+        if (numericFields.Count == 0) return null;
+
+        var gran    = DetectGranularity(table[0].Values);
+        var buckets = new SortedDictionary<DateTime, Dictionary<int, (double sum, int cnt)>>();
+
+        for (int i = 0; i < table[0].Values.Count; i++)
+        {
+            if (table[0].Values[i].ValueCasted == null) continue;
+            var dt = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
+            if (!buckets.ContainsKey(dt)) buckets[dt] = new Dictionary<int, (double, int)>();
+            for (int j = 0; j < numericFields.Count; j++)
+            {
+                var val = numericFields[j].Values[i].ValueCasted;
+                if (val == null) continue;
+                if (!buckets[dt].ContainsKey(j)) buckets[dt][j] = (0, 0);
+                var cur = buckets[dt][j]; buckets[dt][j] = (cur.sum + Convert.ToDouble(val), cur.cnt + 1);
+            }
+        }
+        if (buckets.Count < 2) return null;
+
+        var chart       = new Chart { ChartType = ChartType.Line, Title = $"{numericFields[0].Field.Name} over time ({gran.ToString().ToLower()})" };
+        var sortedDates = buckets.Keys.ToList();
+        chart.X = sortedDates.Select(d => (object)FmtDate(d, gran)).ToList();
+
+        for (int j = 0; j < numericFields.Count; j++)
+        {
+            var avgs = sortedDates.Select(d => buckets[d].TryGetValue(j, out var sc) && sc.cnt > 0 ? (object)Math.Round(sc.sum / sc.cnt, 4) : 0.0).ToList();
+            chart.Y.Add(new LabelData { Label = $"Avg {numericFields[j].Field.Name}", Data = avgs });
+        }
+        return chart;
+    }
+
     /// <summary>
     /// Enhanced time series: auto-bins dates to day/week/month/year, and overlays
     /// a centered moving average so trends emerge from noisy data immediately.
@@ -603,7 +632,7 @@ public class AutoChartService : IAutoChartService
         for (int i = 0; i < table[0].Values.Count; i++)
         {
             if (table[0].Values[i].ValueCasted == null) continue;
-            var dt = TruncToGranularity(ConvertToDateTime(Convert.ToInt64(table[0].Values[i].ValueCasted)), gran);
+            var dt = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
             if (!buckets.ContainsKey(dt)) buckets[dt] = new Dictionary<int, (double, int)>();
             for (int j = 0; j < numericFields.Count; j++)
             {
@@ -651,7 +680,7 @@ public class AutoChartService : IAutoChartService
         for (int i = 0; i < table[0].Values.Count; i++)
         {
             if (table[0].Values[i].ValueCasted == null || table[1].Values[i].ValueCasted == null) continue;
-            var dt  = TruncToGranularity(ConvertToDateTime(Convert.ToInt64(table[0].Values[i].ValueCasted)), gran);
+            var dt  = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
             if (!buckets.ContainsKey(dt)) buckets[dt] = 0;
             buckets[dt] += Convert.ToDouble(table[1].Values[i].ValueCasted);
         }
@@ -680,7 +709,7 @@ public class AutoChartService : IAutoChartService
         for (int i = 0; i < table[0].Values.Count; i++)
         {
             if (table[0].Values[i].ValueCasted == null || table[1].Values[i].ValueCasted == null) continue;
-            var dt  = TruncToGranularity(ConvertToDateTime(Convert.ToInt64(table[0].Values[i].ValueCasted)), gran);
+            var dt  = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
             if (!buckets.ContainsKey(dt)) buckets[dt] = (0, 0);
             var cur = buckets[dt]; buckets[dt] = (cur.sum + Convert.ToDouble(table[1].Values[i].ValueCasted), cur.cnt + 1);
         }
@@ -754,6 +783,128 @@ public class AutoChartService : IAutoChartService
         var cumDs = new LabelData { Label = "Cumulative %", ChartType = ChartType.Line };
         foreach (var kv in sorted) { running += kv.Value; cumDs.Data.Add(Math.Round(running / total * 100, 1)); }
         chart.Z.Add(cumDs);
+        return chart;
+    }
+
+    /// <summary>Count of records per time bucket — the right chart for a lone DateTime column.</summary>
+    private Chart? DetectDateTimeFrequency(List<FieldValues> table)
+    {
+        if (table.Count != 1 || table[0].Field.Type != typeof(DateTime)) return null;
+        var gran    = DetectGranularity(table[0].Values);
+        var buckets = new SortedDictionary<DateTime, int>();
+        foreach (var v in table[0].Values)
+        {
+            if (v.ValueCasted == null) continue;
+            var dt = TruncToGranularity((DateTime)v.ValueCasted!, gran);
+            buckets[dt] = buckets.TryGetValue(dt, out var n) ? n + 1 : 1;
+        }
+        if (buckets.Count < 2) return null;
+        var chart = new Chart { ChartType = ChartType.Bar, Title = $"{table[0].Field.Name} frequency ({gran.ToString().ToLower()})" };
+        chart.X = buckets.Keys.Select(d => (object)FmtDate(d, gran)).ToList();
+        chart.Y.Add(new LabelData { Label = $"Count of {table[0].Field.Name}", Data = buckets.Values.Select(v => (object)v).ToList() });
+        return chart;
+    }
+
+    /// <summary>DateTime + categorical + numeric: bins dates by granularity, one line per category value showing mean(numeric).</summary>
+    private Chart? DetectTimeSeriesCategoricalNumeric(List<FieldValues> table)
+    {
+        if (table.Count < 3 || table[0].Field.Type != typeof(DateTime)) return null;
+        if (!table[1].Field.Categories.Contains(Category.Categorical) || table[1].Field.Type == typeof(DateTime)) return null;
+        if (!table[2].Field.Categories.Contains(Category.Numeric)) return null;
+
+        var gran    = DetectGranularity(table[0].Values);
+        var buckets = new SortedDictionary<DateTime, Dictionary<string, (double sum, int cnt)>>();
+        var cats    = new HashSet<string>();
+
+        for (int i = 0; i < table[0].Values.Count; i++)
+        {
+            var dtVal  = table[0].Values[i].ValueCasted;
+            var catVal = table[1].Values[i].ValueCasted;
+            var numVal = table[2].Values[i].ValueCasted;
+            if (dtVal == null || catVal == null || numVal == null) continue;
+
+            var dt = TruncToGranularity((DateTime)dtVal, gran);
+            if (!buckets.ContainsKey(dt)) buckets[dt] = new Dictionary<string, (double, int)>();
+
+            IEnumerable<string?> catValues = table[1].Field.Type == typeof(List<string>)
+                ? (List<string>)catVal
+                : new[] { catVal.ToString() };
+
+            foreach (var cat in catValues)
+            {
+                if (cat == null) continue;
+                cats.Add(cat);
+                if (!buckets[dt].ContainsKey(cat)) buckets[dt][cat] = (0, 0);
+                var cur = buckets[dt][cat];
+                buckets[dt][cat] = (cur.sum + Convert.ToDouble(numVal), cur.cnt + 1);
+            }
+        }
+
+        if (buckets.Count < 2) return null;
+        var sortedCats = cats.OrderBy(c => c).ToList();
+        if (sortedCats.Count > 20) return null;
+
+        var sortedDates = buckets.Keys.ToList();
+        var chart = new Chart
+        {
+            ChartType = ChartType.Line,
+            Title     = $"Avg {table[2].Field.Name} by {table[1].Field.Name} over time ({gran.ToString().ToLower()})"
+        };
+        chart.X = sortedDates.Select(d => (object)FmtDate(d, gran)).ToList();
+        foreach (var cat in sortedCats)
+        {
+            var data = sortedDates.Select(d =>
+                buckets[d].TryGetValue(cat, out var sc) && sc.cnt > 0
+                    ? (object)Math.Round(sc.sum / sc.cnt, 4)
+                    : 0.0).ToList();
+            chart.Y.Add(new LabelData { Label = cat, Data = data });
+        }
+        return chart;
+    }
+
+    /// <summary>DateTime + categorical string: bins dates by granularity, one line per category value.</summary>
+    private Chart? DetectTimeSeriesCategorical(List<FieldValues> table)
+    {
+        if (table.Count < 2 || table[0].Field.Type != typeof(DateTime)) return null;
+        if (!table[1].Field.Categories.Contains(Category.Categorical) || table[1].Field.Type == typeof(DateTime)) return null;
+
+        var gran    = DetectGranularity(table[0].Values);
+        var buckets = new SortedDictionary<DateTime, Dictionary<string, int>>();
+        var cats    = new HashSet<string>();
+
+        for (int i = 0; i < table[0].Values.Count; i++)
+        {
+            if (table[0].Values[i].ValueCasted == null || table[1].Values[i].ValueCasted == null) continue;
+            var dt = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
+            if (!buckets.ContainsKey(dt)) buckets[dt] = new Dictionary<string, int>();
+            IEnumerable<string?> catValues = table[1].Field.Type == typeof(List<string>)
+                ? (List<string>)table[1].Values[i].ValueCasted!
+                : new[] { table[1].Values[i].ValueCasted!.ToString() };
+            foreach (var cat in catValues)
+            {
+                if (cat == null) continue;
+                cats.Add(cat);
+                buckets[dt][cat] = buckets[dt].TryGetValue(cat, out var n) ? n + 1 : 1;
+            }
+        }
+
+        if (buckets.Count < 2) return null;
+        var sortedCats = cats.OrderBy(c => c).ToList();
+        if (sortedCats.Count > 20) return null;
+
+        var sortedDates = buckets.Keys.ToList();
+        var chart = new Chart
+        {
+            ChartType = ChartType.Line,
+            Title     = $"{table[1].Field.Name} by {table[0].Field.Name} ({gran.ToString().ToLower()})"
+        };
+        chart.X = sortedDates.Select(d => (object)FmtDate(d, gran)).ToList();
+        foreach (var cat in sortedCats)
+            chart.Y.Add(new LabelData
+            {
+                Label = cat,
+                Data  = sortedDates.Select(d => (object)buckets[d].GetValueOrDefault(cat, 0)).ToList()
+            });
         return chart;
     }
 
@@ -925,8 +1076,12 @@ public class AutoChartService : IAutoChartService
                 for (int i = 0; i < numeric.Count; i++)
                 {
                     var ci = scaleInfo[i];
-                    if (Math.Abs(ci.med - fi.med) / Math.Max(fi.IQR, ci.IQR) <= 1 &&
-                        Math.Max(ci.IQR, fi.IQR) / Math.Min(ci.IQR, fi.IQR) <= 2)
+                    double maxIQR = Math.Max(ci.IQR, fi.IQR);
+                    double minIQR = Math.Min(ci.IQR, fi.IQR);
+                    bool sameScale = maxIQR < 1e-10
+                        ? Math.Abs(ci.med - fi.med) < 1e-10
+                        : Math.Abs(ci.med - fi.med) / maxIQR <= 1 && maxIQR / minIQR <= 2;
+                    if (sameScale)
                     {
                         found = true; numeric[i].Add(fv);
                         var nl = new List<Value>(); foreach (var fvi in numeric[i]) foreach (var v in fvi.Values) nl.Add(v);
@@ -964,7 +1119,10 @@ public class AutoChartService : IAutoChartService
                             categorical[ci].Field.Type == typeof(DateTime) ? categorical[cj] : categorical[ci],
                             nf
                         }; Reg(ct);
-                        Add(DetectLineChart(ct), ct);
+                        if (ct[0].Field.Type == typeof(DateTime))
+                            Add(DetectTimeSeriesCategoricalNumeric(ct), ct);
+                        else
+                            Add(DetectLineChart(ct), ct);
                         if (ct[0].Field.Type == typeof(DateTime)) Add(DetectTimeSeriesEnhanced(ct), ct);
                     }
                 }
@@ -990,10 +1148,10 @@ public class AutoChartService : IAutoChartService
                 if (categorical[ci].Field.Type == typeof(DateTime))
                 {
                     if (categorical[cj].Field.Type != typeof(DateTime))
-                    { var ct = new List<FieldValues> { categorical[ci], categorical[cj] }; Reg(ct); Add(DetectLineChart(ct), ct); }
+                    { var ct = new List<FieldValues> { categorical[ci], categorical[cj] }; Reg(ct); Add(DetectTimeSeriesCategorical(ct), ct); }
                 }
                 else if (categorical[cj].Field.Type == typeof(DateTime))
-                { var ct = new List<FieldValues> { categorical[cj], categorical[ci] }; Reg(ct); Add(DetectMatrix(ct), ct); }
+                { var ct = new List<FieldValues> { categorical[cj], categorical[ci] }; Reg(ct); Add(DetectTimeSeriesCategorical(ct), ct); }
                 else if (CountDistinctValues(categorical[ci]) <= 20 && CountDistinctValues(categorical[cj]) <= 20)
                 { var ct = new List<FieldValues> { categorical[cj], categorical[ci] }; Reg(ct); Add(DetectMatrix(ct), ct); Add(DetectMatrixMean(ct), ct); }
                 else
@@ -1007,10 +1165,13 @@ public class AutoChartService : IAutoChartService
 
                 if (categorical[ci].Field.Type == typeof(DateTime) || categorical[ci].Field.Categories.Contains(Category.Numeric))
                 {
-                    Add(DetectLineChart(ct), ct);
-                    Add(DetectTimeSeriesEnhanced(ct), ct);    // NEW
-                    Add(DetectCumulativeSum(ct), ct);          // NEW
-                    Add(DetectGrowthRate(ct), ct);             // NEW
+                    if (categorical[ci].Field.Type == typeof(DateTime))
+                        Add(DetectTimeSeriesLine(ct), ct);    // Line chart with granularity
+                    else
+                        Add(DetectLineChart(ct), ct);         // Numeric categorical: plain line
+                    Add(DetectTimeSeriesEnhanced(ct), ct);
+                    Add(DetectCumulativeSum(ct), ct);
+                    Add(DetectGrowthRate(ct), ct);
                 }
                 else
                 {
@@ -1045,10 +1206,17 @@ public class AutoChartService : IAutoChartService
         foreach (var cat in categorical)
         {
             var ct = new List<FieldValues> { cat }; Reg(ct);
-            var r = CountDistinctValues(cat) <= 20 ? DetectPieChart(ct) : DetectSideBar(ct);
-            if (r != null) { r.PanelIndex = ChartIndex[ct]; Console.WriteLine(ChartIndex[ct]); res.Add(r); }
-            int d = CountDistinctValues(cat);
-            if (d is >= 3 and <= 60) Add(DetectParetoChart(ct), ct);  // NEW
+            if (cat.Field.Type == typeof(DateTime))
+            {
+                Add(DetectDateTimeFrequency(ct), ct);
+            }
+            else
+            {
+                var r = CountDistinctValues(cat) <= 20 ? DetectPieChart(ct) : DetectSideBar(ct);
+                if (r != null) { r.PanelIndex = ChartIndex[ct]; res.Add(r); }
+                int d = CountDistinctValues(cat);
+                if (d is >= 3 and <= 60) Add(DetectParetoChart(ct), ct);
+            }
         }
 
         // ── single identifier ─────────────────────────────────────────────────

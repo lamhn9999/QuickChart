@@ -50,7 +50,7 @@ public class Value
         if (Field.Type == typeof(string)) return value;
         if (Field.Type == typeof(bool)) return bool.Parse(value);
         if (Field.Type == typeof(DateTime)) 
-            return DateTime.Parse(value, CultureInfo.InvariantCulture).ToUniversalTime().Year;
+            return DateTime.Parse(value, CultureInfo.InvariantCulture).ToUniversalTime();
         if (Field.Type == typeof(List<string>))
             return ValueStringFormatted?.Split(',').ToList();
         return null;
