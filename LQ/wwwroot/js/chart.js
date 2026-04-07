@@ -296,6 +296,7 @@ export async function autoChart() {
                     },
 
                     options: {
+                        animations: false,
                         responsive: true,
 
                         plugins: {

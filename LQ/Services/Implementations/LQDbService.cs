@@ -178,25 +178,19 @@ public class LQDbService : ILQDbService
         {
             CSVFile? csvFile = GetCSVFile(csvfileid);
             if (csvFile == null) return null;
-            
-            var fieldsQuery = GetFieldsQuery(csvfileid);
-            var fieldIdsQuery = fieldsQuery.Select(f => f.ID);
-            
-            var limitedRowIndexesQuery = _lqdbContext.Values
-                .Where(v => fieldIdsQuery.Contains(v.FieldID))
-                .Select(v => v.RowIndex)
-                .Distinct()
-                .OrderBy(r => r)
-                .Take(numRowLimited);
-                                     
+
+            var fields = GetFieldsQuery(csvfileid).ToList();
+            if (fields.Count == 0) return new Table(csvFile);
+            var fieldIds = fields.Select(f => f.ID).ToList();
+
             var allValues = _lqdbContext.Values
-                .Where(v => fieldIdsQuery.Contains(v.FieldID) && limitedRowIndexesQuery.Contains(v.RowIndex))
+                .Where(v => fieldIds.Contains(v.FieldID) && v.RowIndex < numRowLimited)
                 .OrderBy(v => v.RowIndex)
                 .ToList();
-            
-            return BuildTableFromFieldsAndValues(csvFile, fieldsQuery.ToList(), allValues);
+
+            return BuildTableFromFieldsAndValues(csvFile, fields, allValues);
         }
-        catch 
+        catch
         {
             return null;
         }

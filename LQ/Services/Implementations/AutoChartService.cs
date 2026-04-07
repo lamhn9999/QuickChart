@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using LQ.Models.ChartModels;
 using LQ.Models.DTOs;
 using LQ.Models.TableModels;
@@ -138,6 +139,7 @@ public class AutoChartService : IAutoChartService
         if (table.Count == 1) return null;
         var barChart = new Chart { ChartType = ChartType.Bar };
         var dict2C = new Dictionary<(object x, object y), int>();
+        var dict2C_avg = new Dictionary<(object x, object y), (double sum, int cnt)>();
         var prep   = new Dictionary<object, (double sum, int cnt)>();
 
         for (int i = 0; i < table[0].Values.Count; i++)
@@ -154,9 +156,13 @@ public class AutoChartService : IAutoChartService
                         if (table[1].Field.Type == typeof(List<string>))
                         {
                             foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
-                            { if (f1 is null) continue; dict2C.TryGetValue((f, f1), out var c0); dict2C[(f, f1)] = c0 + 1; }
+                            { if (f1 is null) continue; dict2C.TryGetValue((f, f1), out var c0); dict2C[(f, f1)] = c0 + 1;
+                                dict2C_avg[(f, f1)] = (0, 0);
+                            }
                         }
-                        else { var f1 = table[1].Values[i].ValueCasted; if (f1 != null) { dict2C.TryGetValue((f, f1), out var c0); dict2C[(f, f1)] = c0 + 1; } }
+                        else { var f1 = table[1].Values[i].ValueCasted; if (f1 != null) { dict2C.TryGetValue((f, f1), out var c0); dict2C[(f, f1)] = c0 + 1;
+                            dict2C_avg[(f, f1)] = (0, 0);
+                        } }
                     }
                 }
             }
@@ -170,15 +176,88 @@ public class AutoChartService : IAutoChartService
                     {
                         if (table[1].Values[i].ValueCasted == null) continue;
                         foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
-                        { if (f1 is null) continue; dict2C.TryGetValue((key, f1), out var c0); dict2C[(key, f1)] = c0 + 1; }
+                        { if (f1 is null) continue; dict2C.TryGetValue((key, f1), out var c0); dict2C[(key, f1)] = c0 + 1;
+                            dict2C_avg[(key, f1)] = (0, 0); 
+                        }
                     }
-                    else { var f1 = table[1].Values[i].ValueCasted; if (f1 != null) { dict2C.TryGetValue((key, f1), out var c0); dict2C[(key, f1)] = c0 + 1; } }
+                    else { var f1 = table[1].Values[i].ValueCasted; if (f1 != null) { dict2C.TryGetValue((key, f1), out var c0); dict2C[(key, f1)] = c0 + 1;
+                        dict2C_avg[(key, f1)] = (0, 0);
+                    }  }
                 }
             }
         }
-
+        var xs2 = dict2C.Keys.Select(k => k.x).Distinct().OrderBy(x => x).ToList();
+        var ys2 = dict2C.Keys.Select(k => k.y).Distinct().OrderBy(y => y).ToList();
         barChart.X = prep.OrderBy(x => x.Key).Select(kv => kv.Key).ToList();
 
+        if (table[1].Field.Categories.Contains(Category.Categorical) &&
+            table[2].Field.Categories.Contains(Category.Numeric) && table.Count == 3)
+        {
+            for (int i = 0; i < table[0].Values.Count; i++)
+            {
+                var val = table[2].Values[i].ValueCasted;
+                if (table[0].Values[i].ValueCasted == null || table[1].Values[i].ValueCasted == null || val == null) continue;
+                if (table[0].Field.Type == typeof(List<string>))
+                {
+                    foreach (string? f in (List<string?>)table[0].Values[i].ValueCasted)
+                    {
+                        if (f == null) continue;
+                        if (table[1].Field.Type == typeof(List<string>))
+                        {
+                            foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
+                            { 
+                                if (f1 is null) continue;
+                                dict2C_avg.TryGetValue((f, f1), out var avg);
+                                dict2C_avg[(f, f1)] = (avg.sum + Convert.ToDouble(val), avg.cnt + 1);
+                            }
+                        }
+                        else
+                        {
+                            var f1 = table[1].Values[i].ValueCasted;
+                            dict2C_avg.TryGetValue((f, f1), out var avg);
+                            dict2C_avg[(f, f1)] = (avg.sum + Convert.ToDouble(val), avg.cnt + 1);
+                            
+                        }
+                    }
+                }
+                else
+                {
+                    var key = table[0].Values[i].ValueCasted;
+                    if (table[1].Field.Type == typeof(List<string>))
+                    {
+                        if (table[1].Values[i].ValueCasted == null) continue;
+                        foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
+                        {
+                            if (f1 is null) continue;
+                            dict2C_avg.TryGetValue((key, f1), out var avg);
+                            dict2C_avg[(key, f1)] = (avg.sum + Convert.ToDouble(val), avg.cnt + 1);
+                        }
+                    }
+                    else
+                    {
+                        var f1 = table[1].Values[i].ValueCasted;
+                        dict2C_avg.TryGetValue((key, f1), out var avg);
+                        dict2C_avg[(key, f1)] = (avg.sum + Convert.ToDouble(val), avg.cnt + 1);
+                        
+                    }
+                   
+                }
+            }
+
+            var data = dict2C_avg.ToDictionary(kv => kv.Key,
+                kv => kv.Value.cnt == 0 ? 0.0 : kv.Value.sum / kv.Value.cnt);
+           
+            foreach (var yk in ys2)
+                barChart.Y.Add(new LabelData
+                {
+                    Label = $"Mean of \"{table[2].Field.Name}\" where \"{table[1].Field.Name}\" = \"{Convert.ToString(yk)}\"",
+                    Data  = xs2.Select(xk => (object)data.GetValueOrDefault((xk, yk), 0)).ToList()
+                });
+            
+            return barChart;
+
+        } 
+        
         for (int j = 1; j < table.Count; j++)
         {
             if (!table[j].Field.Categories.Contains(Category.Numeric)) continue;
@@ -201,8 +280,6 @@ public class AutoChartService : IAutoChartService
             });
         }
 
-        var xs2 = dict2C.Keys.Select(k => k.x).Distinct().OrderBy(x => x).ToList();
-        var ys2 = dict2C.Keys.Select(k => k.y).Distinct().OrderBy(y => y).ToList();
         foreach (var yk in ys2)
             barChart.Y.Add(new LabelData
             {
@@ -1110,6 +1187,8 @@ public class AutoChartService : IAutoChartService
                     {
                         var ct = new List<FieldValues> { categorical[ci], categorical[cj], nf }; Reg(ct);
                         Add(DetectMatrix(ct), ct);
+                        Add(DetectLineChart(ct), ct);
+                        Add(DetectBarChart(ct), ct);
                     }
                     else
                     {
@@ -1122,7 +1201,11 @@ public class AutoChartService : IAutoChartService
                         if (ct[0].Field.Type == typeof(DateTime))
                             Add(DetectTimeSeriesCategoricalNumeric(ct), ct);
                         else
+                        {
                             Add(DetectLineChart(ct), ct);
+                            Add(DetectBarChart(ct), ct);
+                        }
+
                         if (ct[0].Field.Type == typeof(DateTime)) Add(DetectTimeSeriesEnhanced(ct), ct);
                     }
                 }
