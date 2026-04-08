@@ -47,8 +47,6 @@ public class AutoChartService : IAutoChartService
 
     // ─── NEW: time-granularity helpers ────────────────────────────────────────
 
-    private enum TimeGranularity { Hour, Day, Week, Month, Quarter, Year }
-
     private TimeGranularity DetectGranularity(List<Value> values)
     {
         var dates = values.Where(v => v.ValueCasted != null)

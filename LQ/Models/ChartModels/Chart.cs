@@ -2,7 +2,9 @@ using System.Text.Json;
 
 namespace LQ.Models.ChartModels;
 
-public enum ChartType 
+public enum TimeGranularity { Hour, Day, Week, Month, Quarter, Year }
+
+public enum ChartType
 {
     Pie,
     Bar,
