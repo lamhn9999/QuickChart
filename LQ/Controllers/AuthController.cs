@@ -26,7 +26,7 @@ public class AuthController : Controller
         {
             return Json(new { error = "We do not recognize you!" });
         }
-        Analyst? analyst = await _analystService.FindAnalystByName(aname);
+        Analyst? analyst = await _analystService.FindByName(aname);
         if (analyst is null)
         {
             return Json(new { error = "We do not recognize you!" });
@@ -65,7 +65,7 @@ public class AuthController : Controller
 
         newAnalyst.Email = model.Email;
 
-        var creationResult = await _analystService.AddAnalyst(newAnalyst, model.Password);
+        var creationResult = await _analystService.Add(newAnalyst, model.Password);
         if (creationResult.Succeeded)
         {
             await _analystService.CheckPasswordSignIn(newAnalyst, model.Password);

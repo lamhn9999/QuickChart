@@ -27,11 +27,9 @@ public class Value
     {
         get
         {
-            if (!_isCasted)
-            {
-                _valueCasted = CastValue(_valueStringFormatted);
-                _isCasted = true;
-            }
+            if (_isCasted) return _valueCasted;
+            _valueCasted = CastValue(_valueStringFormatted);
+            _isCasted = true;
             return _valueCasted;
         }
     }

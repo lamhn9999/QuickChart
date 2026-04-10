@@ -1,4 +1,5 @@
 using LQ.Data.Database;
+using LQ.Data.Repositories;
 using LQ.Models.AnalystModels;
 using LQ.Services.Implementations;
 using LQ.Services.Interfaces;
@@ -50,10 +51,9 @@ builder.Services.Configure<FormOptions>(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddAuthentication();
 // DI
-builder.Services.AddScoped<ILQDbService, LQDbService>();
-builder.Services.AddScoped<ILQIdentityDbService, LQIdentityDbService>();
 builder.Services.AddScoped<IAnalystService, AnalystService>();
 builder.Services.AddScoped<ICSVService, CSVService>();
+builder.Services.AddScoped<TableRepositoryAbstract, TableRepository>();
 builder.Services.AddScoped<IAutoChartService, AutoChartService>();
 // AddSession
 builder.Services.AddDistributedMemoryCache();

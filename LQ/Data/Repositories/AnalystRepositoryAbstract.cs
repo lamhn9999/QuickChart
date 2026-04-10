@@ -9,5 +9,5 @@ public abstract class AnalystRepositoryAbstract
     public abstract Task<Analyst?> FindByName(string name);
     public abstract Task<Analyst?> FindById(string id);
     public abstract Task<Analyst?> FindByEmail(string email);
-    protected abstract Task<SignInResult> CheckPasswordSignIn(Analyst analyst, string password);
+    public abstract Task<SignInResult> CheckPasswordSignIn(Analyst analyst, string password);
 }

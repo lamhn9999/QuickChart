@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using LQ.Data.Repositories;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using LQ.Models.AnalystModels;
@@ -14,16 +15,16 @@ public class WorkspaceController : Controller
     private ICSVService _csvService;
     private IAnalystService _analystService;
     private IAutoChartService _autoChartService;
-    private ILQDbService _lqDbService;
+    private readonly TableRepositoryAbstract _repo;
     private readonly ILogger<WorkspaceController> _logger;
     private Stopwatch _stopwatch = new Stopwatch();
-    
-    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, ILQDbService lqDbService, ILogger<WorkspaceController> logger)
+
+    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, TableRepositoryAbstract repo, ILogger<WorkspaceController> logger)
     {
         _csvService = csvService;
-        _analystService =  analystService;
+        _analystService = analystService;
         _autoChartService = autoChartService;
-        _lqDbService = lqDbService;
+        _repo = repo;
         _logger = logger;
     }
 
@@ -70,10 +71,10 @@ public class WorkspaceController : Controller
     }
     
     [HttpGet]
-    public IActionResult EnterWorkspace()
+    public async Task<IActionResult> EnterWorkspace()
     {
         if (CurrentCSVFile is null) return NotFound();
-        var table = _csvService.GetTableLimited(CurrentCSVFile.currentFileID, 200);
+        var table = await _csvService.GetTableLimited(CurrentCSVFile.currentFileID, 200);
         if (table is null) return NotFound();
         HttpContext.Session.SetString("TableDTO", JsonSerializer.Serialize(new TableDTO
         {
@@ -106,16 +107,15 @@ public class WorkspaceController : Controller
 
     [HttpPost("filter")]
     [IgnoreAntiforgeryToken]
-    public IActionResult FilterTable([FromBody] List<ValueFilterDTO> filters)
+    public async Task<IActionResult> FilterTable([FromBody] List<ValueFilterDTO> filters)
     {
         if (CurrentTable is null) return NotFound();
-        var table = _lqDbService.GetTableWithFilterLimited(CurrentTable.CSVFileID, filters, 200);
-        
-        WriteDto(filters);
-        
-        if (table is null) return BadRequest("Bad filter request.");
-        HttpContext.Session.SetString("ListValueFilterDTO", JsonSerializer.Serialize(filters));
+        var csvFile = await _repo.GetFile(CurrentTable.CSVFileID);
+        var table   = await _repo.GetWithFilterLimited(csvFile, filters, 200);
 
+        WriteDto(filters);
+
+        HttpContext.Session.SetString("ListValueFilterDTO", JsonSerializer.Serialize(filters));
         return Json(table.GetDisplay());
     }
 

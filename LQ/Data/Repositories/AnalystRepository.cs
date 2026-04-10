@@ -38,7 +38,7 @@ public class AnalystRepository : AnalystRepositoryAbstract
         return await _analystManager.FindByEmailAsync(email);
     }
 
-    protected override async Task<SignInResult> CheckPasswordSignIn(Analyst analyst, string password)
+    public override async Task<SignInResult> CheckPasswordSignIn(Analyst analyst, string password)
     {
         return await _analystSignInManager.CheckPasswordSignInAsync(analyst, password, lockoutOnFailure: true);
     }
