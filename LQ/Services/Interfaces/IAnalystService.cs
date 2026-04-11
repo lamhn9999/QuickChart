@@ -1,10 +1,13 @@
 using LQ.Models.AnalystModels;
-using LQ.Models.TableModels;
 using Microsoft.AspNetCore.Identity;
 
 namespace LQ.Services.Interfaces;
 
-public interface IAnalystService : ILQIdentityDbService
+public interface IAnalystService
 {
-    public List<CSVFile> GetCSVFiles(string analystid);
+    public Task<IdentityResult> Add(Analyst analyst, string password);
+    public Task<Analyst?> FindByName(string name);
+    public Task<Analyst?> FindById(string id);
+    public Task<Analyst?> FindByEmail(string email);
+    public Task<SignInResult> CheckPasswordSignIn(Analyst analyst, string password);
 }

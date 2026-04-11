@@ -5,16 +5,15 @@ namespace LQ.Services.Interfaces;
 
 public interface ICSVService
 {
-    public bool Validate(Analyst analyst, string path);
-    public bool Validate(Analyst analyst, IFormFile file);
-    public Task<bool> ProcessUploadedCSV(Analyst analyst, string path);
-    public Task<bool> ProcessUploadedCSV(Analyst analyst, IFormFile file);
-    public Table? GetTable(string analystId, string filename);
-    public Table? GetTable(string analystId, int csvFileId);
-    public Table? GetTableLimited(int csvFileId, int numRowLimited);
-    public bool DetectDateTime(FieldValues fieldValues);
+    public Task<bool> Validate(Analyst analyst, string path);
+    public Task<bool> Validate(Analyst analyst, IFormFile file);
+    public Task<bool> ProcessUploaded(Analyst analyst, string path);
+    public Task<bool> ProcessUploaded(Analyst analyst, IFormFile file);
     public Task<TryChangeFieldTypeDTO> ChangeFieldType(int fieldId, string newType, char? listSplitChar);
-    public CSVFile? GetCSVFile(string analystid, string filename);
-    public void RemoveCSVFile(string analystId, string fileName);
-    public void RenameCSVFile(string analystId, string fileName, string newFileName);
+    public Task<CSVFile> GetFile(Analyst analyst, string fileName);
+    public Task<CSVFile> GetFile(int csvFileId);
+    public Task<List<CSVFile>> GetAllFiles(Analyst analyst);
+    public Task RemoveFile(Analyst analyst, string fileName);
+    public Task RenameFile(Analyst analyst, string fileName, string newFileName);
+    public Task<Table?> GetTableLimited(int csvFileId, int rowLimit);
 }

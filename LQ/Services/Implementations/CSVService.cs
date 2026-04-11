@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Diagnostics;
+using LQ.Data.Database;
+using LQ.Data.Repositories;
 using LQ.Models.TableModels;
 using LQ.Models.AnalystModels;
 using LQ.Models.DTOs;
@@ -20,34 +22,37 @@ static class TypeNameMap
     };
 }
 
-public class CSVService : ICSVService
+public class CSVService : TableRepository, ICSVService
 {
-    private readonly ILQDbService _lqDbService;
     public static readonly char[] possibleOpen = new[] { '\"', '[' };
     public static readonly char[] possibleEnd = new[] { '\"', ']' };
     
-    public CSVService(ILQDbService lqdbService)
+    public CSVService(LQDbContext lqDbContext) : base(lqDbContext)
     {
-        _lqDbService = lqdbService;
     }
-    
-    private bool Validate(Analyst analyst, StreamReader reader)
+
+    private static bool Validate(Analyst analyst, StreamReader reader)
     {
-        int numCommas = -1;
-        int numLines = 0;
-        
-        string? line = null;
-        while ((line = reader.ReadLine()) != null)
+        var numCommas = -1;
+        var numLines = 0;
+
+        while (reader.ReadLine() is { } line)
         {
             numLines++;
             if (string.IsNullOrWhiteSpace(line)) continue;
             int cnt = 0, unit = 1;
-            for (int i = 0; i < line.Length; i++)
+            foreach (var t in line)
             {
-                if (line[i] == ',') cnt += unit; 
-                else if (line[i] == '"') unit = 1 - unit;
+                switch (t)
+                {
+                    case ',':
+                        cnt += unit;
+                        break;
+                    case '"':
+                        unit = 1 - unit;
+                        break;
+                }
             }
-            // System.Console.WriteLine(cnt);
             if (numCommas == -1) numCommas = cnt;
             else if (cnt != numCommas)
             {
@@ -56,26 +61,23 @@ public class CSVService : ICSVService
             }
         }
         
-        if (numCommas < 1 || numLines < 2) return false;
-        return true;
+        return numCommas >= 1 && numLines >= 2;
     }
 
-    public bool Validate(Analyst analyst, string path)
+    public async Task<bool> Validate(Analyst analyst, string path)
     {
-        return Validate(analyst, new StreamReader(path)) && 
-               !_lqDbService.SearchFileByAnalyst(analyst, Path.GetFileName(path));
+        return !await FileExists(analyst, Path.GetFileName(path)) && Validate(analyst, new StreamReader(path));
     }
 
-    public bool Validate(Analyst analyst, IFormFile file)
+    public async Task<bool> Validate(Analyst analyst, IFormFile file)
     {
-        return Validate(analyst, new StreamReader(file.OpenReadStream())) && 
-               !_lqDbService.SearchFileByAnalyst(analyst, file.FileName);
+        return !await FileExists(analyst, file.FileName) && Validate(analyst, new StreamReader(file.OpenReadStream()));
     }
     
-    private void DetectCategory(FieldValues fieldValues)
+    private static void DetectCategory(FieldValues fieldValues)
     {
-        List <Category> result =  new List<Category>();
-        List<string> valueStringlist = new List<string>();
+        List <Category> result = [];
+        List <string> valueStringlist = [];
         
         if(fieldValues.Field.Type != typeof(List<string>))
         {
@@ -108,7 +110,7 @@ public class CSVService : ICSVService
         fieldValues.Field.Categories = result;
     }
 
-    public bool DetectDateTime(FieldValues fieldvalues)
+    private static bool DetectDateTime(FieldValues fieldvalues)
     {
         // string[] testformats = { "dd/MM/yyyy"};
         string[] formats = {"M/d/yyyy", "MM/dd/yyyy",                                    
@@ -514,12 +516,12 @@ public class CSVService : ICSVService
         return newTable;
     }
 
-    public async Task<bool> ProcessUploadedCSV(Analyst analyst, string path)
+    public async Task<bool> ProcessUploaded(Analyst analyst, string path)
     {
-        if (!Validate(analyst, path)) 
+        if (!await Validate(analyst, path)) 
             return false;
-        CSVFile newCSVFile = new CSVFile(analyst.Id, Path.GetFileName(path));
-        Table? newTable = Interpret(newCSVFile, new StreamReader(path));
+        CSVFile newFile = new CSVFile(analyst.Id, Path.GetFileName(path));
+        Table? newTable = Interpret(newFile, new StreamReader(path));
         if (newTable is null)
         {
             return false;
@@ -529,17 +531,16 @@ public class CSVService : ICSVService
             DetectCategory(fv);
         }
         
-        await _lqDbService.InsertTableAsync(newTable);
+        await Insert(newTable);
         return true;    
     }
 
-    public async Task<bool> ProcessUploadedCSV(Analyst analyst, IFormFile file)
+    public async Task<bool> ProcessUploaded(Analyst analyst, IFormFile file)
     {
-        Console.WriteLine(file is null);
-        if (!Validate(analyst, file)) 
+        if (!await Validate(analyst, file)) 
             return false;
-        CSVFile newCSVFile = new CSVFile(analyst.Id, file.FileName);
-        Table newTable = Interpret(newCSVFile, new StreamReader(file.OpenReadStream()));
+        CSVFile newFile = new CSVFile(analyst.Id, file.FileName);
+        Table? newTable = Interpret(newFile, new StreamReader(file.OpenReadStream()));
         if (newTable is null)
         {
             return false;
@@ -549,47 +550,46 @@ public class CSVService : ICSVService
             DetectCategory(fv);
         }
 
-        await _lqDbService.InsertTableAsync(newTable);
+        await Insert(newTable);
         return true;  
     }
 
-    public Table? GetTable(string analystid, string filename)
+    public new async Task<CSVFile> GetFile(Analyst analyst, string fileName)
     {
-        return _lqDbService.GetTable(analystid, filename);
+        return await base.GetFile(analyst, fileName);
     }
 
-    public Table? GetTable(string analystId, int csvFileId)
+    public new async Task<CSVFile> GetFile(int csvFileId)
     {
-        return _lqDbService.GetTable(analystId, csvFileId);
+        return await base.GetFile(csvFileId);
     }
 
-    public Table? GetTableLimited(int csvFileId, int numRowLimited)
+    public new async Task<List<CSVFile>> GetAllFiles(Analyst analyst)
     {
-        return _lqDbService.GetTableLimited(csvFileId, numRowLimited);
+        return await base.GetAllFiles(analyst);
+    }
+    
+    public async Task RemoveFile(Analyst analyst, string fileName)
+    {
+        CSVFile removingFile = await base.GetFile(analyst, fileName);
+        await base.RemoveFile(removingFile);
     }
 
-    public void RemoveCSVFile(string analystId, string fileName)
+    public async Task RenameFile(Analyst analyst, string fileName, string newFileName)
     {
-        int csvFileId = _lqDbService.GetCSVFile(analystId, fileName).ID;
-        _lqDbService.RemoveCSVFile(csvFileId);
+        CSVFile removingFile = await base.GetFile(analyst, fileName);
+        await base.RenameFile(removingFile, newFileName);
     }
-
-    public void RenameCSVFile(string analystId, string fileName, string newFileName)
+    
+    public async Task<Table?> GetTableLimited(int csvFileId, int rowLimit)
     {
-        Console.WriteLine(analystId + " - " + fileName + " - " + newFileName);
-        Console.WriteLine(_lqDbService.GetCSVFile(analystId, fileName));
-        int csvFileId = _lqDbService.GetCSVFile(analystId, fileName).ID;
-        _lqDbService.RenameCSVFile(csvFileId, newFileName);
-    }
-
-    public CSVFile? GetCSVFile(string analystid, string filename)
-    {
-        return _lqDbService.GetCSVFile(analystid, filename);
+        CSVFile csvFile = await base.GetFile(csvFileId);
+        return await base.GetLimited(csvFile, rowLimit);
     }
 
     public async Task<TryChangeFieldTypeDTO> ChangeFieldType(int fieldId, string newType, char? listSplitChar)
     {
-        if (!TypeNameMap.Map.ContainsKey(newType)) throw new BadHttpRequestException("We do not deal with this type.");
-        return await _lqDbService.ChangeFieldType(new ChangeFieldTypeDTO(fieldId, TypeNameMap.Map[newType], listSplitChar));
+        if (!TypeNameMap.Map.TryGetValue(newType, out var value)) throw new BadHttpRequestException("We do not deal with this type.");
+        return await base.ChangeFieldType(new ChangeFieldTypeDTO(fieldId, value, listSplitChar));
     }
 }

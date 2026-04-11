@@ -28,7 +28,7 @@ public class HomeController : Controller
         }
     }
 
-    private CSVFileDTO? CurrentCSVFile
+    private CSVFileDTO? CurrentFile
     {
         get
         {
@@ -38,19 +38,20 @@ public class HomeController : Controller
     }
 
     [HttpGet]
-    public IActionResult Show()
+    public async Task<IActionResult> Show()
     {
         HttpContext.Session.Remove("TableDTO");
         
         var analystdto = CurrentAnalyst;
         var analystId = analystdto?.ID ?? BaseDTO.DefaultAnalystID;
+        var analyst = await _analystService.FindById(analystId);
         
         if (analystdto != null)
         {
             ViewBag.Username = analystdto.Name;
         }
-        
-        List<CSVFile> sampleCsvs = _analystService.GetCSVFiles(analystId).ToList();
+
+        List<CSVFile> sampleCsvs = await _csvService.GetAllFiles(analyst!);
         
         return CurrentAnalyst is null ? 
             View("Home", sampleCsvs) : 
@@ -59,14 +60,15 @@ public class HomeController : Controller
 
     [HttpDelete("remove")]
     [IgnoreAntiforgeryToken]
-    public IActionResult Remove(string filename)
+    public async Task<IActionResult> Remove(string filename)
     {
         var analystdto = CurrentAnalyst;
         if (analystdto is null) return Json("NG");
+        var analyst = await _analystService.FindById(analystdto.ID);
 
         try
         {
-            _csvService.RemoveCSVFile(analystdto.ID, filename);
+            await _csvService.RemoveFile(analyst!, filename);
             return Json("OK");
         }
         catch (Exception e)
@@ -78,14 +80,15 @@ public class HomeController : Controller
 
     [HttpPut("renamefile")]
     [IgnoreAntiforgeryToken]
-    public IActionResult RenameFile(string oldFileName, string newFileName)
+    public async Task<IActionResult> RenameFile(string oldFileName, string newFileName)
     {
         var analystdto = CurrentAnalyst;
         if (analystdto is null) return Json("Cannot perform action: analyst not signed in");
+        var analyst = await _analystService.FindById(analystdto.ID);
         
         try
         {
-            _csvService.RenameCSVFile(analystdto.ID, oldFileName, newFileName);
+            await _csvService.RenameFile(analyst!, oldFileName, newFileName);
             return Json("OK");
         }
         catch (Exception e)
@@ -97,25 +100,27 @@ public class HomeController : Controller
 
     [HttpPost("table")]
     [IgnoreAntiforgeryToken]
-    public IActionResult Select(string filename)
+    public async Task<IActionResult> Select(string filename)
     {
         var analystdto = CurrentAnalyst;
         var isGuest = analystdto is null;
         var analystId = isGuest ? BaseDTO.DefaultAnalystID : analystdto!.ID;
+        var analyst = await _analystService.FindById(analystId);
+        if (analyst is null) return NotFound();
 
-        CSVFile? selectedFile = _csvService.GetCSVFile(analystId, filename);
+        CSVFile? selectedFile = await _csvService.GetFile(analyst, filename);
         if (selectedFile is null)
             return NotFound();
-        
+
         HttpContext.Session.SetString("CSVFileDTO", JsonSerializer.Serialize(new CSVFileDTO{currentFileID = selectedFile.ID}));
         HttpContext.Session.Remove("ListValueFilterDTO");
         if (isGuest)
         {
-            Table? table = _csvService.GetTableLimited(selectedFile.ID, 200);
+            Table? table = await _csvService.GetTableLimited(selectedFile.ID, 200);
             if (table is null) return NotFound();
             return Json(table.GetDisplay());
         }
-        
+
         return Ok();
     }
 
@@ -127,10 +132,10 @@ public class HomeController : Controller
         var analystdto = CurrentAnalyst;
         if (analystdto is null) return Unauthorized(new { error = "Sign in required to upload files" });
 
-        Analyst? analyst = await _analystService.FindAnalystById(analystdto.ID);
+        Analyst? analyst = await _analystService.FindById(analystdto.ID);
         if (analyst is null) return NotFound(new { error = "Analyst not found" });
 
-        return await _csvService.ProcessUploadedCSV(analyst, file) 
+        return await _csvService.ProcessUploaded(analyst, file)
             ? Json(new { received = file.FileName })
             : Json(new { badcsv = file.FileName });
     }
