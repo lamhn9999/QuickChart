@@ -19,62 +19,7 @@ public class AutoChartService : IAutoChartService
         _repo = repo;
     }
 
-    // ─── existing helpers ─────────────────────────────────────────────────────
-
-    private int CountDistinctValues(FieldValues fv)
-    {
-        var cnt = new Dictionary<object, int>();
-        Index(cnt, fv);
-        return cnt.Count;
-    }
-
-    private void Index(Dictionary<object, int> cnt, FieldValues table)
-    {
-        foreach (var value in table.Values)
-        {
-            if (value.ValueCasted == null) continue;
-            if (table.Field.Type == typeof(List<string>))
-            {
-                foreach (var f in (List<string>)value.ValueCasted)
-                {
-                    if (f == null) continue;
-                    cnt[f] = cnt.TryGetValue(f, out var n) ? n + 1 : 1;
-                }
-            }
-            else
-                cnt[value.ValueCasted] = cnt.TryGetValue(value.ValueCasted, out var n) ? n + 1 : 1;
-        }
-    }
-
-    private DateTime ConvertToDateTime(long val) => new DateTime(val, DateTimeKind.Utc).Date;
-    private string GetYear(object val) => ConvertToDateTime((long)val).Year.ToString();
-
-    // ─── NEW: time-granularity helpers ────────────────────────────────────────
-
-    private TimeGranularity DetectGranularity(List<Value> values)
-    {
-        var dates = values.Where(v => v.ValueCasted != null)
-                          .Select(v => (DateTime)v.ValueCasted!).ToList();
-        if (dates.Count < 2) return TimeGranularity.Day;
-        var span = dates.Max() - dates.Min();
-        if (span.TotalDays <= 2)    return TimeGranularity.Hour;
-        if (span.TotalDays <= 60)   return TimeGranularity.Day;
-        if (span.TotalDays <= 183)  return TimeGranularity.Week;
-        if (span.TotalDays <= 730)  return TimeGranularity.Month;
-        if (span.TotalDays <= 1825) return TimeGranularity.Quarter;
-        return TimeGranularity.Year;
-    }
-
-    private static DateTime TruncToGranularity(DateTime dt, TimeGranularity g) => g switch
-    {
-        TimeGranularity.Hour    => new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, 0, 0),
-        TimeGranularity.Day     => dt.Date,
-        TimeGranularity.Week    => dt.Date.AddDays(-(int)dt.DayOfWeek),
-        TimeGranularity.Month   => new DateTime(dt.Year, dt.Month, 1),
-        TimeGranularity.Quarter => new DateTime(dt.Year, ((dt.Month - 1) / 3) * 3 + 1, 1),
-        TimeGranularity.Year    => new DateTime(dt.Year, 1, 1),
-        _                       => dt.Date,
-    };
+    // ─── Formatting helpers ───────────────────────────────────────────────────
 
     private static string FmtDate(DateTime dt, TimeGranularity g) => g switch
     {
@@ -87,7 +32,7 @@ public class AutoChartService : IAutoChartService
         _                       => dt.ToString("MMM d"),
     };
 
-    // ─── NEW: stats helpers ───────────────────────────────────────────────────
+    // ─── Stats helpers ────────────────────────────────────────────────────────
 
     /// <summary>Ordinary least squares. Returns (slope, intercept, R²).</summary>
     private static (double slope, double intercept, double r2) LinearRegression(List<(double x, double y)> pts)
@@ -134,333 +79,6 @@ public class AutoChartService : IAutoChartService
         return Math.Max(-1, Math.Min(1, num / (denomX * denomY)));
     }
 
-    // ─── EXISTING detectors (unchanged) ──────────────────────────────────────
-
-    private Chart? DetectBarChart(List<FieldValues> table)
-    {
-        if (table.Count == 1) return null;
-        var barChart = new Chart { ChartType = ChartType.Bar };
-        var dict2C = new Dictionary<(object x, object y), int>();
-        var dict2C_avg = new Dictionary<(object x, object y), (double sum, int cnt)>();
-        var prep   = new Dictionary<object, (double sum, int cnt)>();
-
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null) continue;
-            if (table[0].Field.Type == typeof(List<string>))
-            {
-                foreach (string? f in (List<string?>)table[0].Values[i].ValueCasted)
-                {
-                    if (f == null) continue;
-                    if (!prep.ContainsKey(f)) prep[f] = (0, 0);
-                    if (table[1].Field.Categories.Contains(Category.Categorical))
-                    {
-                        if (table[1].Field.Type == typeof(List<string>))
-                        {
-                            foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
-                            { if (f1 is null) continue; dict2C.TryGetValue((f, f1), out var c0); dict2C[(f, f1)] = c0 + 1;
-                                dict2C_avg[(f, f1)] = (0, 0);
-                            }
-                        }
-                        else { var f1 = table[1].Values[i].ValueCasted; if (f1 != null) { dict2C.TryGetValue((f, f1), out var c0); dict2C[(f, f1)] = c0 + 1;
-                            dict2C_avg[(f, f1)] = (0, 0);
-                        } }
-                    }
-                }
-            }
-            else
-            {
-                var key = table[0].Values[i].ValueCasted;
-                if (!prep.ContainsKey(key)) prep[key] = (0, 0);
-                if (table[1].Field.Categories.Contains(Category.Categorical))
-                {
-                    if (table[1].Field.Type == typeof(List<string>))
-                    {
-                        if (table[1].Values[i].ValueCasted == null) continue;
-                        foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
-                        { if (f1 is null) continue; dict2C.TryGetValue((key, f1), out var c0); dict2C[(key, f1)] = c0 + 1;
-                            dict2C_avg[(key, f1)] = (0, 0); 
-                        }
-                    }
-                    else { var f1 = table[1].Values[i].ValueCasted; if (f1 != null) { dict2C.TryGetValue((key, f1), out var c0); dict2C[(key, f1)] = c0 + 1;
-                        dict2C_avg[(key, f1)] = (0, 0);
-                    }  }
-                }
-            }
-        }
-        var xs2 = dict2C.Keys.Select(k => k.x).Distinct().OrderBy(x => x).ToList();
-        var ys2 = dict2C.Keys.Select(k => k.y).Distinct().OrderBy(y => y).ToList();
-        barChart.X = prep.OrderBy(x => x.Key).Select(kv => kv.Key).ToList();
-
-        if (table[1].Field.Categories.Contains(Category.Categorical) &&
-            table[2].Field.Categories.Contains(Category.Numeric) && table.Count == 3)
-        {
-            for (int i = 0; i < table[0].Values.Count; i++)
-            {
-                var val = table[2].Values[i].ValueCasted;
-                if (table[0].Values[i].ValueCasted == null || table[1].Values[i].ValueCasted == null || val == null) continue;
-                if (table[0].Field.Type == typeof(List<string>))
-                {
-                    foreach (string? f in (List<string?>)table[0].Values[i].ValueCasted)
-                    {
-                        if (f == null) continue;
-                        if (table[1].Field.Type == typeof(List<string>))
-                        {
-                            foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
-                            { 
-                                if (f1 is null) continue;
-                                dict2C_avg.TryGetValue((f, f1), out var avg);
-                                dict2C_avg[(f, f1)] = (avg.sum + Convert.ToDouble(val), avg.cnt + 1);
-                            }
-                        }
-                        else
-                        {
-                            var f1 = table[1].Values[i].ValueCasted;
-                            dict2C_avg.TryGetValue((f, f1), out var avg);
-                            dict2C_avg[(f, f1)] = (avg.sum + Convert.ToDouble(val), avg.cnt + 1);
-                            
-                        }
-                    }
-                }
-                else
-                {
-                    var key = table[0].Values[i].ValueCasted;
-                    if (table[1].Field.Type == typeof(List<string>))
-                    {
-                        if (table[1].Values[i].ValueCasted == null) continue;
-                        foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted)
-                        {
-                            if (f1 is null) continue;
-                            dict2C_avg.TryGetValue((key, f1), out var avg);
-                            dict2C_avg[(key, f1)] = (avg.sum + Convert.ToDouble(val), avg.cnt + 1);
-                        }
-                    }
-                    else
-                    {
-                        var f1 = table[1].Values[i].ValueCasted;
-                        dict2C_avg.TryGetValue((key, f1), out var avg);
-                        dict2C_avg[(key, f1)] = (avg.sum + Convert.ToDouble(val), avg.cnt + 1);
-                        
-                    }
-                   
-                }
-            }
-
-            var data = dict2C_avg.ToDictionary(kv => kv.Key,
-                kv => kv.Value.cnt == 0 ? 0.0 : kv.Value.sum / kv.Value.cnt);
-           
-            foreach (var yk in ys2)
-                barChart.Y.Add(new LabelData
-                {
-                    Label = $"Mean of \"{table[2].Field.Name}\" where \"{table[1].Field.Name}\" = \"{Convert.ToString(yk)}\"",
-                    Data  = xs2.Select(xk => (object)data.GetValueOrDefault((xk, yk), 0)).ToList()
-                });
-            
-            return barChart;
-
-        } 
-        
-        for (int j = 1; j < table.Count; j++)
-        {
-            if (!table[j].Field.Categories.Contains(Category.Numeric)) continue;
-            var avg = new Dictionary<object, (double sum, int cnt)>(prep);
-            for (int i = 0; i < table[0].Values.Count; i++)
-            {
-                var val = table[j].Values[i].ValueCasted;
-                if (table[0].Values[i].ValueCasted == null || val == null) continue;
-                if (table[0].Field.Type == typeof(List<string>))
-                    foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
-                    { if (f != null) avg[f] = (avg[f].sum + Convert.ToDouble(val), avg[f].cnt + 1); }
-                else { var k = table[0].Values[i].ValueCasted; if (k != null) avg[k] = (avg[k].sum + Convert.ToDouble(val), avg[k].cnt + 1); }
-            }
-            var data = avg.OrderBy(kv => kv.Key)
-                         .Select(kv => new { Key = kv.Key, Val = kv.Value.cnt == 0 ? 0.0 : kv.Value.sum / kv.Value.cnt }).ToList();
-            barChart.Y.Add(new LabelData
-            {
-                Label = $"Mean of \"{table[j].Field.Name}\" by \"{table[0].Field.Name}\"",
-                Data  = data.Select(kv => (object)kv.Val).ToList()
-            });
-        }
-
-        foreach (var yk in ys2)
-            barChart.Y.Add(new LabelData
-            {
-                Label = $"Count of \"{yk}\" by \"{table[0].Field.Name}\"",
-                Data  = xs2.Select(xk => (object)dict2C.GetValueOrDefault((xk, yk), 0)).ToList()
-            });
-
-        return barChart;
-    }
-
-    private Chart? DetectPieChart(List<FieldValues> table)
-    {
-        var c = new Chart { ChartType = ChartType.Pie };
-        var cnt = new Dictionary<object, int>(); Index(cnt, table[0]);
-        c.X = cnt.Select(kv => kv.Key).ToList();
-        c.Y.Add(new LabelData { Label = $"Count of \"{table[0].Field.Name}\"", Data = cnt.Select(kv => (object)kv.Value).ToList() });
-        return c;
-    }
-
-    private Chart? DetectLineChart(List<FieldValues> table)
-    {
-        var lineChart = new Chart { ChartType = ChartType.Line };
-        var dict2C    = new Dictionary<(object x, object y), int>();
-        var prep      = new Dictionary<object, (double sum, int cnt)>();
-        var ysPos     = new Dictionary<object, HashSet<int>>();
-
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null) continue;
-            void Track(object f, object? f1)
-            {
-                if (!prep.ContainsKey(f)) prep[f] = (0, 0);
-                if (f1 == null) return;
-                dict2C.TryGetValue((f, f1), out var c0); dict2C[(f, f1)] = c0 + 1;
-                if (!ysPos.TryGetValue(f1, out var set)) { set = new HashSet<int>(); ysPos[f1] = set; }
-                set.Add(i);
-            }
-
-            if (table[0].Field.Type == typeof(List<string>))
-            {
-                foreach (string? f in (List<string?>)table[0].Values[i].ValueCasted)
-                {
-                    if (f == null) continue;
-                    if (table[1].Field.Categories.Contains(Category.Categorical))
-                    {
-                        if (table[1].Field.Type == typeof(List<string>))
-                        { if (table[1].Values[i].ValueCasted != null) foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted) Track(f, f1); }
-                        else Track(f, table[1].Values[i].ValueCasted);
-                    }
-                    else if (!prep.ContainsKey(f)) prep[f] = (0, 0);
-                }
-            }
-            else
-            {
-                var key = table[0].Values[i].ValueCasted;
-                if (table[1].Field.Categories.Contains(Category.Categorical))
-                {
-                    if (table[1].Field.Type == typeof(List<string>))
-                    { if (table[1].Values[i].ValueCasted != null) foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted) Track(key, f1); }
-                    else Track(key, table[1].Values[i].ValueCasted);
-                }
-                else if (!prep.ContainsKey(key)) prep[key] = (0, 0);
-            }
-        }
-
-        lineChart.X = prep.OrderBy(x => x.Key).Select(kv => kv.Key).ToList();
-
-        if (table[1].Field.Categories.Contains(Category.Numeric))
-        {
-            for (int j = 1; j < table.Count; j++)
-            {
-                if (!table[j].Field.Categories.Contains(Category.Numeric)) continue;
-                var avg = new Dictionary<object, (double sum, int cnt)>(prep);
-                for (int i = 0; i < table[0].Values.Count; i++)
-                {
-                    var val = table[j].Values[i].ValueCasted;
-                    if (table[0].Values[i].ValueCasted == null || val == null) continue;
-                    if (table[0].Field.Type == typeof(List<string>))
-                        foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
-                        { if (f != null) avg[f] = (avg[f].sum + Convert.ToDouble(val), avg[f].cnt + 1); }
-                    else { var k = table[0].Values[i].ValueCasted; if (k != null) avg[k] = (avg[k].sum + Convert.ToDouble(val), avg[k].cnt + 1); }
-                }
-                lineChart.Y.Add(new LabelData
-                {
-                    Label = $"Mean of \"{table[j].Field.Name}\" by \"{table[0].Field.Name}\"",
-                    Data  = avg.OrderBy(kv => kv.Key).Select(kv => (object)(kv.Value.cnt == 0 ? 0.0 : kv.Value.sum / kv.Value.cnt)).ToList()
-                });
-            }
-            return lineChart;
-        }
-
-        var xs = dict2C.Keys.Select(k => k.x).Distinct().OrderBy(x => x).ToList();
-        var ys = dict2C.Keys.Select(k => k.y).Distinct().OrderBy(y => y).ToList();
-
-        foreach (var yk in ys)
-        {
-            if (!ysPos.TryGetValue(yk, out var posSet)) continue;
-            for (int j = 2; j < table.Count; j++)
-            {
-                var avg = new Dictionary<object, (double sum, int cnt)>(prep);
-                foreach (int i in posSet)
-                {
-                    var val = table[j].Values[i].ValueCasted;
-                    if (table[0].Values[i].ValueCasted == null || val == null) continue;
-                    if (table[0].Field.Type == typeof(List<string>))
-                        foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
-                        { if (f != null) avg[f] = (avg[f].sum + Convert.ToDouble(val), avg[f].cnt + 1); }
-                    else { var k = table[0].Values[i].ValueCasted; if (k != null) avg[k] = (avg[k].sum + Convert.ToDouble(val), avg[k].cnt + 1); }
-                }
-                lineChart.Z.Add(new LabelData
-                {
-                    Label     = $"Mean of \"{table[j].Field.Name}\" where {table[1].Field.Name} = {yk} by \"{table[0].Field.Name}\"",
-                    ChartType = ChartType.Line,
-                    Data      = avg.OrderBy(kv => kv.Key).Select(kv => (object)(kv.Value.cnt == 0 ? 0.0 : kv.Value.sum / kv.Value.cnt)).ToList()
-                });
-            }
-        }
-        if (lineChart.Z.Count != 0) lineChart.ChartType = ChartType.Mixed;
-        foreach (var yk in ys)
-            lineChart.Y.Add(new LabelData
-            {
-                Label     = $"Count of \"{yk}\" by \"{table[0].Field.Name}\"",
-                ChartType = ChartType.Bar,
-                Data      = xs.Select(xk => (object)dict2C.GetValueOrDefault((xk, yk), 0)).ToList()
-            });
-
-        return lineChart;
-    }
-
-    private Chart? DetectPolarAreaChart(List<FieldValues> table)
-    {
-        var c = new Chart { ChartType = ChartType.PolarArea };
-        var cnt = new Dictionary<object, int>(); Index(cnt, table[0]);
-        c.X = cnt.Select(kv => kv.Key).ToList();
-        c.Y.Add(new LabelData { Label = $"Count of \"{table[0].Field.Name}\"", Data = cnt.Select(kv => (object)kv.Value).ToList() });
-        return c;
-    }
-
-    private Chart? DetectHistogram(List<FieldValues> table)
-    {
-        if (table[0].Field.Categories.Contains(Category.Numeric))
-        {
-            var valueList = table[0].Values.Where(v => v.ValueCasted != null).Select(v => Convert.ToDouble(v.ValueCasted)).OrderBy(x => x).ToList();
-            if (valueList.Count < 2) return null;
-            double gap = (valueList.Last() - valueList.First()) / ((int)Math.Sqrt(valueList.Count) + 1);
-            if (gap == 0) gap = 1;
-            var c = new Chart { ChartType = ChartType.Histogram };
-            var listXVal = new List<double>();
-            double xv = valueList.First();
-            while (c.X.Count == 0 || xv < valueList.Last())
-            {
-                listXVal.Add(xv);
-                c.X.Add(table[0].Field.Type == typeof(DateTime)
-                    ? $"[{ConvertToDateTime((long)xv)},{ConvertToDateTime((long)(xv + gap))})"
-                    : $"[{xv}, {Math.Round(xv + gap, 2)})");
-                xv = Math.Round(xv + gap, 2);
-            }
-            listXVal.Add(xv);
-            var yVal = new int[c.X.Count];
-            foreach (double v in valueList)
-                for (int i = 0; i < c.X.Count; i++)
-                    if (v >= listXVal[i] && v < listXVal[i + 1]) { yVal[i]++; break; }
-            var ld = new LabelData { Label = $"Distribution of \"{table[0].Field.Name}\"" };
-            foreach (int y in yVal) ld.Data.Add(y);
-            c.Y.Add(ld);
-            return c;
-        }
-        if (table[0].Field.Categories.Contains(Category.Categorical))
-        {
-            var c = new Chart { ChartType = ChartType.Histogram };
-            var cnt = new Dictionary<object, int>(); Index(cnt, table[0]);
-            c.X = cnt.Select(kv => kv.Key).ToList();
-            if (c.X.Count > 20) return null;
-            c.Y.Add(new LabelData { Label = $"Count of \"{table[0].Field.Name}\"", Data = cnt.Select(kv => (object)kv.Value).ToList() });
-            return c;
-        }
-        return null;
-    }
-
     private Chart? DetectScatter(List<FieldValues> table)
     {
         var c = new Chart { ChartType = ChartType.Scatter };
@@ -490,331 +108,6 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private Chart? DetectSideBar(List<FieldValues> table)
-    {
-        if (table.Count == 1)
-        {
-            var c = new Chart { ChartType = ChartType.SideBar };
-            var cnt = new Dictionary<object, int>(); Index(cnt, table[0]);
-            var show = cnt.OrderByDescending(kv => kv.Value).Take(20).ToList();
-            c.X = show.Select(kv => kv.Key).ToList();
-            c.Y.Add(new LabelData { Label = $"Count of \"{table[0].Field.Name}\"", Data = show.Select(kv => (object)kv.Value).ToList() });
-            return c;
-        }
-        if (table.Count == 2 && table[1].Field.Categories.Contains(Category.Numeric))
-        {
-            var c = new Chart { ChartType = ChartType.SideBar };
-            var avg = new Dictionary<object, (double sum, int cnt)>();
-            for (int i = 0; i < table[0].Values.Count; i++)
-            {
-                var val = table[1].Values[i].ValueCasted; if (val == null || table[0].Values[i].ValueCasted == null) continue;
-                if (table[0].Field.Type == typeof(List<string>)) foreach (var f in (List<string>)table[0].Values[i].ValueCasted)
-                { if (f == null) continue; avg[f] = avg.TryGetValue(f, out var n) ? (n.sum + Convert.ToDouble(val), n.cnt + 1) : (Convert.ToDouble(val), 1); }
-                else { var k = table[0].Values[i].ValueCasted; if (k != null) avg[k] = avg.TryGetValue(k, out var n) ? (n.sum + Convert.ToDouble(val), n.cnt + 1) : (Convert.ToDouble(val), 1); }
-            }
-            var data = avg.Select(kv => new { Key = kv.Key, Val = kv.Value.sum / kv.Value.cnt }).OrderByDescending(x => x.Val).Take(20).ToList();
-            c.X = data.Select(kv => kv.Key).ToList();
-            c.Y.Add(new LabelData { Label = $"Mean of \"{table[1].Field.Name}\" by \"{table[0].Field.Name}\"", Data = data.Select(kv => (object)kv.Val).ToList() });
-            return c;
-        }
-        return null;
-    }
-
-    private (double med, double IQR) GetScaleInfo(List<Value> values)
-    {
-        var vl = values.Where(v => v.ValueCasted != null).Select(v => Convert.ToDouble(v.ValueCasted)).OrderBy(x => x).ToList();
-        if (vl.Count == 0) return (0, 1);
-        double q1 = vl[Math.Max((vl.Count + 1) / 4 - 1, 0)];
-        double q3 = vl[vl.Count - 1 - (vl.Count + 1) / 4];
-        return (vl.Count % 2 != 0 ? vl[vl.Count / 2] : (vl[vl.Count / 2] + vl[vl.Count / 2 - 1]) / 2, q3 - q1);
-    }
-
-    private Chart DetectMatrix(List<FieldValues> table)
-    {
-        var c = new Chart { ChartType = ChartType.Matrix };
-        var d = new Dictionary<(object x, object y), double>();
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null) continue;
-            void Inc(object a, object? b) { if (b == null) return; d.TryGetValue((a, b), out var v); d[(a, b)] = v + 1; }
-            if (table[0].Field.Type == typeof(List<string>))
-                foreach (string? f in (List<string?>)table[0].Values[i].ValueCasted)
-                {
-                    if (f == null) continue;
-                    if (table[1].Field.Type == typeof(List<string>)) { if (table[1].Values[i].ValueCasted != null) foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted) Inc(f, f1); }
-                    else Inc(f, table[1].Values[i].ValueCasted);
-                }
-            else
-            {
-                var k = table[0].Values[i].ValueCasted;
-                if (!table[1].Field.Categories.Contains(Category.Categorical)) continue;
-                if (table[1].Field.Type == typeof(List<string>)) { if (table[1].Values[i].ValueCasted != null) foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted) Inc(k, f1); }
-                else Inc(k, table[1].Values[i].ValueCasted);
-            }
-        }
-        var xs = d.Keys.Select(k => k.x).Distinct().OrderBy(x => x).ToList();
-        var ys = d.Keys.Select(k => k.y).Distinct().OrderBy(y => y).ToList();
-        foreach (var x in xs) c.X.Add(table[0].Field.Type == typeof(bool) ? $"{table[0].Field.Name} = {x}" : x.ToString());
-        foreach (var yk in ys)
-        {
-            var row = new LabelData { Label = table[0].Field.Type == typeof(bool) ? $"{table[1].Field.Name} = {yk}" : yk.ToString() };
-            foreach (var xk in xs) row.Data.Add(d.GetValueOrDefault((xk, yk), 0));
-            c.Y.Add(row);
-        }
-        return c;
-    }
-
-    private Chart DetectMatrixMean(List<FieldValues> table)
-    {
-        var c = new Chart { ChartType = ChartType.Matrix };
-        var d2 = new Dictionary<(object x, object y), double>();
-        var d1 = new Dictionary<object, double>();
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null) continue;
-            void Inc(object a, object? b)
-            {
-                if (b == null) return;
-                d2.TryGetValue((a, b), out var v); d2[(a, b)] = v + 1;
-                d1.TryGetValue(a, out var v2); d1[a] = v2 + 1;
-            }
-            if (table[0].Field.Type == typeof(List<string>))
-                foreach (string? f in (List<string?>)table[0].Values[i].ValueCasted)
-                {
-                    if (f == null) continue;
-                    if (table[1].Field.Type == typeof(List<string>)) { if (table[1].Values[i].ValueCasted != null) foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted) Inc(f, f1); }
-                    else Inc(f, table[1].Values[i].ValueCasted);
-                }
-            else
-            {
-                var k = table[0].Values[i].ValueCasted;
-                if (!table[1].Field.Categories.Contains(Category.Categorical)) continue;
-                if (table[1].Field.Type == typeof(List<string>)) { if (table[1].Values[i].ValueCasted != null) foreach (string? f1 in (List<string?>)table[1].Values[i].ValueCasted) Inc(k, f1); }
-                else Inc(k, table[1].Values[i].ValueCasted);
-            }
-        }
-        var xs = d2.Keys.Select(k => k.x).Distinct().OrderBy(x => x).ToList();
-        var ys = d2.Keys.Select(k => k.y).Distinct().OrderBy(y => y).ToList();
-        foreach (var x in xs) c.X.Add(table[0].Field.Type == typeof(bool) ? $"{table[0].Field.Name} = {x}" : x.ToString());
-        foreach (var yk in ys)
-        {
-            var row = new LabelData { Label = table[0].Field.Type == typeof(bool) ? $"{table[1].Field.Name} = {yk}" : yk.ToString() };
-            foreach (var xk in xs) row.Data.Add(d2.GetValueOrDefault((xk, yk), 0) / d1.GetValueOrDefault(xk, 1));
-            c.Y.Add(row);
-        }
-        return c;
-    }
-
-    private Chart? DetectMixedBarChart(List<FieldValues> table)
-    {
-        var c    = new Chart { ChartType = ChartType.MixedBar };
-        var avg  = new Dictionary<object, (double sum, int cnt)>();
-        var cntId = new Dictionary<object, HashSet<object>>();
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            var val = table[1].Values[i].ValueCasted; var val2 = table[2].Values[i].ValueCasted;
-            if (val == null || val2 == null || table[0].Values[i].ValueCasted == null) continue;
-            void Add(object f) {
-                avg[f] = avg.TryGetValue(f, out var n) ? (n.sum + Convert.ToDouble(val), n.cnt + 1) : (Convert.ToDouble(val), 1);
-                if (!cntId.TryGetValue(f, out var s)) { s = new HashSet<object>(); cntId[f] = s; } s.Add(val2);
-            }
-            if (table[0].Field.Type == typeof(List<string>)) foreach (var f in (List<string>)table[0].Values[i].ValueCasted) { if (f != null) Add(f); }
-            else { var k = table[0].Values[i].ValueCasted; if (k != null) Add(k); }
-        }
-        var data = avg.Where(kv => kv.Value.cnt > 0)
-            .Select(kv => new { Key = kv.Key, Val = kv.Value.sum / kv.Value.cnt, Cnt = cntId.TryGetValue(kv.Key, out var s) ? s.Count : 0 }).ToList();
-        double mV = data.Select(d => d.Val).Average(), sdV = Math.Sqrt(data.Select(d => (d.Val - mV) * (d.Val - mV)).Average());
-        double mC = data.Select(d => (double)d.Cnt).Average(), sdC = Math.Sqrt(data.Select(d => (d.Cnt - mC) * (d.Cnt - mC)).Average());
-        data = data.OrderByDescending(d => (sdC == 0 ? 0 : (d.Cnt - mC) / sdC) + (sdV == 0 ? 0 : (d.Val - mV) / sdV)).Take(20).ToList();
-        c.X = data.Select(d => d.Key).ToList();
-        c.Y.Add(new LabelData { Label = $"Mean of \"{table[1].Field.Name}\" by \"{table[0].Field.Name}\"", ChartType = ChartType.Bar, Data = data.Select(d => (object)d.Val).ToList() });
-        c.Z.Add(new LabelData { Label = $"Count of \"{table[2].Field.Name}\" by \"{table[0].Field.Name}\"", ChartType = ChartType.Bar, Data = data.Select(d => (object)d.Cnt).ToList() });
-        return c;
-    }
-
-    private Chart? DetectMixedLineChart(List<FieldValues> table)
-    {
-        var c    = new Chart { ChartType = ChartType.MixedBar };
-        var avg1 = new Dictionary<object, (double sum, int cnt)>();
-        var avg2 = new Dictionary<object, (double sum, int cnt)>();
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            var val = table[1].Values[i].ValueCasted; var val2 = table[2].Values[i].ValueCasted;
-            if (val == null || val2 == null || table[0].Values[i].ValueCasted == null) continue;
-            void Add(object f) {
-                avg1[f] = avg1.TryGetValue(f, out var n)  ? (n.sum  + Convert.ToDouble(val),  n.cnt  + 1) : (Convert.ToDouble(val),  1);
-                avg2[f] = avg2.TryGetValue(f, out var n2) ? (n2.sum + Convert.ToDouble(val2), n2.cnt + 1) : (Convert.ToDouble(val2), 1);
-            }
-            if (table[0].Field.Type == typeof(List<string>)) foreach (var f in (List<string>)table[0].Values[i].ValueCasted) { if (f != null) Add(f); }
-            else { var k = table[0].Values[i].ValueCasted; if (k != null) Add(k); }
-        }
-        var d1 = avg1.Where(kv => kv.Value.cnt > 0).Select(kv => new { Key = kv.Key, Val = kv.Value.sum / kv.Value.cnt }).OrderBy(x => x.Key).ToList();
-        var d2 = avg2.Where(kv => kv.Value.cnt > 0).Select(kv => new { Key = kv.Key, Val = kv.Value.sum / kv.Value.cnt }).OrderBy(x => x.Key).ToList();
-        c.X = d1.Select(x => x.Key).ToList();
-        c.Y.Add(new LabelData { Label = $"Mean of \"{table[1].Field.Name}\" by \"{table[0].Field.Name}\"", ChartType = ChartType.Line, Data = d1.Select(x => (object)x.Val).ToList() });
-        c.Z.Add(new LabelData { Label = $"Mean of \"{table[2].Field.Name}\" by \"{table[0].Field.Name}\"", ChartType = ChartType.Line, Data = d2.Select(x => (object)x.Val).ToList() });
-        return c;
-    }
-
-    // ─── NEW detectors ────────────────────────────────────────────────────────
-
-    /// <summary>Line chart binned by auto-detected granularity — replaces raw-datetime DetectLineChart for DateTime fields.</summary>
-    private Chart? DetectTimeSeriesLine(List<FieldValues> table)
-    {
-        if (table.Count < 2 || table[0].Field.Type != typeof(DateTime)) return null;
-        var numericFields = table.Skip(1).Where(f => f.Field.Categories.Contains(Category.Numeric)).ToList();
-        if (numericFields.Count == 0) return null;
-
-        var gran    = DetectGranularity(table[0].Values);
-        var buckets = new SortedDictionary<DateTime, Dictionary<int, (double sum, int cnt)>>();
-
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null) continue;
-            var dt = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
-            if (!buckets.ContainsKey(dt)) buckets[dt] = new Dictionary<int, (double, int)>();
-            for (int j = 0; j < numericFields.Count; j++)
-            {
-                var val = numericFields[j].Values[i].ValueCasted;
-                if (val == null) continue;
-                if (!buckets[dt].ContainsKey(j)) buckets[dt][j] = (0, 0);
-                var cur = buckets[dt][j]; buckets[dt][j] = (cur.sum + Convert.ToDouble(val), cur.cnt + 1);
-            }
-        }
-        if (buckets.Count < 2) return null;
-
-        var chart       = new Chart { ChartType = ChartType.Line, Title = $"{numericFields[0].Field.Name} over time ({gran.ToString().ToLower()})" };
-        var sortedDates = buckets.Keys.ToList();
-        chart.X = sortedDates.Select(d => (object)FmtDate(d, gran)).ToList();
-
-        for (int j = 0; j < numericFields.Count; j++)
-        {
-            var avgs = sortedDates.Select(d => buckets[d].TryGetValue(j, out var sc) && sc.cnt > 0 ? (object)Math.Round(sc.sum / sc.cnt, 4) : 0.0).ToList();
-            chart.Y.Add(new LabelData { Label = $"Avg {numericFields[j].Field.Name}", Data = avgs });
-        }
-        return chart;
-    }
-
-    /// <summary>
-    /// Enhanced time series: auto-bins dates to day/week/month/year, and overlays
-    /// a centered moving average so trends emerge from noisy data immediately.
-    /// </summary>
-    private Chart? DetectTimeSeriesEnhanced(List<FieldValues> table)
-    {
-        if (table.Count < 2 || table[0].Field.Type != typeof(DateTime)) return null;
-        var numericFields = table.Skip(1).Where(f => f.Field.Categories.Contains(Category.Numeric)).ToList();
-        if (numericFields.Count == 0) return null;
-
-        var gran    = DetectGranularity(table[0].Values);
-        var buckets = new SortedDictionary<DateTime, Dictionary<int, (double sum, int cnt)>>();
-
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null) continue;
-            var dt = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
-            if (!buckets.ContainsKey(dt)) buckets[dt] = new Dictionary<int, (double, int)>();
-            for (int j = 0; j < numericFields.Count; j++)
-            {
-                var val = numericFields[j].Values[i].ValueCasted;
-                if (val == null) continue;
-                if (!buckets[dt].ContainsKey(j)) buckets[dt][j] = (0, 0);
-                var cur = buckets[dt][j]; buckets[dt][j] = (cur.sum + Convert.ToDouble(val), cur.cnt + 1);
-            }
-        }
-        if (buckets.Count < 3) return null;
-
-        var chart = new Chart { ChartType = ChartType.MixedBar, Title = $"{numericFields[0].Field.Name} over time ({gran.ToString().ToLower()})" };
-        var sortedDates = buckets.Keys.ToList();
-        chart.X = sortedDates.Select(d => (object)FmtDate(d, gran)).ToList();
-
-        for (int j = 0; j < numericFields.Count; j++)
-        {
-            var avgs = sortedDates.Select(d => buckets[d].TryGetValue(j, out var sc) && sc.cnt > 0 ? sc.sum / sc.cnt : 0.0).ToList();
-            chart.Y.Add(new LabelData { Label = $"Avg {numericFields[j].Field.Name}", ChartType = ChartType.Bar, Data = avgs.Cast<object>().ToList() });
-
-            int window = Math.Clamp(sortedDates.Count / 6, 3, 14);
-            if (sortedDates.Count >= window * 2)
-            {
-                var ma = MovingAverage(avgs, window);
-                chart.Y.Add(new LabelData
-                {
-                    Label     = $"{window}-pt moving avg",
-                    ChartType = ChartType.Line,
-                    Data      = ma.Select(v => v.HasValue ? (object)Math.Round(v.Value, 4) : null!).ToList()
-                });
-            }
-        }
-        return chart;
-    }
-
-    /// <summary>Running cumulative total over time — reveals acceleration and plateaus.</summary>
-    private Chart? DetectCumulativeSum(List<FieldValues> table)
-    {
-        if (table.Count < 2 || table[0].Field.Type != typeof(DateTime)) return null;
-        if (!table[1].Field.Categories.Contains(Category.Numeric)) return null;
-
-        var gran    = DetectGranularity(table[0].Values);
-        var buckets = new SortedDictionary<DateTime, double>();
-
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null || table[1].Values[i].ValueCasted == null) continue;
-            var dt  = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
-            if (!buckets.ContainsKey(dt)) buckets[dt] = 0;
-            buckets[dt] += Convert.ToDouble(table[1].Values[i].ValueCasted);
-        }
-        if (buckets.Count < 4) return null;
-
-        var chart = new Chart { ChartType = ChartType.Line, Title = $"Cumulative {table[1].Field.Name}" };
-        chart.X = buckets.Keys.Select(d => (object)FmtDate(d, gran)).ToList();
-        double running = 0;
-        chart.Y.Add(new LabelData
-        {
-            Label = $"Cumulative {table[1].Field.Name}",
-            Data  = buckets.Values.Select(v => { running += v; return (object)Math.Round(running, 4); }).ToList()
-        });
-        return chart;
-    }
-
-    /// <summary>Period-over-period % change — instantly surfaces momentum shifts.</summary>
-    private Chart? DetectGrowthRate(List<FieldValues> table)
-    {
-        if (table.Count < 2 || table[0].Field.Type != typeof(DateTime)) return null;
-        if (!table[1].Field.Categories.Contains(Category.Numeric)) return null;
-
-        var gran    = DetectGranularity(table[0].Values);
-        var buckets = new SortedDictionary<DateTime, (double sum, int cnt)>();
-
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null || table[1].Values[i].ValueCasted == null) continue;
-            var dt  = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
-            if (!buckets.ContainsKey(dt)) buckets[dt] = (0, 0);
-            var cur = buckets[dt]; buckets[dt] = (cur.sum + Convert.ToDouble(table[1].Values[i].ValueCasted), cur.cnt + 1);
-        }
-        if (buckets.Count < 4) return null;
-
-        var periods = buckets.Select(kv => kv.Value.cnt > 0 ? kv.Value.sum / kv.Value.cnt : 0.0).ToList();
-        var labels  = buckets.Keys.Select(d => FmtDate(d, gran)).ToList();
-        double base0 = periods[0];
-
-        var pctChange = new List<object>();
-        for (int i = 1; i < periods.Count; i++)
-        {
-            double prev = periods[i - 1];
-            pctChange.Add(Math.Abs(prev) < 1e-10 ? null! : (object)Math.Round((periods[i] - prev) / Math.Abs(prev) * 100, 2));
-        }
-        var cumChange = periods.Skip(1)
-            .Select(v => Math.Abs(base0) < 1e-10 ? null! : (object)Math.Round((v - base0) / Math.Abs(base0) * 100, 2))
-            .ToList();
-
-        var chart = new Chart { ChartType = ChartType.MixedBar, Title = $"Growth rate: {table[1].Field.Name} ({gran.ToString().ToLower()} over {gran.ToString().ToLower()})" };
-        chart.X = labels.Skip(1).Cast<object>().ToList();
-        chart.Y.Add(new LabelData { Label = "% change (period)", ChartType = ChartType.Bar,  Data = pctChange });
-        chart.Y.Add(new LabelData { Label = "Cumulative % from start", ChartType = ChartType.Line, Data = cumChange });
-        return chart;
-    }
-
     /// <summary>Scatter + OLS regression line with R² — see correlation at a glance.</summary>
     private Chart? DetectScatterRegression(List<FieldValues> table)
     {
@@ -841,149 +134,6 @@ public class AutoChartService : IAutoChartService
         var lineDs = new LabelData { Label = $"Trend: y = {slope:F3}x + {intercept:F3}" };
         for (int k = 0; k <= 12; k++) { double xk = minX + (maxX - minX) * k / 12.0; lineDs.Data.Add(new { x = Math.Round(xk, 6), y = Math.Round(slope * xk + intercept, 6) }); }
         chart.Y.Add(lineDs);
-        return chart;
-    }
-
-    /// <summary>Pareto bar + cumulative-% line — instant 80/20 view.</summary>
-    private Chart? DetectParetoChart(List<FieldValues> table)
-    {
-        if (table.Count != 1 || !table[0].Field.Categories.Contains(Category.Categorical)) return null;
-        var cnt = new Dictionary<object, int>(); Index(cnt, table[0]);
-        if (cnt.Count < 3 || cnt.Count > 60) return null;
-
-        var sorted = cnt.OrderByDescending(kv => kv.Value).ToList();
-        double total = sorted.Sum(kv => kv.Value);
-
-        var chart = new Chart { ChartType = ChartType.MixedBar, Title = $"Pareto: {table[0].Field.Name}" };
-        chart.X = sorted.Select(kv => (object)kv.Key).ToList();
-        chart.Y.Add(new LabelData { Label = $"Count of {table[0].Field.Name}", ChartType = ChartType.Bar, Data = sorted.Select(kv => (object)kv.Value).ToList() });
-
-        double running = 0;
-        var cumDs = new LabelData { Label = "Cumulative %", ChartType = ChartType.Line };
-        foreach (var kv in sorted) { running += kv.Value; cumDs.Data.Add(Math.Round(running / total * 100, 1)); }
-        chart.Z.Add(cumDs);
-        return chart;
-    }
-
-    /// <summary>Count of records per time bucket — the right chart for a lone DateTime column.</summary>
-    private Chart? DetectDateTimeFrequency(List<FieldValues> table)
-    {
-        if (table.Count != 1 || table[0].Field.Type != typeof(DateTime)) return null;
-        var gran    = DetectGranularity(table[0].Values);
-        var buckets = new SortedDictionary<DateTime, int>();
-        foreach (var v in table[0].Values)
-        {
-            if (v.ValueCasted == null) continue;
-            var dt = TruncToGranularity((DateTime)v.ValueCasted!, gran);
-            buckets[dt] = buckets.TryGetValue(dt, out var n) ? n + 1 : 1;
-        }
-        if (buckets.Count < 2) return null;
-        var chart = new Chart { ChartType = ChartType.Bar, Title = $"{table[0].Field.Name} frequency ({gran.ToString().ToLower()})" };
-        chart.X = buckets.Keys.Select(d => (object)FmtDate(d, gran)).ToList();
-        chart.Y.Add(new LabelData { Label = $"Count of {table[0].Field.Name}", Data = buckets.Values.Select(v => (object)v).ToList() });
-        return chart;
-    }
-
-    /// <summary>DateTime + categorical + numeric: bins dates by granularity, one line per category value showing mean(numeric).</summary>
-    private Chart? DetectTimeSeriesCategoricalNumeric(List<FieldValues> table)
-    {
-        if (table.Count < 3 || table[0].Field.Type != typeof(DateTime)) return null;
-        if (!table[1].Field.Categories.Contains(Category.Categorical) || table[1].Field.Type == typeof(DateTime)) return null;
-        if (!table[2].Field.Categories.Contains(Category.Numeric)) return null;
-
-        var gran    = DetectGranularity(table[0].Values);
-        var buckets = new SortedDictionary<DateTime, Dictionary<string, (double sum, int cnt)>>();
-        var cats    = new HashSet<string>();
-
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            var dtVal  = table[0].Values[i].ValueCasted;
-            var catVal = table[1].Values[i].ValueCasted;
-            var numVal = table[2].Values[i].ValueCasted;
-            if (dtVal == null || catVal == null || numVal == null) continue;
-
-            var dt = TruncToGranularity((DateTime)dtVal, gran);
-            if (!buckets.ContainsKey(dt)) buckets[dt] = new Dictionary<string, (double, int)>();
-
-            IEnumerable<string?> catValues = table[1].Field.Type == typeof(List<string>)
-                ? (List<string>)catVal
-                : new[] { catVal.ToString() };
-
-            foreach (var cat in catValues)
-            {
-                if (cat == null) continue;
-                cats.Add(cat);
-                if (!buckets[dt].ContainsKey(cat)) buckets[dt][cat] = (0, 0);
-                var cur = buckets[dt][cat];
-                buckets[dt][cat] = (cur.sum + Convert.ToDouble(numVal), cur.cnt + 1);
-            }
-        }
-
-        if (buckets.Count < 2) return null;
-        var sortedCats = cats.OrderBy(c => c).ToList();
-        if (sortedCats.Count > 20) return null;
-
-        var sortedDates = buckets.Keys.ToList();
-        var chart = new Chart
-        {
-            ChartType = ChartType.Line,
-            Title     = $"Avg {table[2].Field.Name} by {table[1].Field.Name} over time ({gran.ToString().ToLower()})"
-        };
-        chart.X = sortedDates.Select(d => (object)FmtDate(d, gran)).ToList();
-        foreach (var cat in sortedCats)
-        {
-            var data = sortedDates.Select(d =>
-                buckets[d].TryGetValue(cat, out var sc) && sc.cnt > 0
-                    ? (object)Math.Round(sc.sum / sc.cnt, 4)
-                    : 0.0).ToList();
-            chart.Y.Add(new LabelData { Label = cat, Data = data });
-        }
-        return chart;
-    }
-
-    /// <summary>DateTime + categorical string: bins dates by granularity, one line per category value.</summary>
-    private Chart? DetectTimeSeriesCategorical(List<FieldValues> table)
-    {
-        if (table.Count < 2 || table[0].Field.Type != typeof(DateTime)) return null;
-        if (!table[1].Field.Categories.Contains(Category.Categorical) || table[1].Field.Type == typeof(DateTime)) return null;
-
-        var gran    = DetectGranularity(table[0].Values);
-        var buckets = new SortedDictionary<DateTime, Dictionary<string, int>>();
-        var cats    = new HashSet<string>();
-
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            if (table[0].Values[i].ValueCasted == null || table[1].Values[i].ValueCasted == null) continue;
-            var dt = TruncToGranularity((DateTime)table[0].Values[i].ValueCasted!, gran);
-            if (!buckets.ContainsKey(dt)) buckets[dt] = new Dictionary<string, int>();
-            IEnumerable<string?> catValues = table[1].Field.Type == typeof(List<string>)
-                ? (List<string>)table[1].Values[i].ValueCasted!
-                : new[] { table[1].Values[i].ValueCasted!.ToString() };
-            foreach (var cat in catValues)
-            {
-                if (cat == null) continue;
-                cats.Add(cat);
-                buckets[dt][cat] = buckets[dt].TryGetValue(cat, out var n) ? n + 1 : 1;
-            }
-        }
-
-        if (buckets.Count < 2) return null;
-        var sortedCats = cats.OrderBy(c => c).ToList();
-        if (sortedCats.Count > 20) return null;
-
-        var sortedDates = buckets.Keys.ToList();
-        var chart = new Chart
-        {
-            ChartType = ChartType.Line,
-            Title     = $"{table[1].Field.Name} by {table[0].Field.Name} ({gran.ToString().ToLower()})"
-        };
-        chart.X = sortedDates.Select(d => (object)FmtDate(d, gran)).ToList();
-        foreach (var cat in sortedCats)
-            chart.Y.Add(new LabelData
-            {
-                Label = cat,
-                Data  = sortedDates.Select(d => (object)buckets[d].GetValueOrDefault(cat, 0)).ToList()
-            });
         return chart;
     }
 
@@ -1041,86 +191,6 @@ public class AutoChartService : IAutoChartService
         return chart;
     }
 
-    /// <summary>Bar sorted by descending mean value — top 25 only. "What matters most" view.</summary>
-    private Chart? DetectRankedBar(List<FieldValues> table)
-    {
-        if (table.Count < 2 || !table[0].Field.Categories.Contains(Category.Categorical)) return null;
-        if (!table[1].Field.Categories.Contains(Category.Numeric) || table[0].Field.Type == typeof(DateTime)) return null;
-
-        var avg = new Dictionary<object, (double sum, int cnt)>();
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            var key = table[0].Values[i].ValueCasted; var val = table[1].Values[i].ValueCasted;
-            if (key == null || val == null) continue;
-            void Add(object f) { avg[f] = avg.TryGetValue(f, out var n) ? (n.sum + Convert.ToDouble(val), n.cnt + 1) : (Convert.ToDouble(val), 1); }
-            if (table[0].Field.Type == typeof(List<string>)) foreach (var f in (List<string>)key) { if (f != null) Add(f); }
-            else Add(key);
-        }
-        if (avg.Count < 3) return null;
-
-        var sorted = avg.Where(kv => kv.Value.cnt > 0).Select(kv => new { Key = kv.Key, Val = kv.Value.sum / kv.Value.cnt }).OrderByDescending(x => x.Val).Take(25).ToList();
-        var chart = new Chart { ChartType = ChartType.Bar, Title = $"Ranked: {table[1].Field.Name} by {table[0].Field.Name}" };
-        chart.X = sorted.Select(x => (object)x.Key).ToList();
-        chart.Y.Add(new LabelData { Label = $"Mean {table[1].Field.Name}", Data = sorted.Select(x => (object)Math.Round(x.Val, 4)).ToList() });
-        return chart;
-    }
-
-    /// <summary>
-    /// Five-number summary scatter (Min, Q1, Median, Q3, Max) per category.
-    /// No plugin required — workspace.js renders with cross/dash point styles.
-    /// </summary>
-    private Chart? DetectBoxPlot(List<FieldValues> table)
-    {
-        if (table.Count < 2 || !table[0].Field.Categories.Contains(Category.Categorical)) return null;
-        if (!table[1].Field.Categories.Contains(Category.Numeric) || table[0].Field.Type == typeof(DateTime)) return null;
-
-        var groups = new Dictionary<object, List<double>>();
-        for (int i = 0; i < table[0].Values.Count; i++)
-        {
-            var key = table[0].Values[i].ValueCasted; var val = table[1].Values[i].ValueCasted;
-            if (key == null || val == null) continue;
-            void Add(object f) { if (!groups.TryGetValue(f, out var lst)) { lst = new List<double>(); groups[f] = lst; } lst.Add(Convert.ToDouble(val)); }
-            if (table[0].Field.Type == typeof(List<string>)) foreach (var f in (List<string>)key) { if (f != null) Add(f); } else Add(key);
-        }
-        if (groups.Count < 2 || groups.Count > 30) return null;
-
-        static double Q(List<double> s, double q) { double pos = q * (s.Count - 1); int lo = (int)pos, hi = Math.Min(lo + 1, s.Count - 1); return s[lo] + (pos - lo) * (s[hi] - s[lo]); }
-
-        var cats = groups.Keys.OrderBy(k => k).ToList();
-
-        // Build summary as named tuples — avoids Func<dynamic,double> DLR dispatch
-        var sum = cats.Select(cat => {
-            var s = groups[cat].OrderBy(v => v).ToList();
-            return (
-                Cat:    cat,
-                Min:    s.First(),
-                Q1:     Q(s, 0.25),
-                Med:    Q(s, 0.5),
-                Q3:     Q(s, 0.75),
-                Max:    s.Last()
-            );
-        }).ToList();
-
-        var chart = new Chart { ChartType = ChartType.Scatter, Title = $"Distribution: {table[1].Field.Name} by {table[0].Field.Name}" };
-        chart.X = cats.Cast<object>().ToList();
-
-        // Emit each statistic as a named dataset — workspace.js detects "Median" label at index 2
-        void AddStat(string name, Func<(object Cat, double Min, double Q1, double Med, double Q3, double Max), double> get)
-        {
-            var ds = new LabelData { Label = name };
-            foreach (var item in sum) ds.Data.Add(new { x = item.Cat.ToString(), y = Math.Round(get(item), 4) });
-            chart.Y.Add(ds);
-        }
-
-        AddStat("Min",    s => s.Min);
-        AddStat("Q1",     s => s.Q1);
-        AddStat("Median", s => s.Med);
-        AddStat("Q3",     s => s.Q3);
-        AddStat("Max",    s => s.Max);
-
-        return chart;
-    }
-
     // ─── Public API ───────────────────────────────────────────────────────────
 
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
@@ -1130,215 +200,10 @@ public class AutoChartService : IAutoChartService
         => await CreateChartAsync(csvfileid, fieldindexes);
 
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters, CancellationToken cancellationToken = default)
-    {
-        var csvFile = _repo.GetFile(csvfileid).GetAwaiter().GetResult();
-        var table   = _repo.GetWithFilter(csvFile, fieldindexes, filters).GetAwaiter().GetResult();
-        return CreateChart(table);
-    }
+        => DetectChartWithFiltersAsync(csvfileid, fieldindexes, filters, cancellationToken).GetAwaiter().GetResult();
 
-    // ─── CreateChart — updated wiring ─────────────────────────────────────────
-
-    private List<Chart> CreateChart(Table tempTable)
-    {
-        var res         = new List<Chart?>();
-        var identifier  = new List<FieldValues>();
-        var categorical = new List<FieldValues>();
-        var numeric     = new List<List<FieldValues>>();
-        var numericList = new List<FieldValues>();
-        var scaleInfo   = new List<(double med, double IQR)>();
-
-        foreach (var fv in tempTable.Columns)
-        {
-            if (fv.Field.Categories.Contains(Category.Identifier))  identifier.Add(fv);
-            if (fv.Field.Categories.Contains(Category.Categorical))  categorical.Add(fv);
-            if (fv.Field.Categories.Contains(Category.Numeric))
-            {
-                numericList.Add(fv);
-                var fi = GetScaleInfo(fv.Values);
-                bool found = false;
-                for (int i = 0; i < numeric.Count; i++)
-                {
-                    var ci = scaleInfo[i];
-                    double maxIQR = Math.Max(ci.IQR, fi.IQR);
-                    double minIQR = Math.Min(ci.IQR, fi.IQR);
-                    bool sameScale = maxIQR < 1e-10
-                        ? Math.Abs(ci.med - fi.med) < 1e-10
-                        : Math.Abs(ci.med - fi.med) / maxIQR <= 1 && maxIQR / minIQR <= 2;
-                    if (sameScale)
-                    {
-                        found = true; numeric[i].Add(fv);
-                        var nl = new List<Value>(); foreach (var fvi in numeric[i]) foreach (var v in fvi.Values) nl.Add(v);
-                        scaleInfo[i] = GetScaleInfo(nl);
-                    }
-                }
-                if (!found) { numeric.Add(new List<FieldValues> { fv }); scaleInfo.Add(fi); }
-            }
-        }
-
-        var ChartIndex    = new Dictionary<List<FieldValues>, int>();
-        int curChartIndex = 0;
-        void Reg(List<FieldValues> ct) { if (!ChartIndex.ContainsKey(ct)) ChartIndex[ct] = curChartIndex++; }
-        void Add(Chart? ch, List<FieldValues> ct) { if (ch != null) { ch.PanelIndex = ChartIndex.GetValueOrDefault(ct, -1); res.Add(ch); } }
-
-        // ── 3-field: cat × cat × numeric ─────────────────────────────────────
-        for (int ci = 0; ci < categorical.Count; ci++)
-        {
-            for (int cj = ci + 1; cj < categorical.Count; cj++)
-            {
-                foreach (var ng in numeric) foreach (var nf in ng)
-                {
-                    if (nf == categorical[ci] || nf == categorical[cj]) continue;
-                    bool noDateTime = categorical[ci].Field.Type != typeof(DateTime) && categorical[cj].Field.Type != typeof(DateTime);
-                    if (noDateTime && CountDistinctValues(categorical[ci]) <= 10 && CountDistinctValues(categorical[cj]) <= 10)
-                    {
-                        var ct = new List<FieldValues> { categorical[ci], categorical[cj], nf }; Reg(ct);
-                        Add(DetectMatrix(ct), ct);
-                        Add(DetectLineChart(ct), ct);
-                        Add(DetectBarChart(ct), ct);
-                    }
-                    else
-                    {
-                        var ct = new List<FieldValues>
-                        {
-                            categorical[ci].Field.Type == typeof(DateTime) ? categorical[ci] : categorical[cj],
-                            categorical[ci].Field.Type == typeof(DateTime) ? categorical[cj] : categorical[ci],
-                            nf
-                        }; Reg(ct);
-                        if (ct[0].Field.Type == typeof(DateTime))
-                            Add(DetectTimeSeriesCategoricalNumeric(ct), ct);
-                        else
-                        {
-                            Add(DetectLineChart(ct), ct);
-                            Add(DetectBarChart(ct), ct);
-                        }
-
-                        if (ct[0].Field.Type == typeof(DateTime)) Add(DetectTimeSeriesEnhanced(ct), ct);
-                    }
-                }
-            }
-
-            // ── 3-field: cat × numeric × identifier ──────────────────────────
-            foreach (var nf in numericList) { if (categorical[ci] == nf) continue;
-                foreach (var id in identifier) { if (id == nf || id == categorical[ci]) continue;
-                    var ct = new List<FieldValues> { categorical[ci], nf, id }; Reg(ct); Add(DetectMixedBarChart(ct), ct); } }
-
-            // ── 3-field: cat × numeric × numeric ─────────────────────────────
-            for (int ni = 0; ni < numericList.Count; ni++) { if (categorical[ci] == numericList[ni]) continue;
-                for (int nj = ni + 1; nj < numericList.Count; nj++) { if (categorical[ci] == numericList[nj]) continue;
-                    var ct = new List<FieldValues> { categorical[ci], numericList[ni], numericList[nj] }; Reg(ct);
-                    Add(DetectMixedLineChart(ct), ct); Add(DetectScatter(ct), ct); } }
-        }
-
-        // ── 2-field: cat × cat, cat × numeric ────────────────────────────────
-        for (int ci = 0; ci < categorical.Count; ci++)
-        {
-            for (int cj = ci + 1; cj < categorical.Count; cj++)
-            {
-                if (categorical[ci].Field.Type == typeof(DateTime))
-                {
-                    if (categorical[cj].Field.Type != typeof(DateTime))
-                    { var ct = new List<FieldValues> { categorical[ci], categorical[cj] }; Reg(ct); Add(DetectTimeSeriesCategorical(ct), ct); }
-                }
-                else if (categorical[cj].Field.Type == typeof(DateTime))
-                { var ct = new List<FieldValues> { categorical[cj], categorical[ci] }; Reg(ct); Add(DetectTimeSeriesCategorical(ct), ct); }
-                else if (CountDistinctValues(categorical[ci]) <= 20 && CountDistinctValues(categorical[cj]) <= 20)
-                { var ct = new List<FieldValues> { categorical[cj], categorical[ci] }; Reg(ct); Add(DetectMatrix(ct), ct); Add(DetectMatrixMean(ct), ct); }
-                else
-                { var ct = new List<FieldValues> { categorical[ci], categorical[cj] }; Reg(ct); Add(DetectLineChart(ct), ct); }
-            }
-
-            foreach (var ng in numeric) foreach (var nf in ng)
-            {
-                if (nf == categorical[ci]) continue;
-                var ct = new List<FieldValues> { categorical[ci], nf }; Reg(ct);
-
-                if (categorical[ci].Field.Type == typeof(DateTime) || categorical[ci].Field.Categories.Contains(Category.Numeric))
-                {
-                    if (categorical[ci].Field.Type == typeof(DateTime))
-                        Add(DetectTimeSeriesLine(ct), ct);    // Line chart with granularity
-                    else
-                        Add(DetectLineChart(ct), ct);         // Numeric categorical: plain line
-                    Add(DetectTimeSeriesEnhanced(ct), ct);
-                    Add(DetectCumulativeSum(ct), ct);
-                    Add(DetectGrowthRate(ct), ct);
-                }
-                else
-                {
-                    Add(CountDistinctValues(categorical[ci]) <= 20 ? DetectBarChart(ct) : DetectSideBar(ct), ct);
-                    Add(DetectRankedBar(ct), ct);              // NEW
-                    Add(DetectBoxPlot(ct), ct);                // NEW
-                }
-            }
-
-            foreach (var ng in numeric)
-            {
-                var ss = ng.Where(nf => nf != categorical[ci]).ToList();
-                if (ss.Count <= 1) continue;
-                ss.Insert(0, categorical[ci]); Reg(ss); Add(DetectBarChart(ss), ss);
-            }
-        }
-
-        // ── 2-field: numeric × numeric ────────────────────────────────────────
-        for (int ni = 0; ni < numericList.Count; ni++)
-        for (int nj = ni + 1; nj < numericList.Count; nj++)
-        {
-            var ct = new List<FieldValues> { numericList[ni], numericList[nj] }; Reg(ct);
-            Add(DetectScatter(ct), ct);
-            Add(DetectScatterRegression(ct), ct);              // NEW
-        }
-
-        // ── identifier × numeric ──────────────────────────────────────────────
-        foreach (var id in identifier) foreach (var nf in numericList) { if (id == nf) continue;
-            var ct = new List<FieldValues> { id, nf }; Reg(ct); Add(DetectSideBar(ct), ct); }
-
-        // ── single categorical ────────────────────────────────────────────────
-        foreach (var cat in categorical)
-        {
-            var ct = new List<FieldValues> { cat }; Reg(ct);
-            if (cat.Field.Type == typeof(DateTime))
-            {
-                Add(DetectDateTimeFrequency(ct), ct);
-            }
-            else
-            {
-                var r = CountDistinctValues(cat) <= 20 ? DetectPieChart(ct) : DetectSideBar(ct);
-                if (r != null) { r.PanelIndex = ChartIndex[ct]; res.Add(r); }
-                int d = CountDistinctValues(cat);
-                if (d is >= 3 and <= 60) Add(DetectParetoChart(ct), ct);
-            }
-        }
-
-        // ── single identifier ─────────────────────────────────────────────────
-        foreach (var id in identifier)
-        { var ct = new List<FieldValues> { id }; Reg(ct); Add(DetectSideBar(ct), ct); }
-
-        // ── single numeric (histogram) ────────────────────────────────────────
-        foreach (var ng in numeric) foreach (var nf in ng)
-        {
-            if (nf.Field.Categories.Contains(Category.Identifier)) continue;
-            var ct = new List<FieldValues> { nf }; Reg(ct); Add(DetectHistogram(ct), ct);
-        }
-
-        // ── NEW: Correlation matrix (3+ numerics) ─────────────────────────────
-        var pureNum = numericList.Where(f => !f.Field.Categories.Contains(Category.Identifier)).ToList();
-        if (pureNum.Count >= 3) { var ct = new List<FieldValues>(pureNum); Reg(ct); Add(DetectCorrelationMatrix(pureNum), ct); }
-
-        // ── NEW: Bubble chart (every triple of numerics) ──────────────────────
-        if (pureNum.Count >= 3)
-        {
-            for (int bi = 0; bi < pureNum.Count; bi++)
-            for (int bj = bi + 1; bj < pureNum.Count; bj++)
-            for (int bk = bj + 1; bk < pureNum.Count; bk++)
-            {
-                var bubKey = new List<FieldValues> { pureNum[bi], pureNum[bj], pureNum[bk] };
-                var scKey  = new List<FieldValues> { pureNum[bi], pureNum[bj] };
-                if (!ChartIndex.ContainsKey(bubKey)) ChartIndex[bubKey] = ChartIndex.GetValueOrDefault(scKey, curChartIndex++);
-                Add(DetectBubbleChart(bubKey), bubKey);
-            }
-        }
-
-        return res.Where(c => c != null).Select(c => c!).ToList();
-    }
+    private async Task<List<Chart>> DetectChartWithFiltersAsync(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters, CancellationToken cancellationToken = default)
+        => await CreateChartAsync(csvfileid, fieldindexes, filters);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // SQL-aggregate async path
@@ -1355,17 +220,17 @@ public class AutoChartService : IAutoChartService
         return TimeGranularity.Year;
     }
 
-    private async Task<TimeGranularity> GetGranularityAsync(Field dateField)
+    private async Task<TimeGranularity> GetGranularityAsync(Field dateField, int[]? rowFilter = null)
     {
-        var (min, max) = await _repo.GetDateRange(dateField);
+        var (min, max) = await _repo.GetDateRange(dateField, rowFilter);
         return DetectGranularity(min, max);
     }
 
     // ── Count-based ───────────────────────────────────────────────────────────
 
-    private async Task<Chart?> DetectPieChartAsync(Field groupField)
+    private async Task<Chart?> DetectPieChartAsync(Field groupField, int[]? rowFilter = null)
     {
-        var rows = await _repo.CountByGroup(groupField);
+        var rows = await _repo.CountByGroup(groupField, rowFilter);
         if (rows.Count == 0) return null;
         var c = new Chart { ChartType = ChartType.Pie };
         c.X = rows.Select(r => r.Key).ToList();
@@ -1373,16 +238,16 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectPolarAreaAsync(Field groupField)
+    private async Task<Chart?> DetectPolarAreaAsync(Field groupField, int[]? rowFilter = null)
     {
-        var c = await DetectPieChartAsync(groupField);
+        var c = await DetectPieChartAsync(groupField, rowFilter);
         if (c != null) c.ChartType = ChartType.PolarArea;
         return c;
     }
 
-    private async Task<Chart?> DetectSideBarAsync(Field groupField)
+    private async Task<Chart?> DetectSideBarAsync(Field groupField, int[]? rowFilter = null)
     {
-        var rows = await _repo.CountByGroup(groupField);
+        var rows = await _repo.CountByGroup(groupField, rowFilter);
         if (rows.Count == 0) return null;
         var top = rows.OrderByDescending(r => r.Count).Take(20).ToList();
         var c = new Chart { ChartType = ChartType.SideBar };
@@ -1391,9 +256,9 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectSideBarAsync(Field catField, Field numericField)
+    private async Task<Chart?> DetectSideBarAsync(Field catField, Field numericField, int[]? rowFilter = null)
     {
-        var rows = await _repo.AverageByGroup(numericField, catField);
+        var rows = await _repo.AverageByGroup(numericField, catField, rowFilter);
         if (rows.Count == 0) return null;
         var top = rows.OrderByDescending(r => r.Average).Take(20).ToList();
         var c = new Chart { ChartType = ChartType.SideBar };
@@ -1402,9 +267,9 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectParetoChartAsync(Field catField)
+    private async Task<Chart?> DetectParetoChartAsync(Field catField, int[]? rowFilter = null)
     {
-        var rows = await _repo.CountByGroup(catField);
+        var rows = await _repo.CountByGroup(catField, rowFilter);
         if (rows.Count < 3 || rows.Count > 60) return null;
         var sorted = rows.OrderByDescending(r => r.Count).ToList();
         double total = sorted.Sum(r => r.Count);
@@ -1420,9 +285,9 @@ public class AutoChartService : IAutoChartService
 
     // ── Average-based ─────────────────────────────────────────────────────────
 
-    private async Task<Chart?> DetectBarChartAsync(Field catField, Field numericField)
+    private async Task<Chart?> DetectBarChartAsync(Field catField, Field numericField, int[]? rowFilter = null)
     {
-        var rows = await _repo.AverageByGroup(numericField, catField);
+        var rows = await _repo.AverageByGroup(numericField, catField, rowFilter);
         if (rows.Count == 0) return null;
         var ordered = rows.OrderBy(r => r.Key.ToString()).ToList();
         var c = new Chart { ChartType = ChartType.Bar };
@@ -1431,9 +296,9 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectGroupedBarAsync(Field numericField, Field catFieldA, Field catFieldB)
+    private async Task<Chart?> DetectGroupedBarAsync(Field numericField, Field catFieldA, Field catFieldB, int[]? rowFilter = null)
     {
-        var rows = await _repo.AverageByGroup(numericField, catFieldA, catFieldB);
+        var rows = await _repo.AverageByGroup(numericField, catFieldA, catFieldB, rowFilter);
         if (rows.Count == 0) return null;
         var xs = rows.Select(r => r.KeyA).Distinct().OrderBy(k => k.ToString()).ToList();
         var ys = rows.Select(r => r.KeyB).Distinct().OrderBy(k => k.ToString()).ToList();
@@ -1449,9 +314,9 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectRankedBarAsync(Field catField, Field numericField)
+    private async Task<Chart?> DetectRankedBarAsync(Field catField, Field numericField, int[]? rowFilter = null)
     {
-        var rows = await _repo.AverageByGroup(numericField, catField);
+        var rows = await _repo.AverageByGroup(numericField, catField, rowFilter);
         if (rows.Count < 3) return null;
         var top = rows.OrderByDescending(r => r.Average).Take(25).ToList();
         var c = new Chart { ChartType = ChartType.Bar, Title = $"Ranked: {numericField.Name} by {catField.Name}" };
@@ -1460,12 +325,10 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectMixedLineChartAsync(Field catField, Field numericField1, Field numericField2)
+    private async Task<Chart?> DetectMixedLineChartAsync(Field catField, Field numericField1, Field numericField2, int[]? rowFilter = null)
     {
-        var t1 = _repo.AverageByGroup(numericField1, catField);
-        var t2 = _repo.AverageByGroup(numericField2, catField);
-        await Task.WhenAll(t1, t2);
-        var d1 = t1.Result; var d2 = t2.Result;
+        var d1 = await _repo.AverageByGroup(numericField1, catField, rowFilter);
+        var d2 = await _repo.AverageByGroup(numericField2, catField, rowFilter);
         if (d1.Count == 0) return null;
         var ordered1 = d1.OrderBy(r => r.Key.ToString()).ToList();
         var ordered2 = d2.ToDictionary(r => r.Key.ToString()!, r => r.Average);
@@ -1476,16 +339,14 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectMixedBarChartAsync(Field catField, Field numericField, Field identifierField)
+    private async Task<Chart?> DetectMixedBarChartAsync(Field catField, Field numericField, Field identifierField, int[]? rowFilter = null)
     {
-        var tAvg  = _repo.AverageByGroup(numericField, catField);
-        var tCDist = _repo.CountDistinctByGroup(identifierField, catField);
-        await Task.WhenAll(tAvg, tCDist);
-        var avgs  = tAvg.Result; var cdist = tCDist.Result;
+        var avgs  = await _repo.AverageByGroup(numericField, catField, rowFilter);
+        var cdist = await _repo.CountDistinctByGroup(identifierField, catField, rowFilter);
         if (avgs.Count == 0) return null;
-        var avgMap  = avgs.ToDictionary(r => r.Key.ToString()!, r => r.Average);
-        var cntMap  = cdist.ToDictionary(r => r.Key.ToString()!, r => r.CountDistinct);
-        var keys    = avgMap.Keys.ToList();
+        var avgMap = avgs.ToDictionary(r => r.Key.ToString()!, r => r.Average);
+        var cntMap = cdist.ToDictionary(r => r.Key.ToString()!, r => r.CountDistinct);
+        var keys   = avgMap.Keys.ToList();
         double mV = avgMap.Values.Average(), sdV = Math.Sqrt(avgMap.Values.Select(v => (v - mV) * (v - mV)).Average());
         double mC = cntMap.Values.Select(v => (double)v).Average(), sdC = Math.Sqrt(cntMap.Values.Select(v => ((double)v - mC) * ((double)v - mC)).Average());
         var top = keys
@@ -1501,9 +362,9 @@ public class AutoChartService : IAutoChartService
 
     // ── Matrix-based ──────────────────────────────────────────────────────────
 
-    private async Task<Chart?> DetectMatrixAsync(Field catFieldA, Field catFieldB)
+    private async Task<Chart?> DetectMatrixAsync(Field catFieldA, Field catFieldB, int[]? rowFilter = null)
     {
-        var rows = await _repo.CountByGroup(catFieldA, catFieldB);
+        var rows = await _repo.CountByGroup(catFieldA, catFieldB, rowFilter);
         if (rows.Count == 0) return null;
         var xs = rows.Select(r => r.KeyA).Distinct().OrderBy(k => k.ToString()).ToList();
         var ys = rows.Select(r => r.KeyB).Distinct().OrderBy(k => k.ToString()).ToList();
@@ -1519,12 +380,10 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectMatrixMeanAsync(Field catFieldA, Field catFieldB)
+    private async Task<Chart?> DetectMatrixMeanAsync(Field catFieldA, Field catFieldB, int[]? rowFilter = null)
     {
-        var tPairs  = _repo.CountByGroup(catFieldA, catFieldB);
-        var tTotals = _repo.CountByGroup(catFieldA);
-        await Task.WhenAll(tPairs, tTotals);
-        var pairs = tPairs.Result; var totals = tTotals.Result;
+        var pairs  = await _repo.CountByGroup(catFieldA, catFieldB, rowFilter);
+        var totals = await _repo.CountByGroup(catFieldA, rowFilter);
         if (pairs.Count == 0) return null;
         var xs     = pairs.Select(r => r.KeyA).Distinct().OrderBy(k => k.ToString()).ToList();
         var ys     = pairs.Select(r => r.KeyB).Distinct().OrderBy(k => k.ToString()).ToList();
@@ -1548,9 +407,9 @@ public class AutoChartService : IAutoChartService
 
     // ── Statistical ───────────────────────────────────────────────────────────
 
-    private async Task<Chart?> DetectBoxPlotAsync(Field catField, Field numericField)
+    private async Task<Chart?> DetectBoxPlotAsync(Field catField, Field numericField, int[]? rowFilter = null)
     {
-        var rows = await _repo.FiveNumberSummaryByGroup(numericField, catField);
+        var rows = await _repo.FiveNumberSummaryByGroup(numericField, catField, rowFilter);
         if (rows.Count < 2 || rows.Count > 30) return null;
         var sorted = rows.OrderBy(r => r.Key.ToString()).ToList();
         var c = new Chart { ChartType = ChartType.Scatter, Title = $"Distribution: {numericField.Name} by {catField.Name}" };
@@ -1571,15 +430,15 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectHistogramAsync(Field field)
+    private async Task<Chart?> DetectHistogramAsync(Field field, int[]? rowFilter = null)
     {
         if (field.Categories.Contains(Category.Numeric))
         {
-            var (min, max) = await _repo.MinMax(field);
+            var (min, max) = await _repo.MinMax(field, rowFilter);
             if (max - min < 1e-12) return null;
             int numBuckets = 40;
             double gap = (max - min) / numBuckets;
-            var buckets = await _repo.GetHistogramBuckets(field, min, max, numBuckets);
+            var buckets = await _repo.GetHistogramBuckets(field, min, max, numBuckets, rowFilter);
             var c = new Chart { ChartType = ChartType.Histogram };
             for (int i = 1; i <= numBuckets; i++)
             {
@@ -1594,7 +453,7 @@ public class AutoChartService : IAutoChartService
         }
         if (field.Categories.Contains(Category.Categorical))
         {
-            var rows = await _repo.CountByGroup(field);
+            var rows = await _repo.CountByGroup(field, rowFilter);
             if (rows.Count > 20) return null;
             var c = new Chart { ChartType = ChartType.Histogram };
             c.X = rows.Select(r => r.Key).ToList();
@@ -1606,10 +465,10 @@ public class AutoChartService : IAutoChartService
 
     // ── Time-series ───────────────────────────────────────────────────────────
 
-    private async Task<Chart?> DetectDateTimeFrequencyAsync(Field dateField)
+    private async Task<Chart?> DetectDateTimeFrequencyAsync(Field dateField, int[]? rowFilter = null)
     {
-        var gran    = await GetGranularityAsync(dateField);
-        var buckets = await _repo.CountByTimeBucket(dateField, gran);
+        var gran    = await GetGranularityAsync(dateField, rowFilter);
+        var buckets = await _repo.CountByTimeBucket(dateField, gran, rowFilter);
         if (buckets.Count < 2) return null;
         var c = new Chart { ChartType = ChartType.Bar, Title = $"{dateField.Name} frequency ({gran.ToString().ToLower()})" };
         c.X = buckets.Keys.Select(d => (object)FmtDate(d, gran)).ToList();
@@ -1617,11 +476,13 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectTimeSeriesLineAsync(Field dateField, IReadOnlyList<Field> numericFields)
+    private async Task<Chart?> DetectTimeSeriesLineAsync(Field dateField, IReadOnlyList<Field> numericFields, int[]? rowFilter = null)
     {
         if (numericFields.Count == 0) return null;
-        var gran = await GetGranularityAsync(dateField);
-        var series = await Task.WhenAll(numericFields.Select(nf => _repo.AverageByTimeBucket(nf, dateField, gran)));
+        var gran = await GetGranularityAsync(dateField, rowFilter);
+        var series = new SortedDictionary<DateTime, double>[numericFields.Count];
+        for (int j = 0; j < numericFields.Count; j++)
+            series[j] = await _repo.AverageByTimeBucket(numericFields[j], dateField, gran, rowFilter);
         var allDates = series.SelectMany(s => s.Keys).Distinct().OrderBy(d => d).ToList();
         if (allDates.Count < 2) return null;
         var c = new Chart { ChartType = ChartType.Line, Title = $"{numericFields[0].Name} over time ({gran.ToString().ToLower()})" };
@@ -1631,11 +492,13 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectTimeSeriesEnhancedAsync(Field dateField, IReadOnlyList<Field> numericFields)
+    private async Task<Chart?> DetectTimeSeriesEnhancedAsync(Field dateField, IReadOnlyList<Field> numericFields, int[]? rowFilter = null)
     {
         if (numericFields.Count == 0) return null;
-        var gran = await GetGranularityAsync(dateField);
-        var series = await Task.WhenAll(numericFields.Select(nf => _repo.AverageByTimeBucket(nf, dateField, gran)));
+        var gran = await GetGranularityAsync(dateField, rowFilter);
+        var series = new SortedDictionary<DateTime, double>[numericFields.Count];
+        for (int j = 0; j < numericFields.Count; j++)
+            series[j] = await _repo.AverageByTimeBucket(numericFields[j], dateField, gran, rowFilter);
         var allDates = series.SelectMany(s => s.Keys).Distinct().OrderBy(d => d).ToList();
         if (allDates.Count < 3) return null;
         var c = new Chart { ChartType = ChartType.MixedBar, Title = $"{numericFields[0].Name} over time ({gran.ToString().ToLower()})" };
@@ -1654,10 +517,10 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectCumulativeSumAsync(Field dateField, Field numericField)
+    private async Task<Chart?> DetectCumulativeSumAsync(Field dateField, Field numericField, int[]? rowFilter = null)
     {
-        var gran    = await GetGranularityAsync(dateField);
-        var buckets = await _repo.SumByTimeBucket(numericField, dateField, gran);
+        var gran    = await GetGranularityAsync(dateField, rowFilter);
+        var buckets = await _repo.SumByTimeBucket(numericField, dateField, gran, rowFilter);
         if (buckets.Count < 4) return null;
         var c = new Chart { ChartType = ChartType.Line, Title = $"Cumulative {numericField.Name}" };
         c.X = buckets.Keys.Select(d => (object)FmtDate(d, gran)).ToList();
@@ -1666,10 +529,10 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectGrowthRateAsync(Field dateField, Field numericField)
+    private async Task<Chart?> DetectGrowthRateAsync(Field dateField, Field numericField, int[]? rowFilter = null)
     {
-        var gran    = await GetGranularityAsync(dateField);
-        var buckets = await _repo.AverageByTimeBucket(numericField, dateField, gran);
+        var gran    = await GetGranularityAsync(dateField, rowFilter);
+        var buckets = await _repo.AverageByTimeBucket(numericField, dateField, gran, rowFilter);
         if (buckets.Count < 4) return null;
         var periods = buckets.Values.ToList();
         var labels  = buckets.Keys.Select(d => FmtDate(d, gran)).ToList();
@@ -1684,10 +547,10 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectTimeSeriesCategoricalAsync(Field dateField, Field catField)
+    private async Task<Chart?> DetectTimeSeriesCategoricalAsync(Field dateField, Field catField, int[]? rowFilter = null)
     {
-        var gran    = await GetGranularityAsync(dateField);
-        var buckets = await _repo.CountByTimeBucketAndCategory(dateField, catField, gran);
+        var gran    = await GetGranularityAsync(dateField, rowFilter);
+        var buckets = await _repo.CountByTimeBucketAndCategory(dateField, catField, gran, rowFilter);
         if (buckets.Count < 2) return null;
         var cats = buckets.Values.SelectMany(d => d.Keys).Distinct().OrderBy(c => c).ToList();
         if (cats.Count > 20) return null;
@@ -1698,10 +561,10 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
-    private async Task<Chart?> DetectTimeSeriesCategoricalNumericAsync(Field numericField, Field dateField, Field catField)
+    private async Task<Chart?> DetectTimeSeriesCategoricalNumericAsync(Field numericField, Field dateField, Field catField, int[]? rowFilter = null)
     {
-        var gran    = await GetGranularityAsync(dateField);
-        var buckets = await _repo.AverageByTimeBucketAndCategory(numericField, dateField, catField, gran);
+        var gran    = await GetGranularityAsync(dateField, rowFilter);
+        var buckets = await _repo.AverageByTimeBucketAndCategory(numericField, dateField, catField, gran, rowFilter);
         if (buckets.Count < 2) return null;
         var cats = buckets.Values.SelectMany(d => d.Keys).Distinct().OrderBy(c => c).ToList();
         if (cats.Count > 20) return null;
@@ -1714,22 +577,72 @@ public class AutoChartService : IAutoChartService
 
     // ─── Async CreateChart ────────────────────────────────────────────────────
 
-    private async Task<List<Chart>> CreateChartAsync(int csvFileId, List<int> fieldIndexes)
+    private async Task<List<Chart>> CreateChartAsync(int csvFileId, List<int> fieldIndexes, List<ValueFilterDTO>? filters = null)
     {
         var csvFile = await _repo.GetFile(csvFileId);
         var fields  = await _repo.GetFields(csvFile, fieldIndexes);
 
+        // Materialise filtered row indexes once — all aggregate queries reuse this array.
+        // null means no filter (all rows); empty array means the filter matched nothing.
+        int[]? rowFilter = filters is { Count: > 0 }
+            ? await _repo.GetFilteredRowIndexes(csvFile, filters)
+            : null;
+
+        // Short-circuit when the filter produces an empty result set.
+        if (rowFilter is { Length: 0 }) return [];
+
         var identifier  = fields.Where(f => f.Categories.Contains(Category.Identifier)).ToList();
         var categorical = fields.Where(f => f.Categories.Contains(Category.Categorical)).ToList();
-        var numeric     = fields.Where(f => f.Categories.Contains(Category.Numeric) && !f.Categories.Contains(Category.Identifier)).ToList();
+        var numericAll  = fields.Where(f => f.Categories.Contains(Category.Numeric) && !f.Categories.Contains(Category.Identifier)).ToList();
 
-        // Prefetch cardinalities for all categorical fields in parallel
-        var cards = await Task.WhenAll(categorical.Select(f => _repo.CountDistinct(f)));
+        // ── Scale-group numeric fields so fields with compatible IQR/median share a panel ──
+        // Each group is a list of fields that can be plotted on the same y-axis.
+        var scaleInfos = new (double Median, double IQR)[numericAll.Count];
+        for (int i = 0; i < numericAll.Count; i++)
+            scaleInfos[i] = await _repo.GetScaleInfo(numericAll[i], rowFilter);
+        var numericGroups = new List<List<Field>>();
+        var groupScales   = new List<(double Median, double IQR)>();
+        for (int i = 0; i < numericAll.Count; i++)
+        {
+            var fi = scaleInfos[i];
+            bool placed = false;
+            for (int g = 0; g < numericGroups.Count; g++)
+            {
+                var cg = groupScales[g];
+                double maxIQR = Math.Max(cg.IQR, fi.IQR);
+                double minIQR = Math.Min(cg.IQR, fi.IQR);
+                bool sameScale = maxIQR < 1e-10
+                    ? Math.Abs(cg.Median - fi.Median) < 1e-10
+                    : Math.Abs(cg.Median - fi.Median) / maxIQR <= 1 && maxIQR / minIQR <= 2;
+                if (sameScale)
+                {
+                    numericGroups[g].Add(numericAll[i]);
+                    // Recompute group scale as the median of individual medians / average IQR
+                    groupScales[g] = ((cg.Median + fi.Median) / 2, (cg.IQR + fi.IQR) / 2);
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) { numericGroups.Add([numericAll[i]]); groupScales.Add(fi); }
+        }
+        var numeric = numericAll; // flat list for pair-wise detectors
+
+        // Prefetch cardinalities for all categorical fields
+        var cards = new int[categorical.Count];
+        for (int i = 0; i < categorical.Count; i++)
+            cards[i] = await _repo.CountDistinct(categorical[i], rowFilter);
         var cardMap = categorical.Zip(cards).ToDictionary(p => p.First.ID, p => p.Second);
 
         // Raw data loaded lazily once (for scatter / bubble / correlation)
         Table? rawTable = null;
-        async Task<Table> GetRaw() => rawTable ??= await _repo.GetLimited(csvFile, fieldIndexes, ScatterSampleSize);
+        async Task<Table> GetRaw()
+        {
+            if (rawTable != null) return rawTable;
+            rawTable = filters is { Count: > 0 }
+                ? await _repo.GetWithFilterLimited(csvFile, filters, ScatterSampleSize)
+                : await _repo.GetLimited(csvFile, fieldIndexes, ScatterSampleSize);
+            return rawTable;
+        }
 
         var res = new List<Chart?>();
         var chartIndex = new Dictionary<string, int>();
@@ -1749,16 +662,16 @@ public class AutoChartService : IAutoChartService
             {
                 var k = Key(categorical[ci], categorical[cj], nf); Reg(k);
                 if (cardMap[categorical[ci].ID] <= 10 && cardMap[categorical[cj].ID] <= 10)
-                    Add(await DetectMatrixAsync(categorical[ci], categorical[cj]), k);
-                Add(await DetectGroupedBarAsync(nf, categorical[ci], categorical[cj]), k);
+                    Add(await DetectMatrixAsync(categorical[ci], categorical[cj], rowFilter), k);
+                Add(await DetectGroupedBarAsync(nf, categorical[ci], categorical[cj], rowFilter), k);
             }
             else
             {
                 var dtF  = categorical[ci].Type == typeof(DateTime) ? categorical[ci] : categorical[cj];
                 var catF = categorical[ci].Type == typeof(DateTime) ? categorical[cj] : categorical[ci];
                 var k = Key(dtF, catF, nf); Reg(k);
-                Add(await DetectTimeSeriesCategoricalNumericAsync(nf, dtF, catF), k);
-                Add(await DetectTimeSeriesEnhancedAsync(dtF, new[] { nf }), k);
+                Add(await DetectTimeSeriesCategoricalNumericAsync(nf, dtF, catF, rowFilter), k);
+                Add(await DetectTimeSeriesEnhancedAsync(dtF, new[] { nf }, rowFilter), k);
             }
         }
 
@@ -1770,7 +683,7 @@ public class AutoChartService : IAutoChartService
             {
                 if (id == nf || id == catF) continue;
                 var k = Key(catF, nf, id); Reg(k);
-                Add(await DetectMixedBarChartAsync(catF, nf, id), k);
+                Add(await DetectMixedBarChartAsync(catF, nf, id, rowFilter), k);
             }
         }
 
@@ -1781,7 +694,19 @@ public class AutoChartService : IAutoChartService
         {
             if (catF == numeric[ni] || catF == numeric[nj]) continue;
             var k = Key(catF, numeric[ni], numeric[nj]); Reg(k);
-            Add(await DetectMixedLineChartAsync(catF, numeric[ni], numeric[nj]), k);
+            Add(await DetectMixedLineChartAsync(catF, numeric[ni], numeric[nj], rowFilter), k);
+
+            // Scatter: each category gets its own colored dataset of {x,y} points
+            var raw3 = await GetRaw();
+            var fvCat = raw3.Columns.FirstOrDefault(c => c.Field.ID == catF.ID);
+            var fvN1  = raw3.Columns.FirstOrDefault(c => c.Field.ID == numeric[ni].ID);
+            var fvN2  = raw3.Columns.FirstOrDefault(c => c.Field.ID == numeric[nj].ID);
+            if (fvCat != null && fvN1 != null && fvN2 != null)
+            {
+                var sc = DetectScatter(new List<FieldValues> { fvCat, fvN1, fvN2 });
+                if (sc != null) sc.Title = $"{numeric[ni].Name} vs {numeric[nj].Name} by {catF.Name}";
+                Add(sc, k);
+            }
         }
 
         // ── 2-field: cat × cat ────────────────────────────────────────────────
@@ -1792,18 +717,18 @@ public class AutoChartService : IAutoChartService
             if (catA.Type == typeof(DateTime))
             {
                 var k = Key(catA, catB); Reg(k);
-                Add(await DetectTimeSeriesCategoricalAsync(catA, catB), k);
+                Add(await DetectTimeSeriesCategoricalAsync(catA, catB, rowFilter), k);
             }
             else if (catB.Type == typeof(DateTime))
             {
                 var k = Key(catB, catA); Reg(k);
-                Add(await DetectTimeSeriesCategoricalAsync(catB, catA), k);
+                Add(await DetectTimeSeriesCategoricalAsync(catB, catA, rowFilter), k);
             }
             else
             {
                 var k = Key(catA, catB); Reg(k);
-                if (cardMap[catA.ID] <= 20 && cardMap[catB.ID] <= 20) { Add(await DetectMatrixAsync(catA, catB), k); Add(await DetectMatrixMeanAsync(catA, catB), k); }
-                else Add(await DetectBarChartAsync(catA, catB), k); // counts as bar
+                if (cardMap[catA.ID] <= 20 && cardMap[catB.ID] <= 20) { Add(await DetectMatrixAsync(catA, catB, rowFilter), k); Add(await DetectMatrixMeanAsync(catA, catB, rowFilter), k); }
+                else Add(await DetectBarChartAsync(catA, catB, rowFilter), k);
             }
         }
 
@@ -1815,16 +740,30 @@ public class AutoChartService : IAutoChartService
             var k = Key(catF, nf); Reg(k);
             if (catF.Type == typeof(DateTime))
             {
-                Add(await DetectTimeSeriesLineAsync(catF, new[] { nf }), k);
-                Add(await DetectTimeSeriesEnhancedAsync(catF, new[] { nf }), k);
-                Add(await DetectCumulativeSumAsync(catF, nf), k);
-                Add(await DetectGrowthRateAsync(catF, nf), k);
+                Add(await DetectTimeSeriesLineAsync(catF, new[] { nf }, rowFilter), k);
+                Add(await DetectTimeSeriesEnhancedAsync(catF, new[] { nf }, rowFilter), k);
+                Add(await DetectCumulativeSumAsync(catF, nf, rowFilter), k);
+                Add(await DetectGrowthRateAsync(catF, nf, rowFilter), k);
             }
             else
             {
-                Add(cardMap[catF.ID] <= 20 ? await DetectBarChartAsync(catF, nf) : await DetectSideBarAsync(catF, nf), k);
-                Add(await DetectRankedBarAsync(catF, nf), k);
-                Add(await DetectBoxPlotAsync(catF, nf), k);
+                Add(cardMap[catF.ID] <= 20 ? await DetectBarChartAsync(catF, nf, rowFilter) : await DetectSideBarAsync(catF, nf, rowFilter), k);
+                Add(await DetectRankedBarAsync(catF, nf, rowFilter), k);
+                Add(await DetectBoxPlotAsync(catF, nf, rowFilter), k);
+            }
+        }
+
+        // ── 2-field: cat × multiple same-scale numerics (grouped bar) ────────
+        foreach (var catF in categorical)
+        foreach (var ng in numericGroups)
+        {
+            var ss = ng.Where(nf => nf != catF).ToList();
+            if (ss.Count <= 1) continue;
+            // Emit one grouped bar per extra numeric in the group alongside the first
+            for (int ni = 0; ni < ss.Count - 1; ni++)
+            {
+                var k = Key(catF, ss[ni], ss[ni + 1]); Reg(k);
+                Add(await DetectMixedLineChartAsync(catF, ss[ni], ss[ni + 1], rowFilter), k);
             }
         }
 
@@ -1845,7 +784,7 @@ public class AutoChartService : IAutoChartService
         {
             if (id == nf) continue;
             var k = Key(id, nf); Reg(k);
-            Add(await DetectSideBarAsync(id, nf), k);
+            Add(await DetectSideBarAsync(id, nf, rowFilter), k);
         }
 
         // ── single categorical ────────────────────────────────────────────────
@@ -1853,46 +792,46 @@ public class AutoChartService : IAutoChartService
         {
             var k = Key(cat); Reg(k);
             if (cat.Type == typeof(DateTime))
-                Add(await DetectDateTimeFrequencyAsync(cat), k);
+                Add(await DetectDateTimeFrequencyAsync(cat, rowFilter), k);
             else
             {
                 int dc = cardMap[cat.ID];
-                Add(dc <= 20 ? await DetectPieChartAsync(cat) : await DetectSideBarAsync(cat), k);
-                if (dc is >= 3 and <= 60) Add(await DetectParetoChartAsync(cat), k);
+                Add(dc <= 20 ? await DetectPieChartAsync(cat, rowFilter) : await DetectSideBarAsync(cat, rowFilter), k);
+                if (dc is >= 3 and <= 60) Add(await DetectParetoChartAsync(cat, rowFilter), k);
             }
         }
 
         // ── single identifier ─────────────────────────────────────────────────
-        foreach (var id in identifier) { var k = Key(id); Reg(k); Add(await DetectSideBarAsync(id), k); }
+        foreach (var id in identifier) { var k = Key(id); Reg(k); Add(await DetectSideBarAsync(id, rowFilter), k); }
 
         // ── single numeric ────────────────────────────────────────────────────
-        foreach (var nf in numeric) { var k = Key(nf); Reg(k); Add(await DetectHistogramAsync(nf), k); }
+        foreach (var nf in numeric) { var k = Key(nf); Reg(k); Add(await DetectHistogramAsync(nf, rowFilter), k); }
 
         // ── Correlation matrix (3+ numerics — needs raw rows) ─────────────────
-        var pureNum = numeric.ToList();
-        if (pureNum.Count >= 3)
+        if (numeric.Count >= 3)
         {
-            var k   = Key(pureNum.ToArray()); Reg(k);
-            var raw = await _repo.GetLimited(csvFile, fieldIndexes, CorrelationSampleSize);
-            var cols = raw.Columns.Where(c => pureNum.Any(nf => nf.ID == c.Field.ID)).ToList();
+            var k = Key(numeric.ToArray()); Reg(k);
+            Table corrRaw = filters is { Count: > 0 }
+                ? await _repo.GetWithFilterLimited(csvFile, filters, CorrelationSampleSize)
+                : await _repo.GetLimited(csvFile, fieldIndexes, CorrelationSampleSize);
+            var cols = corrRaw.Columns.Where(c => numeric.Any(nf => nf.ID == c.Field.ID)).ToList();
             if (cols.Count >= 3) Add(DetectCorrelationMatrix(cols), k);
         }
 
         // ── Bubble chart (every triple of numerics — needs raw rows) ──────────
-        if (pureNum.Count >= 3)
+        if (numeric.Count >= 3)
         {
-            for (int bi = 0; bi < pureNum.Count; bi++)
-            for (int bj = bi + 1; bj < pureNum.Count; bj++)
-            for (int bk = bj + 1; bk < pureNum.Count; bk++)
+            for (int bi = 0; bi < numeric.Count; bi++)
+            for (int bj = bi + 1; bj < numeric.Count; bj++)
+            for (int bk = bj + 1; bk < numeric.Count; bk++)
             {
-                var k    = Key(pureNum[bi], pureNum[bj], pureNum[bk]);
-                var scKey = Key(pureNum[bi], pureNum[bj]);
+                var k     = Key(numeric[bi], numeric[bj], numeric[bk]);
+                var scKey = Key(numeric[bi], numeric[bj]);
                 if (!chartIndex.ContainsKey(k)) chartIndex[k] = chartIndex.GetValueOrDefault(scKey, nextIndex++);
-                var raw  = await GetRaw();
-                var cols = raw.Columns;
-                var fvA  = cols.FirstOrDefault(c => c.Field.ID == pureNum[bi].ID);
-                var fvB  = cols.FirstOrDefault(c => c.Field.ID == pureNum[bj].ID);
-                var fvC  = cols.FirstOrDefault(c => c.Field.ID == pureNum[bk].ID);
+                var raw = await GetRaw();
+                var fvA = raw.Columns.FirstOrDefault(c => c.Field.ID == numeric[bi].ID);
+                var fvB = raw.Columns.FirstOrDefault(c => c.Field.ID == numeric[bj].ID);
+                var fvC = raw.Columns.FirstOrDefault(c => c.Field.ID == numeric[bk].ID);
                 if (fvA != null && fvB != null && fvC != null)
                     Add(DetectBubbleChart(new List<FieldValues> { fvA, fvB, fvC }), k);
             }

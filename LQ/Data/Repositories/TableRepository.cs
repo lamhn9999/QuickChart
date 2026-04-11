@@ -446,42 +446,151 @@ public class TableRepository : TableRepositoryAbstract
         });
     }
 
-    public override async Task<int> CountDistinct(Field field)
+    // ─── Row-filter helpers ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns a SQL AND-clause that restricts to the given row indexes.
+    /// Safe for integer-only arrays (no injection risk).
+    /// Returns an empty string when rowFilter is null or empty (no restriction).
+    /// </summary>
+    private static string RF(int[]? rowFilter, string alias = "v") =>
+        rowFilter is { Length: > 0 }
+            ? $"AND {alias}.\"RowIndex\" = ANY(ARRAY[{string.Join(",", rowFilter)}])"
+            : "";
+
+    private static bool IsListField(Field f) => f.Type == typeof(List<string>);
+
+    /// <summary>
+    /// Returns a PostgreSQL expression that parses a .NET US-culture DateTime string
+    /// ("M/D/YYYY H:MI:SS AM/PM") into a TIMESTAMP.
+    /// Normalises chr(8239) (U+202F narrow no-break space, used by .NET 6+ en-US before AM/PM)
+    /// and chr(160) (U+00A0 NBSP) to regular space before splitting, then uses MAKE_TIMESTAMP
+    /// with manual AM/PM → 24 h conversion to avoid all TO_TIMESTAMP format-string issues.
+    /// </summary>
+    private static string ParseDT(string col)
     {
-        return await _lqDbContext.Values
-            .Where(v => v.FieldID == field.ID && v.ValueStringFormatted != null)
-            .Select(v => v.ValueStringFormatted)
-            .Distinct()
-            .CountAsync();
+        // Normalise any Unicode space variants to regular ASCII space so SPLIT_PART works correctly.
+        var s = $"REPLACE(REPLACE(TRIM({col}), chr(8239), ' '), chr(160), ' ')";
+        return $"""
+            MAKE_TIMESTAMP(
+                SPLIT_PART(SPLIT_PART({s}, ' ', 1), '/', 3)::int,
+                SPLIT_PART(SPLIT_PART({s}, ' ', 1), '/', 1)::int,
+                SPLIT_PART(SPLIT_PART({s}, ' ', 1), '/', 2)::int,
+                CASE
+                    WHEN UPPER(TRIM(SPLIT_PART({s}, ' ', 3))) = 'PM'
+                         AND SPLIT_PART(SPLIT_PART({s}, ' ', 2), ':', 1)::int < 12
+                    THEN SPLIT_PART(SPLIT_PART({s}, ' ', 2), ':', 1)::int + 12
+                    WHEN UPPER(TRIM(SPLIT_PART({s}, ' ', 3))) = 'AM'
+                         AND SPLIT_PART(SPLIT_PART({s}, ' ', 2), ':', 1)::int = 12
+                    THEN 0
+                    ELSE SPLIT_PART(SPLIT_PART({s}, ' ', 2), ':', 1)::int
+                END,
+                SPLIT_PART(SPLIT_PART({s}, ' ', 2), ':', 2)::int,
+                SPLIT_PART(SPLIT_PART({s}, ' ', 2), ':', 3)::double precision
+            )
+            """;
     }
 
-    public override async Task<(DateTime Min, DateTime Max)> GetDateRange(Field dateField)
+    /// <summary>
+    /// Returns the SELECT/GROUP BY key expression and the LATERAL UNNEST clause
+    /// to append after the FROM for a field used as a grouping key.
+    /// For regular fields returns the plain column reference and an empty lateral.
+    /// For List&lt;string&gt; fields, unnests the comma-separated value into individual items.
+    /// </summary>
+    private static (string KeyExpr, string Lateral) ListExpr(Field f, string unnestAlias) =>
+        IsListField(f)
+            ? ($"TRIM({unnestAlias})",
+               $", LATERAL UNNEST(string_to_array(\"Value_{f.ID}\", ',')) AS {unnestAlias}")
+            : ($"\"Value_{f.ID}\"", "");
+
+    public override async Task<int[]> GetFilteredRowIndexes(CSVFile csvFile, List<ValueFilterDTO> filters)
     {
+        if (filters.Count == 0) return [];
+        return await GetFilteredRowIndexesQuery(csvFile.ID, filters).ToArrayAsync();
+    }
+
+    // ─── Scale helpers ────────────────────────────────────────────────────────
+
+    public override async Task<int> CountDistinct(Field field, int[]? rowFilter = null)
+    {
+        if (rowFilter is { Length: 0 }) return 0;
+        var rf = RF(rowFilter);
+        string sql;
+        if (IsListField(field))
+        {
+            sql = $"""
+                SELECT COUNT(DISTINCT TRIM(cat))::int AS "Value"
+                FROM "app"."Value" v,
+                     LATERAL UNNEST(string_to_array(v."ValueStringFormatted", ',')) AS cat
+                WHERE v."FieldID" = {field.ID}
+                  AND v."ValueStringFormatted" IS NOT NULL
+                  {rf}
+                """;
+        }
+        else
+        {
+            sql = $"""
+                SELECT COUNT(DISTINCT v."ValueStringFormatted")::int AS "Value"
+                FROM "app"."Value" v
+                WHERE v."FieldID" = {field.ID}
+                  AND v."ValueStringFormatted" IS NOT NULL
+                  {rf}
+                """;
+        }
+        return await _lqDbContext.Database.SqlQueryRaw<int>(sql).FirstAsync();
+    }
+
+    public override async Task<(double Median, double IQR)> GetScaleInfo(Field numericField, int[]? rowFilter = null)
+    {
+        if (rowFilter is { Length: 0 }) return (0, 1);
+        var rf = RF(rowFilter);
         var sql = $"""
             SELECT
-                MIN(CAST(v."ValueStringFormatted" AS TIMESTAMP)) AS "Min",
-                MAX(CAST(v."ValueStringFormatted" AS TIMESTAMP)) AS "Max"
+                COALESCE(PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY CAST(v."ValueStringFormatted" AS DOUBLE PRECISION)), 0) AS "Median",
+                COALESCE(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY CAST(v."ValueStringFormatted" AS DOUBLE PRECISION))
+                       - PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY CAST(v."ValueStringFormatted" AS DOUBLE PRECISION)), 1) AS "IQR"
+            FROM "app"."Value" v
+            WHERE v."FieldID" = {numericField.ID}
+              AND v."ValueStringFormatted" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
+              {rf}
+            """;
+        var row = await _lqDbContext.Database.SqlQueryRaw<ScaleInfoRow>(sql).FirstAsync();
+        return (row.Median, Math.Max(row.IQR, 1e-10));
+    }
+
+    public override async Task<(DateTime Min, DateTime Max)> GetDateRange(Field dateField, int[]? rowFilter = null)
+    {
+        if (rowFilter is { Length: 0 }) return (DateTime.UtcNow, DateTime.UtcNow);
+        var rf = RF(rowFilter);
+        var dt = ParseDT(@"v.""ValueStringFormatted""");
+        var sql = $"""
+            SELECT
+                MIN({dt}) AS "Min",
+                MAX({dt}) AS "Max"
             FROM "app"."Value" v
             WHERE v."FieldID" = {dateField.ID}
               AND v."ValueStringFormatted" IS NOT NULL
               AND v."ValueStringFormatted" != ''
+              {rf}
             """;
         var row = await _lqDbContext.Database.SqlQueryRaw<DateRangeRow>(sql).FirstAsync();
         return (DateTime.SpecifyKind(row.Min, DateTimeKind.Utc), DateTime.SpecifyKind(row.Max, DateTimeKind.Utc));
     }
 
-    public override async Task<SortedDictionary<int, int>> GetHistogramBuckets(Field numericField, double min, double max, int numBuckets)
+    public override async Task<SortedDictionary<int, int>> GetHistogramBuckets(Field numericField, double min, double max, int numBuckets, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return new SortedDictionary<int, int>();
         // WIDTH_BUCKET returns 0 for values below min and numBuckets+1 for values at/above max.
         // Expand max by a tiny epsilon so the maximum value falls in the last real bucket.
         double high = max + Math.Abs(max) * 1e-9 + 1e-12;
+        var rf = RF(rowFilter);
         var sql = $"""
             SELECT WIDTH_BUCKET(CAST(v."ValueStringFormatted" AS DOUBLE PRECISION), {min.ToString(System.Globalization.CultureInfo.InvariantCulture)}, {high.ToString(System.Globalization.CultureInfo.InvariantCulture)}, {numBuckets}) AS "Bucket",
                    COUNT(*)::int AS "Count"
             FROM "app"."Value" v
             WHERE v."FieldID" = {numericField.ID}
-              AND v."ValueStringFormatted" IS NOT NULL
-              AND v."ValueStringFormatted" != ''
+              AND v."ValueStringFormatted" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
+              {rf}
             GROUP BY 1
             ORDER BY 1
             """;
@@ -495,6 +604,7 @@ public class TableRepository : TableRepositoryAbstract
 
     private record DateRangeRow  { public DateTime Min { get; init; } public DateTime Max { get; init; } }
     private record HistBucketRow { public int Bucket  { get; init; } public int Count   { get; init; } }
+    private record ScaleInfoRow  { public double Median { get; init; } public double IQR { get; init; } }
 
     public override async Task<List<(object Key, double Sum)>> Sum(Field fieldNumeric, params Field[] fieldGroup)
     {
@@ -526,6 +636,7 @@ public class TableRepository : TableRepositoryAbstract
                 WHERE v."FieldID" IN ({inClause})
                 GROUP BY v."RowIndex"
             ) AS pivoted
+            WHERE "Value_{fieldNumeric.ID}" IS NULL OR "Value_{fieldNumeric.ID}" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
             GROUP BY {groupByClause}
             """;
 
@@ -542,8 +653,7 @@ public class TableRepository : TableRepositoryAbstract
             SELECT COALESCE(SUM(CAST(v."ValueStringFormatted" AS DOUBLE PRECISION)), 0) AS "Value"
             FROM "app"."Value" v
             WHERE v."FieldID" = {fieldNumeric.ID}
-              AND v."ValueStringFormatted" IS NOT NULL
-              AND v."ValueStringFormatted" != ''
+              AND v."ValueStringFormatted" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
             """;
         return await _lqDbContext.Database.SqlQueryRaw<double>(sql).FirstAsync();
     }
@@ -556,25 +666,48 @@ public class TableRepository : TableRepositoryAbstract
 
     // ─── Count aggregates ─────────────────────────────────────────────────────
 
-    public override async Task<List<(object Key, int Count)>> CountByGroup(Field groupField)
+    public override async Task<List<(object Key, int Count)>> CountByGroup(Field groupField, int[]? rowFilter = null)
     {
-        var sql = $"""
-            SELECT v."ValueStringFormatted" AS "Key", COUNT(*)::int AS "Count"
-            FROM "app"."Value" v
-            WHERE v."FieldID" = {groupField.ID}
-              AND v."ValueStringFormatted" IS NOT NULL
-            GROUP BY v."ValueStringFormatted"
-            """;
+        if (rowFilter is { Length: 0 }) return [];
+        var rf = RF(rowFilter);
+        string sql;
+        if (IsListField(groupField))
+        {
+            sql = $"""
+                SELECT TRIM(cat) AS "Key", COUNT(*)::int AS "Count"
+                FROM "app"."Value" v,
+                     LATERAL UNNEST(string_to_array(v."ValueStringFormatted", ',')) AS cat
+                WHERE v."FieldID" = {groupField.ID}
+                  AND v."ValueStringFormatted" IS NOT NULL
+                  {rf}
+                GROUP BY TRIM(cat)
+                """;
+        }
+        else
+        {
+            sql = $"""
+                SELECT v."ValueStringFormatted" AS "Key", COUNT(*)::int AS "Count"
+                FROM "app"."Value" v
+                WHERE v."FieldID" = {groupField.ID}
+                  AND v."ValueStringFormatted" IS NOT NULL
+                  {rf}
+                GROUP BY v."ValueStringFormatted"
+                """;
+        }
         var rows = await _lqDbContext.Database.SqlQueryRaw<CountRow>(sql).ToListAsync();
         return rows.Select(r => ((object)(r.Key ?? ""), r.Count)).ToList();
     }
 
-    public override async Task<List<(object KeyA, object KeyB, int Count)>> CountByGroup(Field groupField1, Field groupField2)
+    public override async Task<List<(object KeyA, object KeyB, int Count)>> CountByGroup(Field groupField1, Field groupField2, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return [];
+        var rf = RF(rowFilter);
+        var (keyA, latA) = ListExpr(groupField1, "cat_a");
+        var (keyB, latB) = ListExpr(groupField2, "cat_b");
         var sql = $"""
             SELECT
-                "Value_{groupField1.ID}" AS "KeyA",
-                "Value_{groupField2.ID}" AS "KeyB",
+                {keyA} AS "KeyA",
+                {keyB} AS "KeyB",
                 COUNT(*)::int AS "Count"
             FROM (
                 SELECT
@@ -583,19 +716,23 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {groupField2.ID} THEN v."ValueStringFormatted" END) AS "Value_{groupField2.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({groupField1.ID}, {groupField2.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
-            ) AS pivoted
-            GROUP BY "Value_{groupField1.ID}", "Value_{groupField2.ID}"
+            ) AS pivoted{latA}{latB}
+            GROUP BY {keyA}, {keyB}
             """;
         var rows = await _lqDbContext.Database.SqlQueryRaw<Count2Row>(sql).ToListAsync();
         return rows.Select(r => ((object)(r.KeyA ?? ""), (object)(r.KeyB ?? ""), r.Count)).ToList();
     }
 
-    public override async Task<List<(object Key, int CountDistinct)>> CountDistinctByGroup(Field distinctField, Field groupField)
+    public override async Task<List<(object Key, int CountDistinct)>> CountDistinctByGroup(Field distinctField, Field groupField, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return [];
+        var rf = RF(rowFilter);
+        var (keyExpr, lateral) = ListExpr(groupField, "grp_cat");
         var sql = $"""
             SELECT
-                "Value_{groupField.ID}" AS "Key",
+                {keyExpr} AS "Key",
                 COUNT(DISTINCT "Value_{distinctField.ID}")::int AS "CountDistinct"
             FROM (
                 SELECT
@@ -604,9 +741,10 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {groupField.ID} THEN v."ValueStringFormatted" END) AS "Value_{groupField.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({distinctField.ID}, {groupField.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
-            ) AS pivoted
-            GROUP BY "Value_{groupField.ID}"
+            ) AS pivoted{lateral}
+            GROUP BY {keyExpr}
             """;
         var rows = await _lqDbContext.Database.SqlQueryRaw<CountDistinctRow>(sql).ToListAsync();
         return rows.Select(r => ((object)(r.Key ?? ""), r.CountDistinct)).ToList();
@@ -614,11 +752,14 @@ public class TableRepository : TableRepositoryAbstract
 
     // ─── Average aggregates ───────────────────────────────────────────────────
 
-    public override async Task<List<(object Key, double Average)>> AverageByGroup(Field numericField, Field groupField)
+    public override async Task<List<(object Key, double Average)>> AverageByGroup(Field numericField, Field groupField, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return [];
+        var rf = RF(rowFilter);
+        var (keyExpr, lateral) = ListExpr(groupField, "grp_cat");
         var sql = $"""
             SELECT
-                "Value_{groupField.ID}" AS "Key",
+                {keyExpr} AS "Key",
                 AVG(CAST("Value_{numericField.ID}" AS DOUBLE PRECISION)) AS "Average"
             FROM (
                 SELECT
@@ -627,20 +768,26 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {groupField.ID} THEN v."ValueStringFormatted" END) AS "Value_{groupField.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({numericField.ID}, {groupField.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
-            ) AS pivoted
-            GROUP BY "Value_{groupField.ID}"
+            ) AS pivoted{lateral}
+            WHERE "Value_{numericField.ID}" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
+            GROUP BY {keyExpr}
             """;
         var rows = await _lqDbContext.Database.SqlQueryRaw<AvgRow>(sql).ToListAsync();
         return rows.Select(r => ((object)(r.Key ?? ""), r.Average)).ToList();
     }
 
-    public override async Task<List<(object KeyA, object KeyB, double Average)>> AverageByGroup(Field numericField, Field groupFieldA, Field groupFieldB)
+    public override async Task<List<(object KeyA, object KeyB, double Average)>> AverageByGroup(Field numericField, Field groupFieldA, Field groupFieldB, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return [];
+        var rf = RF(rowFilter);
+        var (keyA, latA) = ListExpr(groupFieldA, "cat_a");
+        var (keyB, latB) = ListExpr(groupFieldB, "cat_b");
         var sql = $"""
             SELECT
-                "Value_{groupFieldA.ID}" AS "KeyA",
-                "Value_{groupFieldB.ID}" AS "KeyB",
+                {keyA} AS "KeyA",
+                {keyB} AS "KeyB",
                 AVG(CAST("Value_{numericField.ID}" AS DOUBLE PRECISION)) AS "Average"
             FROM (
                 SELECT
@@ -650,9 +797,11 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {groupFieldB.ID} THEN v."ValueStringFormatted" END) AS "Value_{groupFieldB.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({numericField.ID}, {groupFieldA.ID}, {groupFieldB.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
-            ) AS pivoted
-            GROUP BY "Value_{groupFieldA.ID}", "Value_{groupFieldB.ID}"
+            ) AS pivoted{latA}{latB}
+            WHERE "Value_{numericField.ID}" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
+            GROUP BY {keyA}, {keyB}
             """;
         var rows = await _lqDbContext.Database.SqlQueryRaw<Avg2Row>(sql).ToListAsync();
         return rows.Select(r => ((object)(r.KeyA ?? ""), (object)(r.KeyB ?? ""), r.Average)).ToList();
@@ -660,11 +809,14 @@ public class TableRepository : TableRepositoryAbstract
 
     // ─── Five-number summary ──────────────────────────────────────────────────
 
-    public override async Task<List<(object Key, double Min, double Q1, double Median, double Q3, double Max)>> FiveNumberSummaryByGroup(Field numericField, Field groupField)
+    public override async Task<List<(object Key, double Min, double Q1, double Median, double Q3, double Max)>> FiveNumberSummaryByGroup(Field numericField, Field groupField, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return [];
+        var rf = RF(rowFilter);
+        var (keyExpr, lateral) = ListExpr(groupField, "grp_cat");
         var sql = $"""
             SELECT
-                "Value_{groupField.ID}" AS "Key",
+                {keyExpr} AS "Key",
                 MIN(CAST("Value_{numericField.ID}" AS DOUBLE PRECISION)) AS "Min",
                 PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY CAST("Value_{numericField.ID}" AS DOUBLE PRECISION)) AS "Q1",
                 PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY CAST("Value_{numericField.ID}" AS DOUBLE PRECISION)) AS "Median",
@@ -677,10 +829,11 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {groupField.ID} THEN v."ValueStringFormatted" END) AS "Value_{groupField.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({numericField.ID}, {groupField.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
-            ) AS pivoted
-            WHERE "Value_{numericField.ID}" IS NOT NULL AND "Value_{numericField.ID}" != ''
-            GROUP BY "Value_{groupField.ID}"
+            ) AS pivoted{lateral}
+            WHERE "Value_{numericField.ID}" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
+            GROUP BY {keyExpr}
             """;
         var rows = await _lqDbContext.Database.SqlQueryRaw<FiveNumRow>(sql).ToListAsync();
         return rows.Select(r => ((object)(r.Key ?? ""), r.Min, r.Q1, r.Median, r.Q3, r.Max)).ToList();
@@ -688,16 +841,18 @@ public class TableRepository : TableRepositoryAbstract
 
     // ─── Scalar min/max ───────────────────────────────────────────────────────
 
-    public override async Task<(double Min, double Max)> MinMax(Field numericField)
+    public override async Task<(double Min, double Max)> MinMax(Field numericField, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return (0, 0);
+        var rf = RF(rowFilter);
         var sql = $"""
             SELECT
                 MIN(CAST(v."ValueStringFormatted" AS DOUBLE PRECISION)) AS "Min",
                 MAX(CAST(v."ValueStringFormatted" AS DOUBLE PRECISION)) AS "Max"
             FROM "app"."Value" v
             WHERE v."FieldID" = {numericField.ID}
-              AND v."ValueStringFormatted" IS NOT NULL
-              AND v."ValueStringFormatted" != ''
+              AND v."ValueStringFormatted" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
+              {rf}
             """;
         var row = await _lqDbContext.Database.SqlQueryRaw<MinMaxRow>(sql).FirstAsync();
         return (row.Min, row.Max);
@@ -705,16 +860,20 @@ public class TableRepository : TableRepositoryAbstract
 
     // ─── Time-bucketed aggregates ─────────────────────────────────────────────
 
-    public override async Task<SortedDictionary<DateTime, int>> CountByTimeBucket(Field dateField, TimeGranularity granularity)
+    public override async Task<SortedDictionary<DateTime, int>> CountByTimeBucket(Field dateField, TimeGranularity granularity, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return new SortedDictionary<DateTime, int>();
         var gran = ToPostgresGranularity(granularity);
+        var rf = RF(rowFilter);
+        var dt = ParseDT(@"v.""ValueStringFormatted""");
         var sql = $"""
-            SELECT DATE_TRUNC('{gran}', CAST(v."ValueStringFormatted" AS TIMESTAMP)) AS "Bucket",
+            SELECT DATE_TRUNC('{gran}', {dt}) AS "Bucket",
                    COUNT(*)::int AS "Count"
             FROM "app"."Value" v
             WHERE v."FieldID" = {dateField.ID}
               AND v."ValueStringFormatted" IS NOT NULL
               AND v."ValueStringFormatted" != ''
+              {rf}
             GROUP BY 1
             ORDER BY 1
             """;
@@ -724,11 +883,14 @@ public class TableRepository : TableRepositoryAbstract
         return result;
     }
 
-    public override async Task<SortedDictionary<DateTime, double>> AverageByTimeBucket(Field numericField, Field dateField, TimeGranularity granularity)
+    public override async Task<SortedDictionary<DateTime, double>> AverageByTimeBucket(Field numericField, Field dateField, TimeGranularity granularity, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return new SortedDictionary<DateTime, double>();
         var gran = ToPostgresGranularity(granularity);
+        var rf = RF(rowFilter);
+        var dt = ParseDT($@"""Value_{dateField.ID}""");
         var sql = $"""
-            SELECT DATE_TRUNC('{gran}', CAST("Value_{dateField.ID}" AS TIMESTAMP)) AS "Bucket",
+            SELECT DATE_TRUNC('{gran}', {dt}) AS "Bucket",
                    AVG(CAST("Value_{numericField.ID}" AS DOUBLE PRECISION)) AS "Average"
             FROM (
                 SELECT
@@ -737,9 +899,11 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {dateField.ID} THEN v."ValueStringFormatted" END) AS "Value_{dateField.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({numericField.ID}, {dateField.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
             ) AS pivoted
             WHERE "Value_{dateField.ID}" IS NOT NULL AND "Value_{dateField.ID}" != ''
+              AND ("Value_{numericField.ID}" IS NULL OR "Value_{numericField.ID}" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$')
             GROUP BY 1
             ORDER BY 1
             """;
@@ -749,11 +913,14 @@ public class TableRepository : TableRepositoryAbstract
         return result;
     }
 
-    public override async Task<SortedDictionary<DateTime, double>> SumByTimeBucket(Field numericField, Field dateField, TimeGranularity granularity)
+    public override async Task<SortedDictionary<DateTime, double>> SumByTimeBucket(Field numericField, Field dateField, TimeGranularity granularity, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return new SortedDictionary<DateTime, double>();
         var gran = ToPostgresGranularity(granularity);
+        var rf = RF(rowFilter);
+        var dt = ParseDT($@"""Value_{dateField.ID}""");
         var sql = $"""
-            SELECT DATE_TRUNC('{gran}', CAST("Value_{dateField.ID}" AS TIMESTAMP)) AS "Bucket",
+            SELECT DATE_TRUNC('{gran}', {dt}) AS "Bucket",
                    COALESCE(SUM(CAST("Value_{numericField.ID}" AS DOUBLE PRECISION)), 0) AS "Sum"
             FROM (
                 SELECT
@@ -762,9 +929,11 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {dateField.ID} THEN v."ValueStringFormatted" END) AS "Value_{dateField.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({numericField.ID}, {dateField.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
             ) AS pivoted
             WHERE "Value_{dateField.ID}" IS NOT NULL AND "Value_{dateField.ID}" != ''
+              AND ("Value_{numericField.ID}" IS NULL OR "Value_{numericField.ID}" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$')
             GROUP BY 1
             ORDER BY 1
             """;
@@ -774,12 +943,16 @@ public class TableRepository : TableRepositoryAbstract
         return result;
     }
 
-    public override async Task<SortedDictionary<DateTime, Dictionary<string, int>>> CountByTimeBucketAndCategory(Field dateField, Field catField, TimeGranularity granularity)
+    public override async Task<SortedDictionary<DateTime, Dictionary<string, int>>> CountByTimeBucketAndCategory(Field dateField, Field catField, TimeGranularity granularity, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return new SortedDictionary<DateTime, Dictionary<string, int>>();
         var gran = ToPostgresGranularity(granularity);
+        var rf = RF(rowFilter);
+        var (catExpr, lateral) = ListExpr(catField, "cat_item");
+        var dt = ParseDT($@"""Value_{dateField.ID}""");
         var sql = $"""
-            SELECT DATE_TRUNC('{gran}', CAST("Value_{dateField.ID}" AS TIMESTAMP)) AS "Bucket",
-                   "Value_{catField.ID}" AS "Category",
+            SELECT DATE_TRUNC('{gran}', {dt}) AS "Bucket",
+                   {catExpr} AS "Category",
                    COUNT(*)::int AS "Count"
             FROM (
                 SELECT
@@ -788,8 +961,9 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {catField.ID} THEN v."ValueStringFormatted" END) AS "Value_{catField.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({dateField.ID}, {catField.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
-            ) AS pivoted
+            ) AS pivoted{lateral}
             WHERE "Value_{dateField.ID}" IS NOT NULL AND "Value_{dateField.ID}" != ''
             GROUP BY 1, 2
             ORDER BY 1
@@ -805,12 +979,16 @@ public class TableRepository : TableRepositoryAbstract
         return result;
     }
 
-    public override async Task<SortedDictionary<DateTime, Dictionary<string, double>>> AverageByTimeBucketAndCategory(Field numericField, Field dateField, Field catField, TimeGranularity granularity)
+    public override async Task<SortedDictionary<DateTime, Dictionary<string, double>>> AverageByTimeBucketAndCategory(Field numericField, Field dateField, Field catField, TimeGranularity granularity, int[]? rowFilter = null)
     {
+        if (rowFilter is { Length: 0 }) return new SortedDictionary<DateTime, Dictionary<string, double>>();
         var gran = ToPostgresGranularity(granularity);
+        var rf = RF(rowFilter);
+        var (catExpr, lateral) = ListExpr(catField, "cat_item");
+        var dt = ParseDT($@"""Value_{dateField.ID}""");
         var sql = $"""
-            SELECT DATE_TRUNC('{gran}', CAST("Value_{dateField.ID}" AS TIMESTAMP)) AS "Bucket",
-                   "Value_{catField.ID}" AS "Category",
+            SELECT DATE_TRUNC('{gran}', {dt}) AS "Bucket",
+                   {catExpr} AS "Category",
                    AVG(CAST("Value_{numericField.ID}" AS DOUBLE PRECISION)) AS "Average"
             FROM (
                 SELECT
@@ -820,9 +998,11 @@ public class TableRepository : TableRepositoryAbstract
                     MAX(CASE WHEN v."FieldID" = {catField.ID} THEN v."ValueStringFormatted" END) AS "Value_{catField.ID}"
                 FROM "app"."Value" v
                 WHERE v."FieldID" IN ({numericField.ID}, {dateField.ID}, {catField.ID})
+                  {rf}
                 GROUP BY v."RowIndex"
-            ) AS pivoted
+            ) AS pivoted{lateral}
             WHERE "Value_{dateField.ID}" IS NOT NULL AND "Value_{dateField.ID}" != ''
+              AND ("Value_{numericField.ID}" IS NULL OR "Value_{numericField.ID}" ~ '^-?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$')
             GROUP BY 1, 2
             ORDER BY 1
             """;
