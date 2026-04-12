@@ -29,8 +29,6 @@ public sealed class AnalystTest
             .AddEntityFrameworkStores<LQDbContext>()
             .AddSignInManager();
 
-        services.AddScoped<ILQDbService, LQDbService>();
-        services.AddScoped<ILQIdentityDbService, LQIdentityDbService>();
         services.AddScoped<IAnalystService, AnalystService>();
         
         var provider = services.BuildServiceProvider();
@@ -69,7 +67,7 @@ public sealed class AnalystTest
     public async Task InsertAnalyst_ReturntTrue(string value)
     {
         Analyst analyst = Analyst.GiveBirth(value);
-        IdentityResult res = await _analystService.AddAnalyst(analyst, "Ab@123");
+        IdentityResult res = await _analystService.Add(analyst, "Ab@123");
         Debug.WriteLine(res.ToString());
     }
 
@@ -77,9 +75,9 @@ public sealed class AnalystTest
     [DataRow("Tung.T.H")]
     public async Task FindAnalyst_ReturnNotNull(string value)
     {
-        Analyst? analyst = await _analystService.FindAnalystByName(value);
+        Analyst? analyst = await _analystService.FindByName(value);
         Assert.IsNotNull(analyst);
-        if(analyst is not null) 
+        if(analyst is not null)
             Debug.WriteLine(analyst.Id);
     }
 }

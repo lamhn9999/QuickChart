@@ -4,6 +4,7 @@ using LQ.Services.Implementations;
 using Microsoft.Extensions.DependencyInjection;
 using LQ.Services.Interfaces;
 using LQ.Data.Database;
+using LQ.Data.Repositories;
 using LQ.Models.DTOs;
 using LQ.Models.TableModels;
 using Microsoft.AspNetCore.Identity;
@@ -16,11 +17,10 @@ namespace LQ.Tests;
 [TestClass]
 public sealed class CSVFileTest
 {
-    private ILQDbService? _lqDbService;
     private ICSVService? _csvService;
     private IAnalystService? _analystService;
     private IAutoChartService? _autoChartService;
-    
+
     [TestInitialize]
     public void Setup()
     {
@@ -29,37 +29,26 @@ public sealed class CSVFileTest
             .Build();
         var services = new ServiceCollection();
         services.AddDbContext<LQDbContext>(options => options.UseNpgsql(config.GetConnectionString("DefaultConnection")));
-        
+
         services.AddAuthentication();
         services.AddIdentityCore<Analyst>()
             .AddEntityFrameworkStores<LQDbContext>()
             .AddSignInManager();
-        
-        services.AddScoped<ILQDbService, LQDbService>();
-        services.AddScoped<ILQIdentityDbService, LQIdentityDbService>();
+
         services.AddScoped<IAnalystService, AnalystService>();
         services.AddScoped<ICSVService, CSVService>();
+        services.AddScoped<TableRepositoryAbstract, TableRepository>();
         services.AddScoped<IAutoChartService, AutoChartService>();
-        
-        
+
         var provider = services.BuildServiceProvider();
-        _lqDbService = provider.GetRequiredService<ILQDbService>();
         _analystService = provider.GetRequiredService<IAnalystService>();
         _csvService = provider.GetRequiredService<ICSVService>();
         _autoChartService = provider.GetRequiredService<IAutoChartService>();
-        
-        // var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        // while (dir != null && !dir.GetFiles("*.csproj").Any())
-        // {
-        //     dir = dir.Parent;
-        // }
-        // logPath = Path.Combine(dir!.FullName, "test.log");
     }
-    
+
     [TestMethod]
     public void InjectDependency_ReturnNotNull()
     {
-        Assert.IsNotNull(_lqDbService);
         Assert.IsNotNull(_csvService);
     }
 
@@ -141,25 +130,5 @@ public sealed class CSVFileTest
     //     bool temp = await _csvService.ProcessUploadedCSV(tester,
     //         "/home/lam/LQ/LQ/Data/SampleCSVs/player_stats_2023.csv");
     // }
-    [TestMethod]
-    public void FilterTest()
-    {
-        List<ValueFilterDTO> filters = new List<ValueFilterDTO>
-        {
-            new ValueFilterDTO {FieldIndex = 1, FilteringValues = new List<string>{"2019", "2020"}},
-            new ValueFilterDTO {FieldIndex = 2, FilteringValues = new List<string>{"19"}},
-            new ValueFilterDTO {FieldIndex = 3, FilteringValues = new List<string>{"7.4"}},
-        };
-        Table? TestTable = _lqDbService.GetTableWithFilter(56, filters);
-        var tabledisplay = TestTable.GetDisplay();
-        for (int i = 0; i < tabledisplay.Length; i++)
-        {
-            for (int j = 0; j < tabledisplay[i].Length; j++)
-            {
-                Debug.Write(tabledisplay[i][j] + ",");
-            }
-
-            Debug.WriteLine("");
-        }
-    }
+    // FilterTest moved to TableRepositoryTest.cs (uses TableRepositoryAbstract.GetWithFilter)
 }

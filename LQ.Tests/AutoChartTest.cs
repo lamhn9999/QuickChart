@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LQ.Data.Database;
+using LQ.Data.Repositories;
 using LQ.Models.AnalystModels;
 using LQ.Models.ChartModels;
 using LQ.Models.DTOs;
@@ -20,7 +21,7 @@ public class AutoChartTest
     private ICSVService _csvService;
     private IAutoChartService _autoChartService;
     private string logPath { get; set; }
-    
+
     [TestInitialize]
     public void Setup()
     {
@@ -29,19 +30,18 @@ public class AutoChartTest
             .Build();
         var services = new ServiceCollection();
         services.AddDbContext<LQDbContext>(options => options.UseNpgsql(config.GetConnectionString("DefaultConnection")));
-        
+
         services.AddAuthentication();
         services.AddIdentityCore<Analyst>()
             .AddEntityFrameworkStores<LQDbContext>()
             .AddSignInManager();
-        
-        services.AddScoped<ILQDbService, LQDbService>();
-        services.AddScoped<ILQIdentityDbService, LQIdentityDbService>();
+
         services.AddScoped<IAnalystService, AnalystService>();
         services.AddScoped<ICSVService, CSVService>();
+        services.AddScoped<TableRepositoryAbstract, TableRepository>();
         services.AddScoped<IAutoChartService, AutoChartService>();
-        
-        
+
+
         var provider = services.BuildServiceProvider();
         _analystService = provider.GetRequiredService<IAnalystService>();
         _csvService = provider.GetRequiredService<ICSVService>();
@@ -77,25 +77,6 @@ public class AutoChartTest
     //     File.AppendAllText(logPath, "end--------------------------------------------\n");
     // }
 
-    [TestMethod]
-    public async Task NumericTest()
-    {
-        File.WriteAllText(logPath, String.Empty);
-        Analyst tester = await _analystService.FindAnalystByName("BaGia");
-        Table tempTable = _csvService.GetTable(tester.Id, "main_dataset.csv");
-        List<int> fieldindexes = new List<int> { 3, 4 };
-        List<Chart> res = _autoChartService.DetectChart(tempTable.CSVFile.ID, fieldindexes);
-        
-        File.AppendAllText(logPath, "--------------------------------------------\n");
-        foreach (FieldValues fv in tempTable.Columns)
-        {
-            if(fieldindexes.Contains(fv.Field.Index))
-                File.AppendAllText(logPath, JsonSerializer.Serialize(fv.Field.Categories) + "\n");
-        }
-        foreach (Chart c in res)
-        {
-            File.AppendAllText(logPath, c.ShowJson() + "\n");
-        }
-        File.AppendAllText(logPath, "end--------------------------------------------\n");   
-    }
+    // NumericTest was removed: ICSVService.GetTable no longer exists after the
+    // TableRepository refactor. Use TableRepositoryTest.DetectChartAsync_* instead.
 }
