@@ -6,8 +6,8 @@ export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 
 export let muuriGrid = null;
 
 const axisStyle = {
-    ticks: { color: "white" },
-    grid: { color: "lightgray" }
+    ticks: { color: "white", font: { size: 11 } },
+    grid: { color: "rgba(255,255,255,0.1)" }
 };
 
 const stackedAxis = {
@@ -47,25 +47,37 @@ function buildMatrixDataset(sample) {
     const xCount = new Set(heatmapData.map(d => d.x)).size;
     const yCount = new Set(heatmapData.map(d => d.y)).size;
 
-    // Detect correlation matrix by title — uses diverging scale (-1 → teal, 0 → neutral, +1 → coral)
+    // Detect correlation matrix by title
     const isCorr = (sample.title || '').toLowerCase().includes('correlation');
 
-    function divergingColor(v) {
-        const t = Math.max(-1, Math.min(1, v));
-        if (t >= 0) return `rgba(233,150,122,${(t * 0.88 + 0.05).toFixed(2)})`;  // coral
-        else        return `rgba(82,200,155,${((-t) * 0.88 + 0.05).toFixed(2)})`; // teal
+    // Muted coolwarm: steel-blue → off-white → crimson (softer than pure blue/white/red)
+    function corrToColor(v) {
+        const t = (Math.max(-1, Math.min(1, v)) + 1) / 2;
+        let r, g, b;
+        if (t < 0.5) {
+            const f = t / 0.5;
+            r = Math.round(58  + f * (238 - 58));   // steel-blue → off-white
+            g = Math.round(76  + f * (238 - 76));
+            b = Math.round(192 + f * (238 - 192));
+        } else {
+            const f = (t - 0.5) / 0.5;
+            r = Math.round(238 + f * (178 - 238));  // off-white → crimson
+            g = Math.round(238 + f * (24  - 238));
+            b = Math.round(238 + f * (43  - 238));
+        }
+        return `rgba(${r},${g},${b},0.92)`;
     }
 
     return [{
         type: 'matrix',
         label: sample.title ?? 'Heatmap',
         data: heatmapData,
-        borderColor: '#fff',
+        borderColor: 'rgba(255,255,255,0.12)',
         borderWidth: 1,
 
         backgroundColor(ctx) {
             const v = ctx.raw.v;
-            if (isCorr) return divergingColor(v);
+            if (isCorr) return corrToColor(v);
             const t = (v - minVal) / (maxVal - minVal || 1);
             return `rgba(0,123,255,${t})`;
         },
@@ -80,6 +92,81 @@ function buildMatrixDataset(sample) {
             return a ? (a.bottom - a.top) / yCount - 2 : 0;
         }
     }];
+}
+
+// ── Box-plot canvas drawing ───────────────────────────────────────────────────
+
+function drawBoxPlot(chart, data) {
+    const { labels, min, q1, med, q3, max } = data;
+    const c  = chart.ctx;
+    const xs = chart.scales.x;
+    const ys = chart.scales.y;
+    if (!xs || !ys || !labels.length) return;
+
+    const n    = labels.length;
+    const catW = n > 1
+        ? Math.abs(xs.getPixelForValue(labels[1]) - xs.getPixelForValue(labels[0]))
+        : (chart.chartArea.right - chart.chartArea.left);
+    const half = catW * 0.28;   // IQR box half-width
+    const cap  = catW * 0.13;   // whisker cap half-width
+
+    c.save();
+    c.beginPath();
+    c.rect(chart.chartArea.left, chart.chartArea.top,
+           chart.chartArea.right  - chart.chartArea.left,
+           chart.chartArea.bottom - chart.chartArea.top);
+    c.clip();
+
+    labels.forEach((label, i) => {
+        const cx   = xs.getPixelForValue(label);
+        const yMin = ys.getPixelForValue(min[i]);
+        const yQ1  = ys.getPixelForValue(q1[i]);
+        const yMed = ys.getPixelForValue(med[i]);
+        const yQ3  = ys.getPixelForValue(q3[i]);
+        const yMax = ys.getPixelForValue(max[i]);
+
+        const boxTop = Math.min(yQ1, yQ3);
+        const boxBot = Math.max(yQ1, yQ3);
+        const boxH   = Math.max(boxBot - boxTop, 1);
+
+        // Whisker lines: Max→Q3 and Q1→Min
+        c.beginPath();
+        c.strokeStyle = 'rgba(54,162,235,0.75)';
+        c.lineWidth   = 1.5;
+        c.moveTo(cx, yMax);   c.lineTo(cx, boxTop);
+        c.moveTo(cx, boxBot); c.lineTo(cx, yMin);
+        c.stroke();
+
+        // T-caps at Max and Min
+        c.beginPath();
+        c.moveTo(cx - cap, yMax); c.lineTo(cx + cap, yMax);
+        c.moveTo(cx - cap, yMin); c.lineTo(cx + cap, yMin);
+        c.stroke();
+
+        // IQR box (Q1–Q3)
+        const r = Math.min(3, half * 0.1, boxH * 0.1);
+        c.beginPath();
+        if (c.roundRect) {
+            c.roundRect(cx - half, boxTop, half * 2, boxH, r);
+        } else {
+            c.rect(cx - half, boxTop, half * 2, boxH);
+        }
+        c.fillStyle   = 'rgba(54,162,235,0.22)';
+        c.strokeStyle = 'rgba(54,162,235,0.9)';
+        c.lineWidth   = 1.5;
+        c.fill();
+        c.stroke();
+
+        // Median line — bright cyan stands out clearly against the blue box
+        c.beginPath();
+        c.strokeStyle = 'rgb(0,220,255)';
+        c.lineWidth   = 2.5;
+        c.moveTo(cx - half, yMed);
+        c.lineTo(cx + half, yMed);
+        c.stroke();
+    });
+
+    c.restore();
 }
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
@@ -107,10 +194,19 @@ function reformatColor(color, canvas) {
     chart.options.plugins.legend.labels.color = textColor;
     chart.options.plugins.title.color = textColor;
 
+    const gridColor = textColor === 'white' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.15)';
+
     chart.options.scales.x.ticks.color = textColor;
     chart.options.scales.y.ticks.color = textColor;
     if (chart.options.scales.z)
         chart.options.scales.z.ticks.color = textColor;
+
+    if (chart.options.scales.x?.grid)
+        chart.options.scales.x.grid.color = gridColor;
+    if (chart.options.scales.y?.grid)
+        chart.options.scales.y.grid.color = gridColor;
+    if (chart.options.scales.z?.grid)
+        chart.options.scales.z.grid.color = gridColor;
 
     if (chart.config.type === "matrix") {
         chart.data.datasets.forEach(ds => {
@@ -217,6 +313,8 @@ export async function autoChart() {
                 const isBubble          = sample.chartType === 10;
                 const isBar             = chartArray[sample.chartType] === 'bar';
                 const isPie             = chartArray[sample.chartType] === 'pie';
+                const isLine            = chartArray[sample.chartType] === 'line';
+                const isHorizontalBar   = sample.chartType === 6;
 
                 // Box plot: backend emits exactly 5 Y datasets named Min/Q1/Median/Q3/Max
                 const isBoxPlot = !isMatrix && !isBubble
@@ -241,6 +339,12 @@ export async function autoChart() {
                                     label: ds.label,
                                     data: ds.data,
                                     yAxisID: 'y',
+                                    ...(isBar && { borderRadius: 4 }),
+                                    ...(isLine && {
+                                        tension: 0.3,
+                                        pointRadius: 3,
+                                        pointHoverRadius: 6,
+                                    }),
                                 };
                                 // Regression trend line: showLine scatter, dashed, no points
                                 if (typeof ds.label === 'string' && ds.label.startsWith('Trend:')) {
@@ -257,16 +361,25 @@ export async function autoChart() {
                             })
                         ];
 
-                // Box plot: assign distinctive point styles per statistic
+                // Box plot: keep 5 stat datasets invisible for y-axis scaling;
+                // a per-chart inline plugin (set up below) draws the visual.
+                let boxData = null;
                 if (isBoxPlot) {
-                    const styles = ['dash', 'line', 'crossRot', 'line', 'dash'];
-                    const sizes  = [6, 5, 9, 5, 6];
-                    datasets.forEach((ds, i) => {
-                        if (i < styles.length) {
-                            ds.pointStyle  = styles[i];
-                            ds.pointRadius = sizes[i];
-                            ds.showLine    = false;
-                        }
+                    const yVal = d => (d !== null && typeof d === 'object' && 'y' in d) ? d.y : d;
+                    boxData = {
+                        labels: sample.x,
+                        min: datasets[0].data.map(yVal),
+                        q1:  datasets[1].data.map(yVal),
+                        med: datasets[2].data.map(yVal),
+                        q3:  datasets[3].data.map(yVal),
+                        max: datasets[4].data.map(yVal),
+                    };
+                    datasets.forEach(ds => {
+                        ds.pointRadius      = 0;
+                        ds.pointHoverRadius = 1;
+                        ds.showLine         = false;
+                        ds.borderColor      = 'transparent';
+                        ds.backgroundColor  = 'transparent';
                     });
                 }
 
@@ -333,9 +446,10 @@ export async function autoChart() {
                                     y: { type: 'linear', ...axisStyle }
                                 }
                                 : isBoxPlot
-                                    // Box plot: {x: "CategoryName", y: value} — must use category x-axis
+                                    // Box plot: offset:true gives half-category padding on each side so
+                                    // edge boxes aren't clipped by the chart area boundary
                                     ? {
-                                        x: { type: 'category', labels: sample.x, ...axisStyle },
+                                        x: { type: 'category', labels: sample.x, offset: true, ...axisStyle, grid: { ...axisStyle.grid, display: false } },
                                         y: { position: 'left', ...axisStyle }
                                     }
                                     : isMixed
@@ -352,14 +466,46 @@ export async function autoChart() {
                                                 y: { display: false }
                                             }
                                             : {
-                                                x: axisStyle,
+                                                x: {
+                                                    ...axisStyle,
+                                                    ...(isBar && !isHorizontalBar && { grid: { ...axisStyle.grid, display: false } })
+                                                },
                                                 y: {
                                                     position: "left",
-                                                    ...axisStyle
+                                                    ...axisStyle,
+                                                    ...(isHorizontalBar && { grid: { ...axisStyle.grid, display: false } })
                                                 }
                                             }
                     }
                 };
+
+                if (isBoxPlot && boxData) {
+                    // Inline plugin: only active on this chart instance
+                    cfg.plugins = [{
+                        id: 'lqBoxPlot',
+                        afterDatasetsDraw: (chart) => drawBoxPlot(chart, boxData),
+                    }];
+                    cfg.options.plugins.legend = { display: false };
+                    cfg.options.interaction = { mode: 'index', axis: 'x', intersect: false };
+                    cfg.options.plugins.tooltip = {
+                        callbacks: {
+                            title: (items) => boxData.labels[items[0]?.dataIndex ?? 0] ?? '',
+                            label: (ctx) => {
+                                const names = ['Min', 'Q1', 'Median', 'Q3', 'Max'];
+                                const val   = ctx.raw?.y ?? ctx.raw;
+                                const fmt   = v => typeof v === 'number'
+                                    ? v.toLocaleString(undefined, { maximumFractionDigits: 4 })
+                                    : String(v);
+                                return ` ${names[ctx.datasetIndex] ?? ''}:  ${fmt(val)}`;
+                            },
+                            labelColor: () => ({
+                                borderColor:     'rgba(233,150,122,0.8)',
+                                backgroundColor: 'rgba(233,150,122,0.3)',
+                                borderRadius: 2,
+                            }),
+                        }
+                    };
+                }
 
                 if (isMatrix) {
                     cfg.options.plugins = cfg.options.plugins || {};
@@ -375,8 +521,82 @@ export async function autoChart() {
                     cfg.options.plugins.tooltip.callbacks.label = (ctx) => {
                         const v = ctx.raw.v;
                         const isCorr = (sample.title || '').toLowerCase().includes('correlation');
-                        return isCorr ? `R = ${v}` : `Value: ${v}`;
+                        return isCorr ? `r = ${v.toFixed(2)}` : `Value: ${v}`;
                     };
+
+                    // Correlation matrices: cell text + color bar
+                    const isCorr = (sample.title || '').toLowerCase().includes('correlation');
+                    if (isCorr) {
+                        cfg.options.layout = { padding: { right: 62 } };
+
+                        cfg.plugins = [{
+                            id: 'corrCellText',
+                            afterDraw(chart) {
+                                const { ctx, data: { datasets }, chartArea: ca } = chart;
+                                const meta = chart.getDatasetMeta(0);
+
+                                // ── Cell values ───────────────────────────
+                                datasets[0].data.forEach((d, i) => {
+                                    const el = meta.data[i];
+                                    if (!el) return;
+                                    ctx.save();
+                                    ctx.fillStyle = Math.abs(d.v) > 0.5 ? '#ffffff' : '#333333';
+                                    ctx.font = 'bold 11px sans-serif';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    const cp = el.getCenterPoint ? el.getCenterPoint() : { x: el.x, y: el.y };
+                                    ctx.fillText(d.v.toFixed(2), cp.x, cp.y);
+                                    ctx.restore();
+                                });
+
+                                // ── Color bar ─────────────────────────────
+                                const barX = ca.right + 14;
+                                const barY = ca.top;
+                                const barW = 14;
+                                const barH = ca.bottom - ca.top;
+
+                                const grad = ctx.createLinearGradient(0, barY, 0, barY + barH);
+                                grad.addColorStop(0,   'rgba(178,24,43,0.92)');
+                                grad.addColorStop(0.5, 'rgba(238,238,238,0.92)');
+                                grad.addColorStop(1,   'rgba(58,76,192,0.92)');
+
+                                ctx.save();
+                                ctx.beginPath();
+                                if (ctx.roundRect) ctx.roundRect(barX, barY, barW, barH, 3);
+                                else               ctx.rect(barX, barY, barW, barH);
+                                ctx.fillStyle   = grad;
+                                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                                ctx.lineWidth   = 0.5;
+                                ctx.fill();
+                                ctx.stroke();
+
+                                // Tick marks and labels
+                                const tickColor = chart.options.scales?.x?.ticks?.color ?? 'white';
+                                const tickAlpha = tickColor === 'white' ? '0.75' : '0.8';
+                                const lineAlpha = tickColor === 'white' ? '0.5'  : '0.4';
+                                ctx.fillStyle   = tickColor === 'white'
+                                    ? `rgba(255,255,255,${tickAlpha})`
+                                    : `rgba(0,0,0,${tickAlpha})`;
+                                ctx.font        = '10px sans-serif';
+                                ctx.textAlign   = 'left';
+                                ctx.textBaseline = 'middle';
+                                [1, 0.5, 0, -0.5, -1].forEach(v => {
+                                    const ty = barY + (1 - (v + 1) / 2) * barH;
+                                    ctx.beginPath();
+                                    ctx.strokeStyle = tickColor === 'white'
+                                        ? `rgba(255,255,255,${lineAlpha})`
+                                        : `rgba(0,0,0,${lineAlpha})`;
+                                    ctx.lineWidth   = 1;
+                                    ctx.moveTo(barX + barW,     ty);
+                                    ctx.lineTo(barX + barW + 4, ty);
+                                    ctx.stroke();
+                                    ctx.fillText(v === 0 ? '0' : v.toFixed(1), barX + barW + 7, ty);
+                                });
+
+                                ctx.restore();
+                            }
+                        }];
+                    }
                 }
 
                 if (!isMatrix && !isBubble && sample.z?.length > 0) {
