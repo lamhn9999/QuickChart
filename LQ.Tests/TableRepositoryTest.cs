@@ -20,7 +20,7 @@ namespace LQ.Tests;
 [TestClass]
 public class TableRepositoryTest
 {
-    private const int CSV_FILE_ID = 56;
+    private const int CSV_FILE_ID = 34;
 
     private static readonly List<int> AllFields    = [0, 1, 2, 3];
     private static readonly List<int> CatFields    = [0, 1];
@@ -61,6 +61,18 @@ public class TableRepositoryTest
         var file = await _repo.GetFile(CSV_FILE_ID);
         Assert.IsNotNull(file);
         Debug.WriteLine($"File: id={file.ID}  name={file.Name}");
+    }
+
+    [TestMethod]
+    public async Task GetDisplayTable()
+    {
+        var file = await _repo.GetFile(CSV_FILE_ID);
+        var dto = await _repo.GetDisplayLimited(file, 200);
+        Debug.WriteLine($"File: {dto.FileName} | Rows: {dto.RowCount}");
+        Debug.WriteLine(string.Join(" | ", dto.Fields));
+        foreach (var row in dto.Values)
+            Debug.WriteLine(string.Join(" | ", row));
+        Assert.AreEqual(200, dto.RowCount);
     }
 
 
@@ -247,7 +259,7 @@ public class TableRepositoryTest
             new() { FieldIndex = 1, FilteringValues = ["2019", "2020"] },
         };
 
-        var charts = _autoChart.DetectChart(CSV_FILE_ID, AllFields, filters);
+        var charts = await _autoChart.DetectChartWithFiltersAsync(CSV_FILE_ID, AllFields, filters);
 
         Debug.WriteLine($"Filtered charts: {charts.Count}");
         foreach (var c in charts)

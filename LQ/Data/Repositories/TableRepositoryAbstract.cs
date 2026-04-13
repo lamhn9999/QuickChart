@@ -21,6 +21,7 @@ public abstract class TableRepositoryAbstract
     protected abstract Task Insert(Table table);
 
     public abstract Task<List<Field>> GetFields(CSVFile csvFile, List<int> fieldIndexes);
+    public abstract Task<Field> GetField(int csvFileId, int fieldIndex);
 
     public abstract Task<Table> Get(CSVFile csvFile);
     public abstract Task<Table> Get(CSVFile csvFile, List<int> fieldIndexes);
@@ -29,6 +30,9 @@ public abstract class TableRepositoryAbstract
     public abstract Task<Table> GetWithFilter(CSVFile csvFile, List<ValueFilterDTO> filters);
     public abstract Task<Table> GetWithFilter(CSVFile csvFile, List<int> fieldIndexes, List<ValueFilterDTO> filters);
     public abstract Task<Table> GetWithFilterLimited(CSVFile csvFile, List<ValueFilterDTO> filters, int rowLimit);
+    public abstract Task<TableDisplayDTO> GetDisplayLimited(CSVFile csvFile, int rowLimit);
+    public abstract Task<TableDisplayDTO> GetDisplayWithFilterLimited(CSVFile csvFile, List<ValueFilterDTO> filters,
+        int rowLimit); 
 
     protected abstract Task<TryChangeFieldTypeDTO> ChangeFieldType(ChangeFieldTypeDTO dto);
 

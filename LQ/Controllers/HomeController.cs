@@ -108,18 +108,12 @@ public class HomeController : Controller
         var analyst = await _analystService.FindById(analystId);
         if (analyst is null) return NotFound();
 
-        CSVFile? selectedFile = await _csvService.GetFile(analyst, filename);
+        CSVFile selectedFile = await _csvService.GetFile(analyst, filename);
         if (selectedFile is null)
             return NotFound();
 
         HttpContext.Session.SetString("CSVFileDTO", JsonSerializer.Serialize(new CSVFileDTO{currentFileID = selectedFile.ID}));
         HttpContext.Session.Remove("ListValueFilterDTO");
-        if (isGuest)
-        {
-            Table? table = await _csvService.GetTableLimited(selectedFile.ID, 200);
-            if (table is null) return NotFound();
-            return Json(table.GetDisplay());
-        }
 
         return Ok();
     }

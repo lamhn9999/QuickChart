@@ -199,10 +199,7 @@ public class AutoChartService : IAutoChartService
     public async Task<List<Chart>> DetectChartAsync(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
         => await CreateChartAsync(csvfileid, fieldindexes);
 
-    public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters, CancellationToken cancellationToken = default)
-        => DetectChartWithFiltersAsync(csvfileid, fieldindexes, filters, cancellationToken).GetAwaiter().GetResult();
-
-    private async Task<List<Chart>> DetectChartWithFiltersAsync(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters, CancellationToken cancellationToken = default)
+    public async Task<List<Chart>> DetectChartWithFiltersAsync(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters, CancellationToken cancellationToken = default)
         => await CreateChartAsync(csvfileid, fieldindexes, filters);
 
     // ═══════════════════════════════════════════════════════════════════════════

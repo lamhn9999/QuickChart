@@ -9,11 +9,12 @@ public interface ICSVService
     public Task<bool> Validate(Analyst analyst, IFormFile file);
     public Task<bool> ProcessUploaded(Analyst analyst, string path);
     public Task<bool> ProcessUploaded(Analyst analyst, IFormFile file);
-    public Task<TryChangeFieldTypeDTO> ChangeFieldType(int fieldId, string newType, char? listSplitChar);
+    public Task<TryChangeFieldTypeDTO> ChangeFieldType(CSVFile csvFile, int fieldIndex, string newType, char? listSplitChar);
     public Task<CSVFile> GetFile(Analyst analyst, string fileName);
     public Task<CSVFile> GetFile(int csvFileId);
     public Task<List<CSVFile>> GetAllFiles(Analyst analyst);
     public Task RemoveFile(Analyst analyst, string fileName);
     public Task RenameFile(Analyst analyst, string fileName, string newFileName);
-    public Task<Table?> GetTableLimited(int csvFileId, int rowLimit);
+    public Task<TableDisplayDTO> GetTableDisplayLimited(CSVFile csvFile, int rowLimit);
+    public Task<TableDisplayDTO> GetTableDisplayWithFilterLimited(CSVFile csvFile, List<ValueFilterDTO> filters, int rowLimit);
 }

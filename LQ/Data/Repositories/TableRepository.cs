@@ -112,6 +112,9 @@ public class TableRepository : TableRepositoryAbstract
     public override async Task<List<Field>> GetFields(CSVFile csvFile, List<int> fieldIndexes)
         => await GetFieldsAsync(csvFile.ID, fieldIndexes);
 
+    public override async Task<Field> GetField(int csvFileId, int fieldIndex)
+        => await GetFieldsQuery(csvFileId, [fieldIndex]).SingleAsync();
+
     public override async Task<Table> GetLimited(CSVFile csvFile, int rowLimit)
     {
         var fields = await GetFieldsAsync(csvFile.ID);
@@ -181,6 +184,64 @@ public class TableRepository : TableRepositoryAbstract
             .ToListAsync();
 
         return BuildTable(csvFile, await fieldsQuery.ToListAsync(), values);
+    }
+
+    public override async Task<TableDisplayDTO> GetDisplayLimited(CSVFile csvFile, int rowLimit)
+    {
+        var fields = await GetFieldsAsync(csvFile.ID);
+        var fieldsDisplay = fields.Select(f => new TableFieldDTO
+        {
+            Name = f.Name ?? "",
+            TypeName = f.Type.Name ?? "",
+            Categories = f.Categories,
+            Index = f.Index,
+        }).ToList();
+        var fieldIds = fields.Select(f => f.ID).ToHashSet();
+        var values = await _lqDbContext.Values
+            .Where(v => fieldIds.Contains(v.FieldID) && v.RowIndex < rowLimit)
+            .GroupBy(v => v.RowIndex)
+            .OrderBy(g => g.Key)
+            .Select(g => g.OrderBy(v => v.FieldID)
+                .Select(v => v.ValueStringFormatted)
+                .ToArray())
+            .ToArrayAsync();
+        return new TableDisplayDTO
+        {
+            FileName = csvFile.Name,
+            Fields = fieldsDisplay,
+            Values = values,
+        };
+    }
+    
+    public override async Task<TableDisplayDTO> GetDisplayWithFilterLimited(CSVFile csvFile, List<ValueFilterDTO> filters,
+        int rowLimit)
+    {
+        var fields = await GetFieldsAsync(csvFile.ID);
+        var fieldsDisplay = fields.Select(f => new TableFieldDTO
+        {
+            Name = f.Name ?? "",
+            TypeName = f.Type.Name ?? "",
+            Categories = f.Categories,
+            Index = f.Index,
+        }).ToList();
+        var fieldIds = fields.Select(f => f.ID).ToHashSet();
+        var limitedRowIndexes = GetFilteredRowIndexesQuery(csvFile.ID, filters)
+            .OrderBy(r => r)
+            .Take(rowLimit);
+        var values = await _lqDbContext.Values
+            .Where(v => fieldIds.Contains(v.FieldID) && limitedRowIndexes.Contains(v.RowIndex))
+            .GroupBy(v => v.RowIndex)
+            .OrderBy(g => g.Key)
+            .Select(g => g.OrderBy(v => v.FieldID)
+                .Select(v => v.ValueStringFormatted)
+                .ToArray())
+            .ToArrayAsync();
+        return new TableDisplayDTO
+        {
+            FileName = csvFile.Name,
+            Fields = fieldsDisplay,
+            Values = values,
+        };
     }
 
     // ─── Field type change ────────────────────────────────────────────────────

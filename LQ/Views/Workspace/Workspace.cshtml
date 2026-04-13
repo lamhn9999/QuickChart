@@ -1,5 +1,5 @@
-@using LQ.Models.TableModels
-@model LQ.Models.TableModels.Table;
+@using LQ.Models.DTOs
+@model LQ.Models.DTOs.TableDisplayDTO;
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
@@ -23,7 +23,7 @@
     <nav class="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
         <div class="flex items-center gap-3">
             <h1 class="text-xl font-semibold tracking-tight text-white">
-                Demo: <span class="text-[#E9967A] italic">@Model.CSVFile.Name</span>
+                Demo: <span class="text-[#E9967A] italic">@Model.FileName</span>
             </h1>
         </div>
         <div class="flex items-center gap-4">
@@ -43,24 +43,22 @@
                 <thead class="sticky top-0">
                 <tr>
                     @{
-                        foreach (FieldValues fv in Model.Columns)
+                        foreach (var f in Model.Fields)
                         {
-                            <th onclick="fieldClicked(@fv.Field.Index)">
-                                @fv.Field.Name
+                            <th onclick="fieldClicked(@f.Index)">
+                                @f.Name
                             </th>
                         }
                     }
                 </tr>
                 </thead>
                 <tbody>
-                @for(int i = 0; i < Model.RowCount; i++)
+                @foreach (var row in Model.Values)
                 {
-                    // DELETE LATER
-                    if (i > 200) break;
                     <tr>
-                        @foreach (FieldValues fv in Model.Columns)
+                        @foreach (var cell in row)
                         {
-                            <td>@fv.Values[i].ValueString</td>
+                            <td>@cell</td>
                         }
                     </tr>
                 }

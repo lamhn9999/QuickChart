@@ -76,11 +76,11 @@ export function showToast(message, isError = false) {
 
 // ── Table update ──────────────────────────────────────────────────────────────
 
-export function updateTable(rows) {
+export function updateTable(dto) {
     const tbody = document.querySelector("#dataTable tbody");
     let trs = tbody.querySelectorAll("tr");
 
-    const dataRows = rows.slice(1); // skip header row if server includes it
+    const dataRows = dto.values;
 
     dataRows.forEach((row, i) => {
         let tr;

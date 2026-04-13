@@ -69,16 +69,7 @@ public class Table
                 tableString[j+1][i] = Columns[i].Values[j].ValueString;
             }
         }
-
-        // for (int i = 0; i <= RowCount; i++)
-        // {
-        //     for (int j = 0; j < Columns.Count; j++)
-        //     {
-        //         System.Console.Write($"{tableString[i][j]},");
-        //     }
-        //
-        //     System.Console.WriteLine();
-        // }
+        
         return tableString;
     }
     public void SetRowCount()

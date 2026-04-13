@@ -587,9 +587,19 @@ public class CSVService : TableRepository, ICSVService
         return await base.GetLimited(csvFile, rowLimit);
     }
 
-    public async Task<TryChangeFieldTypeDTO> ChangeFieldType(int fieldId, string newType, char? listSplitChar)
+    public async Task<TableDisplayDTO> GetTableDisplayLimited(CSVFile csvFile, int rowLimit)
+    {
+        return await base.GetDisplayLimited(csvFile, rowLimit);
+    }
+
+    public async Task<TableDisplayDTO> GetTableDisplayWithFilterLimited(CSVFile csvFile, List<ValueFilterDTO> filters, int rowLimit)
+    {
+        return await base.GetDisplayWithFilterLimited(csvFile, filters, rowLimit);
+    }
+
+    public async Task<TryChangeFieldTypeDTO> ChangeFieldType(CSVFile csvFile, int fieldIndex, string newType, char? listSplitChar)
     {
         if (!TypeNameMap.Map.TryGetValue(newType, out var value)) throw new BadHttpRequestException("We do not deal with this type.");
-        return await base.ChangeFieldType(new ChangeFieldTypeDTO(fieldId, value, listSplitChar));
+        return await base.ChangeFieldType(new ChangeFieldTypeDTO(base.GetField(csvFile.ID, fieldIndex).Id, value, listSplitChar));
     }
 }

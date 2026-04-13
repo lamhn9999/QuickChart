@@ -1,5 +1,5 @@
-@using LQ.Models.TableModels
-@model LQ.Models.TableModels.Table;
+@using LQ.Models.DTOs
+@model LQ.Models.DTOs.TableDisplayDTO;
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
@@ -23,7 +23,7 @@
     <nav class="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
         <div class="flex items-center gap-3">
             <h1 class="text-xl font-semibold tracking-tight text-white">
-                Workspace: <span class="text-[#E9967A] italic">@Model.CSVFile.Name</span>
+                Workspace: <span class="text-[#E9967A] italic">@Model.FileName</span>
             </h1>
         </div>
         <div class="flex items-center gap-4">
@@ -58,10 +58,10 @@
                 <!-- The TR becomes the bordered column container when collapsed -->
                 <tr class="group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:items-stretch group-[.is-collapsed]:w-[calc(100%-2rem)] group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700 group-[.is-collapsed]:rounded-2xl group-[.is-collapsed]:p-3 group-[.is-collapsed]:gap-2 group-[.is-collapsed]:m-4 group-[.is-collapsed]:bg-zinc-900/30 transition-all">
                     @{
-                        foreach (FieldValues fv in Model.Columns)
+                        foreach (var f in Model.Fields)
                         {
                             <!-- The TH becomes a larger, block-level card when collapsed -->
-                            <th onclick="fieldClicked(@fv.Field.Index)" class="relative align-top p-2 focus-within:z-[100] has-[.filterPopup:not(.hidden)]:z-[101] has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@fv.Field.Index">
+                            <th onclick="fieldClicked(@f.Index)" class="relative align-top p-2 focus-within:z-[100] has-[.filterPopup:not(.hidden)]:z-[101] has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@f.Index">
                                 <!-- Flex container: Column in expanded, Row in collapsed -->
                                 <div class="flex flex-col h-full min-h-[64px] justify-between group-[.is-collapsed]:flex-row group-[.is-collapsed]:items-center group-[.is-collapsed]:min-h-0">
                                     
@@ -69,11 +69,11 @@
                                     <div class="flex justify-between items-start w-full group-[.is-collapsed]:w-auto group-[.is-collapsed]:flex-1 group-[.is-collapsed]:items-center group-[.is-collapsed]:justify-start group-[.is-collapsed]:gap-3 min-w-0">
                                         
                                         <!-- Field Name (Top Left) -->
-                                        <span class="font-semibold truncate group-[.is-collapsed]:font-medium">@fv.Field.Name</span>
-                                        
+                                        <span class="font-semibold truncate group-[.is-collapsed]:font-medium">@f.Name</span>
+
                                         <!-- Field Type (Top Right) -->
                                         <div class="flex items-center gap-1 relative z-[60]">
-                                            <span class="text-[10px] font-normal text-zinc-500 tracking-wide shrink-0 group-[.is-collapsed]:text-sm" id="fieldType-@fv.Field.Index">@fv.Field.Type.Name</span>
+                                            <span class="text-[10px] font-normal text-zinc-500 tracking-wide shrink-0 group-[.is-collapsed]:text-sm" id="fieldType-@f.Index">@f.TypeName</span>
                                             
                                             <div class="relative">
                                                 <button class="gear-btn hover:cursor-pointer text-zinc-500 hover:text-white transition-colors relative z-40 focus:outline-none p-1 -m-1 rounded-full" onclick="gearBtnClicked(event, this)">
@@ -93,19 +93,19 @@
                                                         <div class="hidden type-menu-popup absolute top-0 left-full ml-1 w-max min-w-[120px] bg-zinc-900/95 backdrop-blur-3xl border border-white/20 rounded-xl p-1 shadow-2xl flex flex-col gap-0.5 z-[9999]">
                                                             @{
                                                                 string ctName = "";
-                                                                if (fv.Field.Type == typeof(string)) { ctName = "string"; }
-                                                                else if (fv.Field.Type == typeof(int)) { ctName = "int"; }
-                                                                else if (fv.Field.Type == typeof(double)) { ctName = "double"; }
-                                                                else if (fv.Field.Type == typeof(DateTime)) { ctName = "datetime"; }
-                                                                else if (fv.Field.Type == typeof(bool)) { ctName = "bool"; }
-                                                                else if (fv.Field.Type == typeof(System.Collections.Generic.List<string>)) { ctName = "list"; }
+                                                                if (f.TypeName == "String")   { ctName = "string"; }
+                                                                else if (f.TypeName == "Int32")    { ctName = "int"; }
+                                                                else if (f.TypeName == "Double")   { ctName = "double"; }
+                                                                else if (f.TypeName == "DateTime") { ctName = "datetime"; }
+                                                                else if (f.TypeName == "Boolean")  { ctName = "bool"; }
+                                                                else if (f.TypeName.StartsWith("List")) { ctName = "list"; }
 
                                                                 var allTypes = new string[] { "string", "int", "double", "datetime", "bool", "list" };
                                                                 foreach (var t in allTypes)
                                                                 {
                                                                     if (t != ctName)
                                                                     {
-                                                                        <button onclick="changeFieldType(event, @fv.Field.Index, '@t')" class="text-left px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors w-full tracking-wide">@t</button>
+                                                                        <button onclick="changeFieldType(event, @f.Index, '@t')" class="text-left px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors w-full tracking-wide">@t</button>
                                                                     }
                                                                 }
                                                             }
@@ -127,9 +127,9 @@
                                             </svg>
                                         </button>
                                         
-                                        @if (fv.Field.Type == typeof(int) || fv.Field.Type == typeof(double))
+                                        @if (f.TypeName == "Int32" || f.TypeName == "Double")
                                         {
-                                            <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="@(fv.Field.Type == typeof(int) ? "Int" : "Double")" onclick="filterPopupClicked(event, this)">
+                                            <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="@(f.TypeName == "Int32" ? "Int" : "Double")" onclick="filterPopupClicked(event, this)">
                                                 <div class="flex flex-col gap-3">
                                                     <div>
                                                         <label class="block text-xs text-zinc-400 mb-1">Specific Values</label>
@@ -153,7 +153,7 @@
                                                 </div>
                                             </div>
                                         }
-                                        else if (fv.Field.Type == typeof(DateTime))
+                                        else if (f.TypeName == "DateTime")
                                         {
                                             <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="DateTime" onclick="filterPopupClicked(event, this)">
                                                 <div class="flex flex-col gap-3">
@@ -174,10 +174,10 @@
                                                 </div>
                                             </div>
                                         }
-                                        else if (fv.Field.Type == typeof(bool))
+                                        else if (f.TypeName == "Boolean")
                                         {
                                             <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="Bool" onclick="filterPopupClicked(event, this)">
-                                                <label class="block text-xs text-zinc-400 mb-2">Filter @fv.Field.Name</label>
+                                                <label class="block text-xs text-zinc-400 mb-2">Filter @f.Name</label>
                                                 <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
                                                 <div class="flex gap-2 mb-2">
                                                     <button class="flex-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-1.5 rounded transition" onclick="applyBoolFilter(event, this, 'true')">True</button>
@@ -185,10 +185,10 @@
                                                 </div>
                                             </div>
                                         }
-                                        else if (fv.Field.Type == typeof(System.Collections.Generic.List<string>))
+                                        else if (f.TypeName.StartsWith("List"))
                                         {
                                             <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="ListString" onclick="filterPopupClicked(event, this)">
-                                                <label class="block text-xs text-zinc-400 mb-1">Search items in @fv.Field.Name</label>
+                                                <label class="block text-xs text-zinc-400 mb-1">Search items in @f.Name</label>
                                                 <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
                                                 <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
                                                 
@@ -205,7 +205,7 @@
                                         else
                                         {
                                             <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="String" onclick="filterPopupClicked(event, this)">
-                                                <label class="block text-xs text-zinc-400 mb-1">Search in @fv.Field.Name</label>
+                                                <label class="block text-xs text-zinc-400 mb-1">Search in @f.Name</label>
                                                 <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
                                                 <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
                                                 
@@ -228,12 +228,12 @@
                 </thead>
                 <!-- Hides the rows entirely when collapsed -->
                 <tbody class="group-[.is-collapsed]:hidden">
-                @for(int i = 0; i < Model.RowCount; i++)
+                @foreach (var row in Model.Values)
                 {
                     <tr>
-                        @foreach (FieldValues fvx in Model.Columns)
+                        @foreach (var cell in row)
                         {
-                            <td>@fvx.Values[i].ValueString</td>
+                            <td>@cell</td>
                         }
                     </tr>
                 }
