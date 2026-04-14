@@ -600,6 +600,7 @@ public class CSVService : TableRepository, ICSVService
     public async Task<TryChangeFieldTypeDTO> ChangeFieldType(CSVFile csvFile, int fieldIndex, string newType, char? listSplitChar)
     {
         if (!TypeNameMap.Map.TryGetValue(newType, out var value)) throw new BadHttpRequestException("We do not deal with this type.");
-        return await base.ChangeFieldType(new ChangeFieldTypeDTO(base.GetField(csvFile.ID, fieldIndex).Id, value, listSplitChar));
+        var field = await base.GetField(csvFile.ID, fieldIndex);
+        return await base.ChangeFieldType(new ChangeFieldTypeDTO(field.ID, value, listSplitChar));
     }
 }
