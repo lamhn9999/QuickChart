@@ -113,6 +113,17 @@ public class WorkspaceController : Controller
         return Json(tableDisplay);
     }
 
+    [HttpGet("sparkline/{fieldIndex:int}")]
+    public async Task<IActionResult> SparklineChart(int fieldIndex)
+    {
+        if (CurrentCSVFileDTO is null || CurrentTableDTO is null) return NotFound();
+        if (fieldIndex < 0 || fieldIndex >= CurrentTableDTO.FieldCount) return BadRequest();
+        var chart = await _autoChartService.DetectSingleFieldChartAsync(
+            CurrentCSVFileDTO.currentFileID, fieldIndex, CurrentFilters);
+        if (chart is null) return NoContent();
+        return Json(chart);
+    }
+
     [HttpPost("changeFieldType")]
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> ChangeFieldType(int fieldIndex, string newType, char? listSplitChar)

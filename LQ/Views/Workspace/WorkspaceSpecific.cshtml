@@ -1,4 +1,5 @@
 @using LQ.Models.DTOs
+@using LQ.Models.TableModels
 @model LQ.Models.DTOs.TableDisplayDTO;
 <!DOCTYPE html>
 <html lang="en-us">
@@ -61,164 +62,159 @@
                         foreach (var f in Model.Fields)
                         {
                             <!-- The TH becomes a larger, block-level card when collapsed -->
-                            <th onclick="fieldClicked(@f.Index)" class="relative align-top p-2 focus-within:z-[100] has-[.filterPopup:not(.hidden)]:z-[101] has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@f.Index">
-                                <!-- Flex container: Column in expanded, Row in collapsed -->
-                                <div class="flex flex-col h-full min-h-[64px] justify-between group-[.is-collapsed]:flex-row group-[.is-collapsed]:items-center group-[.is-collapsed]:min-h-0">
-                                    
-                                    <!-- Top Row (Expanded) / Left Side (Collapsed) -->
-                                    <div class="flex justify-between items-start w-full group-[.is-collapsed]:w-auto group-[.is-collapsed]:flex-1 group-[.is-collapsed]:items-center group-[.is-collapsed]:justify-start group-[.is-collapsed]:gap-3 min-w-0">
-                                        
-                                        <!-- Field Name (Top Left) -->
-                                        <span class="font-semibold truncate group-[.is-collapsed]:font-medium">@f.Name</span>
+                            <th onclick="fieldClicked(@f.Index)" class="relative align-top p-2 bg-zinc-900/80 border-b border-b-zinc-800 border-r border-r-zinc-800/30 has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:text-lg group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-zinc-800/50 group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-700/50 transition-colors" data-index="@f.Index">
+                                <div class="flex flex-col">
+                                    @{
+                                        string typeSvg = f.TypeName switch {
+                                            "Int32"    => """<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>""",
+                                            "Double"   => """<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/><circle cx="19" cy="19" r="1.5" fill="currentColor" stroke="none"/>""",
+                                            "DateTime" => """<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>""",
+                                            "Boolean"  => """<rect x="1" y="7" width="22" height="10" rx="5"/><circle cx="16" cy="12" r="3" fill="currentColor" stroke="none"/>""",
+                                            _ when f.TypeName.StartsWith("List") => """<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/>""",
+                                            _          => """<text x="12" y="19" text-anchor="middle" font-family="'Times New Roman', Times, serif" font-size="20" font-weight="bold" fill="currentColor" stroke="none">T</text>"""
+                                        };
+                                        string typeLabel = f.TypeName switch {
+                                            "Int32" => "Integer", "Double" => "Float", "DateTime" => "DateTime",
+                                            "Boolean" => "Boolean", "String" => "Text",
+                                            _ when f.TypeName.StartsWith("List") => "List", _ => f.TypeName
+                                        };
+                                        string ctName = f.TypeName switch {
+                                            "String" => "string", "Int32" => "int", "Double" => "double",
+                                            "DateTime" => "datetime", "Boolean" => "bool",
+                                            _ when f.TypeName.StartsWith("List") => "list", _ => ""
+                                        };
+                                        var allTypes = new string[] { "string", "int", "double", "datetime", "bool", "list" };
+                                    }
 
-                                        <!-- Field Type (Top Right) -->
-                                        <div class="flex items-center gap-1 relative z-[60]">
-                                            <span class="text-[10px] font-normal text-zinc-500 tracking-wide shrink-0 group-[.is-collapsed]:text-sm" id="fieldType-@f.Index">@f.TypeName</span>
-                                            
-                                            <div class="relative">
-                                                <button class="gear-btn hover:cursor-pointer text-zinc-500 hover:text-white transition-colors relative z-40 focus:outline-none p-1 -m-1 rounded-full" onclick="gearBtnClicked(event, this)">
-                                                    <svg class="w-3.5 h-3.5 transition-transform duration-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                        <circle cx="12" cy="12" r="3"></circle>
-                                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                                                    </svg>
-                                                </button>
-                                                
-                                                <div class="hidden gearPopup fixed border border-white/20 bg-zinc-900/90 backdrop-blur-xl shadow-2xl rounded-xl p-1 z-[9999] text-left font-normal" onclick="event.stopPropagation()">
-                                                    <div class="relative">
-                                                        <div class="type-menu-btn px-3 py-2 hover:bg-white/10 rounded-lg cursor-pointer text-sm text-zinc-100 font-medium transition-colors flex items-center justify-between gap-3" onclick="toggleFieldTypeMenu(this)">
-                                                            Change Field Type
-                                                            <svg class="w-3.5 h-3.5 opacity-60 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                                                        </div>
-                                                        
-                                                        <div class="hidden type-menu-popup absolute top-0 left-full ml-1 w-max min-w-[120px] bg-zinc-900/95 backdrop-blur-3xl border border-white/20 rounded-xl p-1 shadow-2xl flex flex-col gap-0.5 z-[9999]">
-                                                            @{
-                                                                string ctName = "";
-                                                                if (f.TypeName == "String")   { ctName = "string"; }
-                                                                else if (f.TypeName == "Int32")    { ctName = "int"; }
-                                                                else if (f.TypeName == "Double")   { ctName = "double"; }
-                                                                else if (f.TypeName == "DateTime") { ctName = "datetime"; }
-                                                                else if (f.TypeName == "Boolean")  { ctName = "bool"; }
-                                                                else if (f.TypeName.StartsWith("List")) { ctName = "list"; }
-
-                                                                var allTypes = new string[] { "string", "int", "double", "datetime", "bool", "list" };
-                                                                foreach (var t in allTypes)
-                                                                {
-                                                                    if (t != ctName)
-                                                                    {
-                                                                        <button onclick="changeFieldType(event, @f.Index, '@t')" class="text-left px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors w-full tracking-wide">@t</button>
-                                                                    }
-                                                                }
-                                                            }
-                                                        </div>
+                                    <!-- Zone 1: type icon · field name · gear · filter -->
+                                    <div class="flex items-center gap-1.5 pb-1.5 mb-1.5 border-b border-zinc-800/40">
+                                        <span class="text-zinc-500 shrink-0" id="fieldType-@f.Index" title="@typeLabel">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">@Html.Raw(typeSvg)</svg>
+                                        </span>
+                                        <span class="font-medium text-[11px] text-zinc-200 flex-1 truncate leading-none min-w-0">@f.Name</span>
+                                        <!-- Gear -->
+                                        <div class="relative shrink-0">
+                                            <button class="gear-btn hover:cursor-pointer text-zinc-600 hover:text-zinc-300 transition-colors relative z-40 focus:outline-none p-0.5 rounded" onclick="gearBtnClicked(event, this)">
+                                                <svg class="w-3 h-3 transition-transform duration-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <circle cx="12" cy="12" r="3"></circle>
+                                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                                </svg>
+                                            </button>
+                                            <div class="hidden gearPopup fixed border border-white/20 bg-zinc-900/90 backdrop-blur-xl shadow-2xl rounded-xl p-1 z-[9999] text-left font-normal" onclick="event.stopPropagation()">
+                                                <div class="relative">
+                                                    <div class="type-menu-btn px-3 py-2 hover:bg-white/10 rounded-lg cursor-pointer text-sm text-zinc-100 font-medium transition-colors flex items-center justify-between gap-3" onclick="toggleFieldTypeMenu(this)">
+                                                        Change Field Type
+                                                        <svg class="w-3.5 h-3.5 opacity-60 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                                    </div>
+                                                    <div class="hidden type-menu-popup absolute top-0 left-full ml-1 w-max min-w-[120px] bg-zinc-900/95 backdrop-blur-3xl border border-white/20 rounded-xl p-1 shadow-2xl flex flex-col gap-0.5 z-[9999]">
+                                                        @foreach (var t in allTypes) { if (t != ctName) { <button onclick="changeFieldType(event, @f.Index, '@t')" class="text-left px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors w-full tracking-wide">@t</button> } }
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
+                                        <!-- Filter -->
+                                        <div class="relative z-50 shrink-0 focus-within:z-[101] has-[.filterPopup:not(.hidden)]:z-[101]">
+                                            <button class="filter-btn hover:cursor-pointer relative z-40 text-zinc-600 hover:text-zinc-300 transition-colors p-0.5 rounded" onclick="filterClicked(event, this)">
+                                                <span class="filter-chip hidden absolute -top-1 -left-1 bg-[#E9967A] text-black text-[9px] font-bold h-3.5 min-w-[14px] flex items-center justify-center rounded-full pointer-events-none z-10 px-0.5"></span>
+                                                <svg width="13" height="13" viewBox="0 0 24 24"><path d="M3 5H21L14 13V19L10 21V13L3 5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                            </button>
+                                            @if (f.TypeName == "Int32" || f.TypeName == "Double")
+                                            {
+                                                <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="@(f.TypeName == "Int32" ? "Int" : "Double")" onclick="filterPopupClicked(event, this)">
+                                                    <div class="flex flex-col gap-3">
+                                                        <div>
+                                                            <label class="block text-xs text-zinc-400 mb-1">Specific Values</label>
+                                                            <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                            <input type="number" step="any" placeholder="Add specific number..." class="int-specific-input rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntSpecificKey(event, this)" />
+                                                        </div>
+                                                        <div class="text-xs text-zinc-500 text-center uppercase tracking-widest font-semibold mt-1">OR</div>
+                                                        <div>
+                                                            <label class="block text-xs text-zinc-400 mb-1">Range</label>
+                                                            <div class="flex items-center gap-2">
+                                                                <input type="number" step="any" placeholder="Min" class="int-range-min rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntRangeKey(event, this)" />
+                                                                <span class="text-zinc-500 text-xs">to</span>
+                                                                <input type="number" step="any" placeholder="Max" class="int-range-max rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntRangeKey(event, this)" />
+                                                            </div>
+                                                            <button class="mt-2 text-xs w-full font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white py-1.5 rounded transition" onclick="applyIntRangeFilter(event, this)">Apply Range</button>
+                                                        </div>
+                                                        <label class="flex items-center gap-1.5 mt-1 cursor-pointer text-xs text-zinc-400">
+                                                            <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeIntCheckboxClicked(event, this)" />
+                                                            Exclude results
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (f.TypeName == "DateTime")
+                                            {
+                                                <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="DateTime" onclick="filterPopupClicked(event, this)">
+                                                    <div class="flex flex-col gap-3">
+                                                        <div>
+                                                            <label class="block text-xs text-zinc-400 mb-1">Date Range</label>
+                                                            <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                            <div class="flex flex-col gap-2">
+                                                                <input type="datetime-local" placeholder="Min Date" class="dt-range-min rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" />
+                                                                <span class="text-zinc-500 text-xs text-center">to</span>
+                                                                <input type="datetime-local" placeholder="Max Date" class="dt-range-max rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" />
+                                                            </div>
+                                                            <button class="mt-2 text-xs w-full font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white py-1.5 rounded transition" onclick="applyDtRangeFilter(event, this)">Apply Range</button>
+                                                        </div>
+                                                        <label class="flex items-center gap-1.5 mt-1 cursor-pointer text-xs text-zinc-400">
+                                                            <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeDtCheckboxClicked(event, this)" />
+                                                            Exclude results
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (f.TypeName == "Boolean")
+                                            {
+                                                <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="Bool" onclick="filterPopupClicked(event, this)">
+                                                    <label class="block text-xs text-zinc-400 mb-2">Filter @f.Name</label>
+                                                    <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                    <div class="flex gap-2 mb-2">
+                                                        <button class="flex-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-1.5 rounded transition" onclick="applyBoolFilter(event, this, 'true')">True</button>
+                                                        <button class="flex-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-1.5 rounded transition" onclick="applyBoolFilter(event, this, 'false')">False</button>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (f.TypeName.StartsWith("List"))
+                                            {
+                                                <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="ListString" onclick="filterPopupClicked(event, this)">
+                                                    <label class="block text-xs text-zinc-400 mb-1">Search items in @f.Name</label>
+                                                    <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                    <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
+                                                    <label class="flex items-center gap-1.5 mt-3 cursor-pointer text-xs text-zinc-300">
+                                                        <input type="checkbox" name="IsPartialMatch" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-sm checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="partialMatchStrCheckboxClicked(event, this)" />
+                                                        Must contain ANY (default ALL)
+                                                    </label>
+                                                    <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
+                                                        <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeCheckboxClicked(event, this)" />
+                                                        Exclude results
+                                                    </label>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="String" onclick="filterPopupClicked(event, this)">
+                                                    <label class="block text-xs text-zinc-400 mb-1">Search in @f.Name</label>
+                                                    <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                    <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
+                                                    <label class="flex items-center gap-1.5 mt-3 cursor-pointer text-xs text-zinc-300">
+                                                        <input type="checkbox" name="IsPartialMatch" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-sm checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="partialMatchStrCheckboxClicked(event, this)" />
+                                                        Partial Match
+                                                    </label>
+                                                    <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
+                                                        <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeCheckboxClicked(event, this)" />
+                                                        Exclude results
+                                                    </label>
+                                                </div>
+                                            }
+                                        </div>
                                     </div>
 
-                                    <!-- Bottom Row (Expanded) / Right Side (Collapsed) -->
-                                    <div class="flex justify-end mt-2 group-[.is-collapsed]:mt-0 group-[.is-collapsed]:shrink-0 relative z-50">
-                                        
-                                        <!-- Filter Button (Bottom Right) -->
-                                        <button class="filter-btn hover:cursor-pointer relative z-40" onclick="filterClicked(event, this)">
-                                            <span class="filter-chip hidden absolute -top-1.5 -left-1.5 bg-[#E9967A] text-black text-[10px] font-bold h-4 min-w-[16px] flex items-center justify-center rounded-full pointer-events-none z-10 px-1"></span>
-                                            <svg width="20" height="20" viewBox="0 0 24 24">
-                                                <path d="M3 5H21L14 13V19L10 21V13L3 5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                                            </svg>
-                                        </button>
-                                        
-                                        @if (f.TypeName == "Int32" || f.TypeName == "Double")
-                                        {
-                                            <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="@(f.TypeName == "Int32" ? "Int" : "Double")" onclick="filterPopupClicked(event, this)">
-                                                <div class="flex flex-col gap-3">
-                                                    <div>
-                                                        <label class="block text-xs text-zinc-400 mb-1">Specific Values</label>
-                                                        <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
-                                                        <input type="number" step="any" placeholder="Add specific number..." class="int-specific-input rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntSpecificKey(event, this)" />
-                                                    </div>
-                                                    <div class="text-xs text-zinc-500 text-center uppercase tracking-widest font-semibold mt-1">OR</div>
-                                                    <div>
-                                                        <label class="block text-xs text-zinc-400 mb-1">Range</label>
-                                                        <div class="flex items-center gap-2">
-                                                            <input type="number" step="any" placeholder="Min" class="int-range-min rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntRangeKey(event, this)" />
-                                                            <span class="text-zinc-500 text-xs">to</span>
-                                                            <input type="number" step="any" placeholder="Max" class="int-range-max rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntRangeKey(event, this)" />
-                                                        </div>
-                                                        <button class="mt-2 text-xs w-full font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white py-1.5 rounded transition" onclick="applyIntRangeFilter(event, this)">Apply Range</button>
-                                                    </div>
-                                                    <label class="flex items-center gap-1.5 mt-1 cursor-pointer text-xs text-zinc-400">
-                                                        <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeIntCheckboxClicked(event, this)" />
-                                                        Exclude results
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        }
-                                        else if (f.TypeName == "DateTime")
-                                        {
-                                            <div class="hidden filterPopup w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="DateTime" onclick="filterPopupClicked(event, this)">
-                                                <div class="flex flex-col gap-3">
-                                                    <div>
-                                                        <label class="block text-xs text-zinc-400 mb-1">Date Range</label>
-                                                        <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
-                                                        <div class="flex flex-col gap-2">
-                                                            <input type="datetime-local" placeholder="Min Date" class="dt-range-min rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" />
-                                                            <span class="text-zinc-500 text-xs text-center">to</span>
-                                                            <input type="datetime-local" placeholder="Max Date" class="dt-range-max rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" />
-                                                        </div>
-                                                        <button class="mt-2 text-xs w-full font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white py-1.5 rounded transition" onclick="applyDtRangeFilter(event, this)">Apply Range</button>
-                                                    </div>
-                                                    <label class="flex items-center gap-1.5 mt-1 cursor-pointer text-xs text-zinc-400">
-                                                        <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeDtCheckboxClicked(event, this)" />
-                                                        Exclude results
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        }
-                                        else if (f.TypeName == "Boolean")
-                                        {
-                                            <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="Bool" onclick="filterPopupClicked(event, this)">
-                                                <label class="block text-xs text-zinc-400 mb-2">Filter @f.Name</label>
-                                                <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
-                                                <div class="flex gap-2 mb-2">
-                                                    <button class="flex-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-1.5 rounded transition" onclick="applyBoolFilter(event, this, 'true')">True</button>
-                                                    <button class="flex-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-1.5 rounded transition" onclick="applyBoolFilter(event, this, 'false')">False</button>
-                                                </div>
-                                            </div>
-                                        }
-                                        else if (f.TypeName.StartsWith("List"))
-                                        {
-                                            <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="ListString" onclick="filterPopupClicked(event, this)">
-                                                <label class="block text-xs text-zinc-400 mb-1">Search items in @f.Name</label>
-                                                <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
-                                                <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
-                                                
-                                                <label class="flex items-center gap-1.5 mt-3 cursor-pointer text-xs text-zinc-300">
-                                                    <input type="checkbox" name="IsPartialMatch" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-sm checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="partialMatchStrCheckboxClicked(event, this)" />
-                                                    Must contain ANY (default ALL)
-                                                </label>
-                                                <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
-                                                    <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeCheckboxClicked(event, this)" />
-                                                    Exclude results
-                                                </label>
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <div class="hidden filterPopup w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="String" onclick="filterPopupClicked(event, this)">
-                                                <label class="block text-xs text-zinc-400 mb-1">Search in @f.Name</label>
-                                                <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
-                                                <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
-                                                
-                                                <label class="flex items-center gap-1.5 mt-3 cursor-pointer text-xs text-zinc-300">
-                                                    <input type="checkbox" name="IsPartialMatch" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-sm checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="partialMatchStrCheckboxClicked(event, this)" />
-                                                    Partial Match
-                                                </label>
-                                                <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-400">
-                                                    <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-zinc-800 border border-zinc-600 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeCheckboxClicked(event, this)" />
-                                                    Exclude results
-                                                </label>
-                                            </div>
-                                        }
+                                    <!-- Zone 3: field visual -->
+                                    <div class="mt-1.5" data-spark-col="@f.Index" data-spark-type="@f.TypeName" data-spark-categorical="@(f.Categories.Contains(Category.Categorical).ToString().ToLower())">
+                                        <canvas class="sparkline-canvas w-full block" style="height:28px"></canvas>
+                                        <div class="sparkline-stat text-[9px] text-zinc-500 mt-0.5"></div>
                                     </div>
                                 </div>
                             </th>
@@ -230,10 +226,17 @@
                 <tbody class="group-[.is-collapsed]:hidden">
                 @foreach (var row in Model.Values)
                 {
-                    <tr>
-                        @foreach (var cell in row)
+                    <tr class="even:bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors duration-75 group/row cursor-default">
+                        @for (int ci = 0; ci < row.Length; ci++)
                         {
-                            <td>@cell</td>
+                            var fieldType = Model.Fields[ci].TypeName;
+                            var isNum     = fieldType is "Int32" or "Double";
+                            var cellVal   = row[ci];
+                            var isEmpty   = string.IsNullOrEmpty(cellVal);
+                            var isZero    = isNum && (cellVal == "0" || cellVal == "0.0" || cellVal == "0.00");
+                            <td class="px-3 py-2 text-xs border-b border-zinc-800/15 whitespace-nowrap max-w-[220px] overflow-hidden text-ellipsis transition-colors duration-75
+                                       @(isNum ? "text-right tabular-nums" : "")
+                                       @(isEmpty ? "text-zinc-700" : isZero ? "text-zinc-600 group-hover/row:text-zinc-400" : "text-zinc-400 group-hover/row:text-zinc-100")">@cellVal</td>
                         }
                     </tr>
                 }
@@ -428,5 +431,222 @@
         <div id="zoomOptionPane" class="flex-1/6 min-h-0 border"></div>
     </div>
 </div>
+<script>
+// ── Header sparklines — server data, plain canvas (no Chart.js) ───────────────
+(function () {
+    // Salmon accent matching the UI's #E9967A
+    const [SR, SG, SB] = [233, 150, 122];
+    const ac = a => `rgba(${SR},${SG},${SB},${a})`;
+    const fmtN = n => Math.abs(n) >= 1e9 ? (n/1e9).toFixed(1)+'B'
+                    : Math.abs(n) >= 1e6 ? (n/1e6).toFixed(1)+'M'
+                    : Math.abs(n) >= 1e3 ? (n/1e3).toFixed(1)+'k'
+                    : Number.isInteger(n) ? String(n) : n.toPrecision(3);
+    // Labels that convey no categorical meaning
+    const NA_RE = /^(n\/a|null|none|\(empty\)|unknown|-|)$/i;
+
+    function draw(canvas, statEl, sample) {
+        const W = canvas.offsetWidth || 120;
+        const H = canvas.offsetHeight || 28;
+        canvas.width  = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+
+        // ChartType: Pie=0 Bar=1 Line=2 Histogram=3 Scatter=4
+        //            PolarArea=5 SideBar=6 Mixed=7 Matrix=8 MixedBar=9 Bubble=10
+        const type   = sample.chartType;
+        const labels = sample.x ?? [];
+        const y0     = sample.y?.[0];
+        if (!y0?.data?.length) return;
+
+        const nums = y0.data.map(Number).filter(n => !isNaN(n));
+        if (!nums.length) return;
+
+        let stat = '';
+
+        if (type === 0) {
+            const PIE_COLORS = [
+                'rgba(233,150,122,0.9)',
+                'rgba(99,179,237,0.82)',
+                'rgba(154,230,180,0.82)',
+                'rgba(113,113,122,0.55)',
+            ];
+
+            const total = nums.reduce((a, b) => a + b, 0);
+            if (!total) return;
+
+            // Build the slice data: ≤3 → all slices; ≥4 → top 3 + Other
+            let sliceData, sliceLabels;
+            if (nums.length <= 3) {
+                sliceData   = nums.slice();
+                sliceLabels = labels.map(String);
+            } else {
+                const otherSum = nums.slice(3).reduce((a, b) => a + b, 0);
+                sliceData   = [nums[0], nums[1], nums[2], otherSum];
+                sliceLabels = [String(labels[0]), String(labels[1]), String(labels[2]), 'Other'];
+            }
+
+            // Hide original canvas/stat and inject [pie | legend] row
+            canvas.style.display = 'none';
+            if (statEl) statEl.style.display = 'none';
+
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:7px;align-items:center;margin-top:2px';
+
+            // ── Pie canvas ──────────────────────────────────────────────────
+            const SZ = 38;
+            const pc  = document.createElement('canvas');
+            pc.width  = SZ; pc.height = SZ;
+            pc.style.cssText = `width:${SZ}px;height:${SZ}px;flex-shrink:0`;
+
+            const pctx = pc.getContext('2d');
+            const cx = SZ / 2, cy = SZ / 2, r = SZ / 2 - 0.5;
+            const sliceTotal = sliceData.reduce((a, b) => a + b, 0);
+            let angle = -Math.PI / 2;
+            sliceData.forEach((v, i) => {
+                const sweep = (v / sliceTotal) * Math.PI * 2;
+                pctx.beginPath();
+                pctx.moveTo(cx, cy);
+                pctx.arc(cx, cy, r, angle, angle + sweep);
+                pctx.closePath();
+                pctx.fillStyle = PIE_COLORS[i];
+                pctx.fill();
+                angle += sweep;
+            });
+
+            // ── Legend ──────────────────────────────────────────────────────
+            const legend = document.createElement('div');
+            legend.style.cssText = 'display:flex;flex-direction:column;gap:2px;flex:1;min-width:0';
+            sliceData.forEach((v, i) => {
+                const pct = Math.round(v / total * 100);
+                const lbl = (sliceLabels[i] || '(empty)').replace(/^"+|"+$/g, '').slice(0, 18);
+                const item = document.createElement('div');
+                item.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:9px;color:#a1a1aa;line-height:1.45';
+                item.innerHTML =
+                    `<span style="width:6px;height:6px;border-radius:1px;background:${PIE_COLORS[i]};flex-shrink:0;display:inline-block"></span>`
+                  + `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${lbl}</span>`
+                  + `<span style="flex-shrink:0;font-variant-numeric:tabular-nums">${pct}%</span>`;
+                legend.appendChild(item);
+            });
+
+            row.appendChild(pc);
+            row.appendChild(legend);
+            // Remove any row injected earlier by initSparklines (DOM-based pass)
+            canvas.parentElement.querySelectorAll('.spark-row').forEach(el => el.remove());
+            canvas.parentElement.appendChild(row);
+            return;
+
+        } else if (type === 2) {
+            // Line → mini area line showing trend
+            const peak = Math.max(...nums), trough = Math.min(...nums);
+            const range = peak - trough || 1;
+            const n = nums.length;
+            const toX = i => (i / (n - 1)) * W;
+            const toY = v => H - 2 - ((v - trough) / range) * (H - 4);
+
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, ac(0.22));
+            grad.addColorStop(1, ac(0.02));
+
+            ctx.beginPath();
+            ctx.moveTo(toX(0), H);
+            nums.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
+            ctx.lineTo(toX(n - 1), H);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            ctx.beginPath();
+            nums.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
+            ctx.strokeStyle = ac(0.8);
+            ctx.lineWidth = 1.5;
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            if (labels.length >= 2)
+                stat = `${String(labels[0]).slice(0, 10)}  –  ${String(labels[labels.length - 1]).slice(0, 10)}`;
+
+        } else if (type === 3) {
+            // Histogram → bars with top-to-bottom gradient + range stat
+            const peak = Math.max(...nums);
+            if (!peak) return;
+
+            const bw = W / nums.length;
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, ac(0.75));
+            grad.addColorStop(1, ac(0.25));
+            ctx.fillStyle = grad;
+
+            for (let i = 0; i < nums.length; i++) {
+                const bh = Math.max(1, (nums[i] / peak) * (H - 2));
+                ctx.fillRect(i * bw + 0.5, H - bh - 1, Math.max(1, bw - 1.5), bh);
+            }
+
+            const first = String(labels[0] ?? ''), last = String(labels[labels.length - 1] ?? '');
+            const lo = parseFloat(first.replace(/[\[\(]/, ''));
+            const hi = parseFloat(last.split(',')[1]);
+            if (!isNaN(lo) && !isNaN(hi)) stat = `${fmtN(lo)} – ${fmtN(hi)}`;
+
+        } else {
+            // Bar / SideBar / MixedBar → bars faded by height ratio (works well for sorted desc data)
+            const peak = Math.max(...nums);
+            if (!peak) return;
+
+            const total = nums.reduce((a, b) => a + b, 0);
+            const bw = W / nums.length;
+
+            for (let i = 0; i < nums.length; i++) {
+                const ratio = nums[i] / peak;
+                const bh = Math.max(1, ratio * (H - 2));
+                // Taller bars are more opaque — creates natural visual hierarchy
+                const alpha = 0.15 + 0.65 * Math.pow(ratio, 0.5);
+                ctx.fillStyle = ac(alpha);
+                ctx.fillRect(i * bw + 0.5, H - bh - 1, Math.max(1, bw - 1), bh);
+            }
+
+            // Stat: date range for time series, top-category summary for categorical
+            const firstLbl = String(labels[0] ?? '');
+            if (/\d{4}/.test(firstLbl) && nums.length >= 4) {
+                stat = `${firstLbl.slice(0, 10)}  –  ${String(labels[labels.length - 1] ?? '').slice(0, 10)}`;
+            } else if (labels.length > 0) {
+                // Skip N/A-class entries to find most meaningful category
+                let topIdx = 0;
+                for (let i = 0; i < labels.length; i++) {
+                    if (!NA_RE.test(String(labels[i]).trim())) { topIdx = i; break; }
+                }
+                const topPct = Math.round(nums[topIdx] / total * 100);
+                stat = `${String(labels[topIdx] ?? '').slice(0, 16)} · ${topPct}%  ·  ${nums.length} cat`;
+            } else {
+                stat = `${nums.length} values`;
+            }
+        }
+
+        if (statEl) statEl.textContent = stat;
+    }
+
+    async function loadSparkline(container) {
+        const idx = container.dataset.sparkCol;
+        try {
+            const res = await fetch(`/workspace/sparkline/${idx}`);
+            if (!res.ok || res.status === 204) return;
+            const sample = await res.json();
+            const canvas = container.querySelector('.sparkline-canvas');
+            const statEl = container.querySelector('.sparkline-stat');
+            if (canvas) draw(canvas, statEl, sample);
+        } catch {}
+    }
+
+    async function loadAll() {
+        const containers = Array.from(document.querySelectorAll('[data-spark-col]'));
+        const BATCH = 4;
+        for (let i = 0; i < containers.length; i += BATCH)
+            await Promise.allSettled(containers.slice(i, i + BATCH).map(loadSparkline));
+    }
+
+    if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', loadAll);
+    else
+        loadAll();
+})();
+</script>
 </body>
 </html>

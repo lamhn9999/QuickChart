@@ -180,7 +180,7 @@ th {
     vertical-align: top;
     user-select: text;
 
-    border: 2px solid white;
+    border: none;
 }
 
 .col-selected {

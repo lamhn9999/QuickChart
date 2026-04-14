@@ -11,4 +11,5 @@ public interface IAutoChartService
     public Task<List<Chart>> DetectChartAsync(int csvfileid, List<int> fieldindexes,
         CancellationToken cancellationToken = default);
     public Task<List<Chart>> DetectChartWithFiltersAsync(int csvfileid, List<int> fieldindexes, List<ValueFilterDTO> filters, CancellationToken cancellationToken = default);
+    public Task<Chart?> DetectSingleFieldChartAsync(int csvFileId, int fieldIndex, List<ValueFilterDTO>? filters = null);
 }

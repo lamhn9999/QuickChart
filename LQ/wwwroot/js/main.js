@@ -2,7 +2,7 @@ import {
     listIndexes, appState,
     backHome, gearBtnClicked, toggleFieldTypeMenu, changeFieldType,
 } from './workspace.js';
-import { chartInstances, muuriGrid, autoChart, closeZoom } from './chart.js';
+import { chartInstances, muuriGrid, autoChart, closeZoom, initSparklines } from './chart.js';
 import {
     filterClicked, filterPopupClicked, filterInputKey,
     excludeCheckboxClicked, filterIntSpecificKey, filterIntRangeKey,
@@ -37,6 +37,8 @@ Object.assign(window, {
 // ── DOM setup ─────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+    initSparklines();
+
     const resizer   = document.getElementById('drag');
     const left      = document.getElementById('tablePanel');
     const table     = document.getElementById("dataTable");
