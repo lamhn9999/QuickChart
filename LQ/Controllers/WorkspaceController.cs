@@ -76,6 +76,7 @@ public class WorkspaceController : Controller
             FieldCount = tableDisplay.Fields.Count,
         }));
         HttpContext.Session.Remove("ListValueFilterDTO");
+        ViewBag.Username = CurrentAnalystDTO?.Name;
         return CurrentAnalystDTO is null
             ? View("Workspace", tableDisplay)
             : View("WorkspaceSpecific", tableDisplay);

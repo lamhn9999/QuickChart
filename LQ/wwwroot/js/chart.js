@@ -5,15 +5,57 @@ export let chartInstances = [];
 export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
 export let muuriGrid = null;
 
+// ── Global tooltip style ──────────────────────────────────────────────────────
+Chart.defaults.plugins.tooltip.cornerRadius = 4;
+
+// ── Theme tokens ─────────────────────────────────────────────────────────────
+const DARK_TEXT   = 'rgba(255,255,255,0.65)';
+const DARK_TITLE  = 'rgba(255,255,255,0.92)';
+const DARK_GRID   = 'rgba(255,255,255,0.06)';
+const LIGHT_TEXT  = '#52525b';
+const LIGHT_TITLE = '#18181b';
+const LIGHT_GRID  = 'rgba(0,0,0,0.08)';
+
 const axisStyle = {
-    ticks: { color: "white", font: { size: 11 } },
-    grid: { color: "rgba(255,255,255,0.1)" }
+    ticks: { color: LIGHT_TEXT, font: { size: 11 } },
+    grid: { color: LIGHT_GRID }
 };
 
 const stackedAxis = {
     ...axisStyle,
     stacked: true
 };
+
+/**
+ * Switch a chart's text / grid colours to match a container background.
+ * theme: 'dark'  → card (dark bg) — use light text
+ *        'light' → zoom overlay (light bg) — use dark text
+ */
+function _applyChartTheme(chart, theme) {
+    const isDark = theme === 'dark';
+    const text   = isDark ? DARK_TEXT  : LIGHT_TEXT;
+    const title  = isDark ? DARK_TITLE : LIGHT_TITLE;
+    const grid   = isDark ? DARK_GRID  : LIGHT_GRID;
+
+    if (chart.options.plugins?.legend?.labels)
+        chart.options.plugins.legend.labels.color = text;
+    if (chart.options.plugins?.title)
+        chart.options.plugins.title.color = title;
+
+    ['x', 'y', 'z'].forEach(axis => {
+        const s = chart.options.scales?.[axis];
+        if (!s) return;
+        if (s.ticks) s.ticks.color = text;
+        if (s.grid)  s.grid.color  = grid;
+    });
+
+    // Matrix: border colour as text
+    if (chart.config.type === 'matrix') {
+        chart.data.datasets.forEach(ds => { ds.borderColor = text; });
+    }
+
+    chart.update('none');
+}
 
 // ── Zoom state ────────────────────────────────────────────────────────────────
 let _zoomedWrapper  = null;
@@ -190,31 +232,8 @@ function reformatColor(color, canvas) {
 
     const textColor = getContrastTextColor(color);
     const chart = Chart.getChart(canvas);
-
-    chart.options.plugins.legend.labels.color = textColor;
-    chart.options.plugins.title.color = textColor;
-
-    const gridColor = textColor === 'white' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.15)';
-
-    chart.options.scales.x.ticks.color = textColor;
-    chart.options.scales.y.ticks.color = textColor;
-    if (chart.options.scales.z)
-        chart.options.scales.z.ticks.color = textColor;
-
-    if (chart.options.scales.x?.grid)
-        chart.options.scales.x.grid.color = gridColor;
-    if (chart.options.scales.y?.grid)
-        chart.options.scales.y.grid.color = gridColor;
-    if (chart.options.scales.z?.grid)
-        chart.options.scales.z.grid.color = gridColor;
-
-    if (chart.config.type === "matrix") {
-        chart.data.datasets.forEach(ds => {
-            ds.borderColor = textColor;
-        });
-    }
-
-    chart.update();
+    const isDark = textColor === 'white';
+    _applyChartTheme(chart, isDark ? 'dark' : 'light');
 }
 
 // ── Field sparklines (collapsed card view) ────────────────────────────────────
@@ -611,13 +630,20 @@ export async function autoChart() {
 
                         plugins: {
                             legend: {
-                                labels: { color: "white" }
+                                labels: {
+                                    color: LIGHT_TEXT,
+                                    padding: 12,
+                                    usePointStyle: true,
+                                    pointStyleWidth: 8,
+                                }
                             },
                             title: {
                                 display: true,
                                 // Backend now populates sample.title for new chart types
                                 text: sample.title || "My Chart",
-                                color: "white"
+                                color: LIGHT_TITLE,
+                                font: { size: 12, weight: '600', family: "'DM Sans', system-ui, sans-serif" },
+                                padding: { top: 10, bottom: 6 },
                             }
                         },
 
@@ -1058,6 +1084,7 @@ export function openZoom(wrapper) {
         const chart = Chart.getChart(wrapper.querySelector('canvas'));
         if (chart) {
             chart.resize();
+            _applyChartTheme(chart, 'light');  // zoom overlay is light bg
             _navInit(chart);   // show the navigator now that the chart is live
         }
     });
@@ -1087,7 +1114,10 @@ export function closeZoom() {
 
     requestAnimationFrame(() => {
         const chart = Chart.getChart(wrapper.querySelector('canvas')); // ← safe local ref
-        chart?.resize();
+        if (chart) {
+            chart.resize();
+            _applyChartTheme(chart, 'light');  // card is light bg
+        }
         if (muuriGrid) muuriGrid.refreshItems().layout();
     });
 }
@@ -1110,13 +1140,13 @@ function _onEscClose(e) {
 function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     // ── 1. Build ONE panel-level header (always visible, owns drag-handle) ─
     const header = document.createElement("div");
-    header.className = "drag-handle flex justify-between items-center p-2 border-b border-zinc-800 bg-zinc-900/30 relative z-50 select-none cursor-grab active:cursor-grabbing";
+    header.className = "drag-handle flex justify-between items-center px-3 py-1.5 border-b border-zinc-100 bg-white/90 backdrop-blur-sm relative z-50 select-none cursor-grab active:cursor-grabbing rounded-t-2xl";
 
     // Drag grip icon (left side — visual affordance)
     const grip = document.createElement("div");
-    grip.className = "text-zinc-600 hover:text-zinc-400 transition-colors pl-1 pointer-events-none";
+    grip.className = "text-zinc-300 hover:text-zinc-500 transition-colors pointer-events-none";
     grip.innerHTML = `
-        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
             <circle cx="9"  cy="5"  r="1.5"/><circle cx="15" cy="5"  r="1.5"/>
             <circle cx="9"  cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
             <circle cx="9"  cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
@@ -1130,18 +1160,19 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     bgbtnWrapper.className = "relative flex flex-col items-end";
 
     const bgbtn = document.createElement("button");
-    bgbtn.className = "hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5 focus:outline-none";
+    bgbtn.className = "hover:cursor-pointer text-[11px] tracking-wide px-2.5 py-1 rounded-md border border-zinc-200 text-zinc-400 hover:text-[#E9967A] hover:border-[#E9967A]/40 bg-white hover:bg-zinc-50 transition-all flex items-center gap-1.5 focus:outline-none";
     bgbtn.innerHTML = `
-        Background color
-        <svg class="w-2.5 h-2.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20" stroke-linecap="round"/></svg>
+        Bg color
+        <svg class="w-2 h-2 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
         </svg>`;
 
     const colormap = document.createElement("div");
-    colormap.className = "hidden absolute top-full right-0 mt-1 min-w-[150px] p-3 bg-zinc-900 border border-zinc-800 rounded shadow-2xl z-30 flex flex-col gap-2";
+    colormap.className = "hidden absolute top-full right-0 mt-1.5 min-w-[150px] p-3 bg-white border border-zinc-200 rounded-xl shadow-xl shadow-black/8 z-30 flex flex-col gap-2 backdrop-blur-sm";
     colormap.innerHTML = `
-        <input type="color" id="hiddenPicker-${pIdx}" class="w-full h-10 cursor-pointer rounded border-0 border-none bg-transparent" value="#000000">
-        <input id="hexInput-${pIdx}" class="w-full bg-zinc-800 text-white px-3 py-2 rounded-lg outline-none text-sm text-center" placeholder="#000000">`;
+        <input type="color" id="hiddenPicker-${pIdx}" class="w-full h-8 cursor-pointer rounded-md border-0 border-none bg-transparent" value="#ffffff">
+        <input id="hexInput-${pIdx}" class="w-full bg-zinc-50 text-zinc-600 px-3 py-1.5 rounded-lg outline-none text-xs text-center border border-zinc-200 focus:border-[#E9967A]/60 transition-colors" placeholder="#ffffff">`;
 
     colormap.onclick = (e) => e.stopPropagation();
 
@@ -1174,10 +1205,10 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
         e.stopPropagation();
         const isHidden = colormap.classList.contains("hidden");
         document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
-        document.querySelectorAll('.plot-btn svg, .plot-bgbtn svg').forEach(s => s.classList.remove('rotate-180'));
+        document.querySelectorAll('.plot-btn svg:last-of-type, .plot-bgbtn svg:last-of-type').forEach(s => s.classList.remove('rotate-180'));
         if (isHidden) {
             colormap.classList.remove("hidden");
-            bgbtn.querySelector('svg').classList.add('rotate-180');
+            bgbtn.querySelectorAll('svg')[bgbtn.querySelectorAll('svg').length - 1].classList.add('rotate-180');
         }
     };
 
@@ -1190,19 +1221,20 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
         btnWrapper.className = "relative flex flex-col items-end";
 
         const btn = document.createElement("button");
-        btn.className = "hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center gap-1.5";
+        btn.className = "hover:cursor-pointer text-[11px] tracking-wide px-2.5 py-1 rounded-md border border-zinc-200 text-zinc-400 hover:text-[#E9967A] hover:border-[#E9967A]/40 bg-white hover:bg-zinc-50 transition-all flex items-center gap-1.5";
         btn.innerHTML = `
+            <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
             Turn into
-            <svg class="w-2.5 h-2.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-2 h-2 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>`;
 
         const menu = document.createElement("div");
-        menu.className = "hidden absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-800 rounded shadow-2xl py-1 z-30";
+        menu.className = "hidden absolute top-full right-0 mt-1.5 min-w-[140px] w-max max-w-[220px] bg-white border border-zinc-200 rounded-xl shadow-xl shadow-black/8 py-1.5 z-30 backdrop-blur-sm";
 
         panelSamples.forEach((targetSample, tIdx) => {
             const item = document.createElement("button");
-            item.className = `w-full text-left px-3 py-1.5 text-sm transition-colors truncate ${tIdx === 0 ? 'text-[#E9967A] font-semibold bg-zinc-800/50' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`;
+            item.className = `w-full text-left px-3 py-1.5 text-xs transition-colors truncate ${tIdx === 0 ? 'text-[#E9967A] font-semibold bg-zinc-50' : 'text-zinc-500 hover:bg-zinc-100 hover:text-[#18181B]'}`;
             item.innerText = targetSample.title || `Chart ${tIdx + 1}`;
             item.onclick = (e) => {
                 e.stopPropagation();
@@ -1214,11 +1246,11 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
 
                 // Sync active-item styles in the dropdown
                 menu.querySelectorAll('button').forEach((b, i) => {
-                    b.className = `w-full text-left px-3 py-1.5 text-sm transition-colors truncate ${i === tIdx ? 'text-[#E9967A] font-semibold bg-zinc-800/50' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`;
+                    b.className = `w-full text-left px-3 py-1.5 text-xs transition-colors truncate ${i === tIdx ? 'text-[#E9967A] font-semibold bg-zinc-50' : 'text-zinc-500 hover:bg-zinc-100 hover:text-[#18181B]'}`;
                 });
 
                 menu.classList.add("hidden");
-                btn.querySelector('svg').classList.remove('rotate-180');
+                { const svgs = btn.querySelectorAll('svg'); svgs[svgs.length - 1].classList.remove('rotate-180'); }
 
                 // Resize the newly visible chart so it fills the panel correctly
                 const chart = Chart.getChart(wrappers[tIdx].querySelector('canvas'));
@@ -1234,10 +1266,10 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
             e.stopPropagation();
             const isHidden = menu.classList.contains("hidden");
             document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
-            document.querySelectorAll('.plot-btn svg, .plot-bgbtn svg').forEach(s => s.classList.remove('rotate-180'));
+            document.querySelectorAll('.plot-btn svg:last-of-type, .plot-bgbtn svg:last-of-type').forEach(s => s.classList.remove('rotate-180'));
             if (isHidden) {
                 menu.classList.remove("hidden");
-                btn.querySelector('svg').classList.add('rotate-180');
+                { const svgs = btn.querySelectorAll('svg'); svgs[svgs.length - 1].classList.add('rotate-180'); }
             }
         };
 
@@ -1248,7 +1280,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
 
     // ── Zoom button ───────────────────────────────────────────────────────
     const zoomBtn = document.createElement("button");
-    zoomBtn.className = "hover:cursor-pointer px-2 py-1 rounded text-zinc-400 hover:text-white transition-all flex items-center";
+    zoomBtn.className = "hover:cursor-pointer p-1.5 rounded-md border border-zinc-200 text-zinc-400 hover:text-[#E9967A] hover:border-[#E9967A]/40 bg-white hover:bg-zinc-50 transition-all flex items-center";
     zoomBtn.title = "Fullscreen";
     zoomBtn.innerHTML = `
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1278,7 +1310,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     gridItem.className = "grid-item";
 
     const gridItemContent = document.createElement("div");
-    gridItemContent.className = "grid-item-content rounded-2xl border   ";
+    gridItemContent.className = "grid-item-content";
     gridItemContent.appendChild(panelDivCopy);
     gridItem.appendChild(gridItemContent);
 
