@@ -5,8 +5,9 @@ export let chartInstances = [];
 export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
 export let muuriGrid = null;
 
-// ── Global tooltip style ──────────────────────────────────────────────────────
+// ── Global chart defaults ─────────────────────────────────────────────────────
 Chart.defaults.plugins.tooltip.cornerRadius = 4;
+Chart.defaults.plugins.legend.labels.borderRadius = 4;
 
 // ── Theme tokens ─────────────────────────────────────────────────────────────
 const DARK_TEXT   = 'rgba(255,255,255,0.65)';
@@ -633,8 +634,7 @@ export async function autoChart() {
                                 labels: {
                                     color: LIGHT_TEXT,
                                     padding: 12,
-                                    usePointStyle: true,
-                                    pointStyleWidth: 8,
+                                    borderRadius: 4,
                                 }
                             },
                             title: {
@@ -1160,11 +1160,11 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     bgbtnWrapper.className = "relative flex flex-col items-end";
 
     const bgbtn = document.createElement("button");
-    bgbtn.className = "hover:cursor-pointer text-[11px] tracking-wide px-2.5 py-1 rounded-md border border-zinc-200 text-zinc-400 hover:text-[#E9967A] hover:border-[#E9967A]/40 bg-white hover:bg-zinc-50 transition-all flex items-center gap-1.5 focus:outline-none";
+    bgbtn.className = "cursor-pointer h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-zinc-200 bg-white text-[11px] font-medium text-zinc-500 hover:text-[#E9967A] hover:border-[#E9967A]/30 hover:bg-[#E9967A]/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none";
     bgbtn.innerHTML = `
-        <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20" stroke-linecap="round"/></svg>
-        Bg color
-        <svg class="w-2 h-2 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+        Bg
+        <svg class="w-3 h-3 transition-transform duration-200 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
         </svg>`;
 
@@ -1221,11 +1221,11 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
         btnWrapper.className = "relative flex flex-col items-end";
 
         const btn = document.createElement("button");
-        btn.className = "hover:cursor-pointer text-[11px] tracking-wide px-2.5 py-1 rounded-md border border-zinc-200 text-zinc-400 hover:text-[#E9967A] hover:border-[#E9967A]/40 bg-white hover:bg-zinc-50 transition-all flex items-center gap-1.5";
+        btn.className = "cursor-pointer h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-zinc-200 bg-white text-[11px] font-medium text-zinc-500 hover:text-[#E9967A] hover:border-[#E9967A]/30 hover:bg-[#E9967A]/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none";
         btn.innerHTML = `
-            <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4-4 4M7 21l-4-4 4-4"/><path d="M21 7H3M3 17h18"/></svg>
             Turn into
-            <svg class="w-2 h-2 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-3 h-3 transition-transform duration-200 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>`;
 
@@ -1280,13 +1280,11 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
 
     // ── Zoom button ───────────────────────────────────────────────────────
     const zoomBtn = document.createElement("button");
-    zoomBtn.className = "hover:cursor-pointer p-1.5 rounded-md border border-zinc-200 text-zinc-400 hover:text-[#E9967A] hover:border-[#E9967A]/40 bg-white hover:bg-zinc-50 transition-all flex items-center";
+    zoomBtn.className = "cursor-pointer h-7 w-7 flex items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 hover:text-[#E9967A] hover:border-[#E9967A]/30 hover:bg-[#E9967A]/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none";
     zoomBtn.title = "Fullscreen";
     zoomBtn.innerHTML = `
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5
-                 M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+        <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
     </svg>`;
     zoomBtn.onclick = (e) => {
         e.stopPropagation();
@@ -1294,8 +1292,8 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
         openZoom(activeWrapper);
     };
 
-    container.appendChild(zoomBtn);
     container.appendChild(bgbtnWrapper);
+    container.appendChild(zoomBtn);
     header.appendChild(grip);
     header.appendChild(container);
 
