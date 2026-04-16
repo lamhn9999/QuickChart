@@ -41,6 +41,7 @@ public class HomeController : Controller
     public async Task<IActionResult> Show()
     {
         HttpContext.Session.Remove("TableDTO");
+        HttpContext.Session.Remove("ListValueFilterDTO");
         
         var analystdto = CurrentAnalyst;
         var analystId = analystdto?.ID ?? BaseDTO.DefaultAnalystID;
