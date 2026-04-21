@@ -5,6 +5,18 @@ export let chartInstances = [];
 export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
 export let muuriGrid = null;
 
+// ── Chart group tracking ──────────────────────────────────────────────────────
+let _groupCounter = 0;
+const _groupData   = new Map(); // groupId → { gridItems: Element[], instances: Chart[] }
+
+function _logGroups(label = '') {
+    const entries = [..._groupData.entries()].map(([id, d]) => ({
+        groupId: id,
+        fields: JSON.parse(d.gridItems[0]?.dataset.fieldIndexes || '[]'),
+    }));
+    console.log(`[chart groups${label ? ' · ' + label : ''}]`, entries);
+}
+
 // ── Global chart defaults ─────────────────────────────────────────────────────
 Chart.defaults.plugins.tooltip.cornerRadius = 4;
 Chart.defaults.plugins.legend.labels.borderRadius = 4;
@@ -26,6 +38,21 @@ const stackedAxis = {
     ...axisStyle,
     stacked: true
 };
+
+// ── Muuri init helper ─────────────────────────────────────────────────────────
+function _ensureMuuriGrid() {
+    if (muuriGrid) return;
+    const chartGrid = document.getElementById('chartGrid');
+    muuriGrid = new Muuri(chartGrid, {
+        items:       '.grid-item',
+        layoutDuration: 300,
+        layoutEasing:   'ease',
+        dragEnabled:    true,
+        dragHandle:     '.drag-handle',
+        dragStartPredicate: { distance: 5, delay: 0 },
+    });
+    muuriGrid.on('layoutEnd', () => { chartInstances.forEach(c => c.resize()); });
+}
 
 /**
  * Switch a chart's text / grid colours to match a container background.
@@ -434,7 +461,7 @@ export function initSparklines() {
     });
 }
 
-// ── autoChart ─────────────────────────────────────────────────────────────────
+// ── autoChart (legacy: uses global listIndexes, clears everything) ────────────
 
 export async function autoChart() {
     const selPlot   = document.getElementById("selPlot");
@@ -445,12 +472,11 @@ export async function autoChart() {
     // ── Clear previous state ──────────────────────────────────────────────
     chartInstances.forEach(c => c.destroy());
     chartInstances.length = 0;
+    _groupData.clear();
 
-    // Destroy Muuri instance and empty the grid container
     if (muuriGrid) {
         muuriGrid.destroy();
         muuriGrid = null;
-        console.log("[autoChart] Muuri grid destroyed.");
     }
     chartGrid.innerHTML = '';
 
@@ -463,10 +489,6 @@ export async function autoChart() {
     selPlot.hidden = true;
     noPlot.hidden  = true;
     loader.hidden  = false;
-
-    // panelDivCopy is the inner content card — styling only, no layout role
-    const panelDivTemplate = document.createElement("div");
-    panelDivTemplate.classList.add("flex", "flex-col", "h-full");
 
     appState.controller = new AbortController();
     try {
@@ -481,24 +503,13 @@ export async function autoChart() {
         loader.hidden = true;
 
         if (result.length === 0) {
-            console.log("[autoChart] No charts returned.");
             selPlot.hidden = true;
             noPlot.hidden  = false;
             return;
         }
 
-        // ── Init a fresh Muuri grid ───────────────────────────────────────
-        muuriGrid = new Muuri(chartGrid, {
-            items:       '.grid-item',
-            layoutDuration: 300,
-            layoutEasing:   'ease',
-            dragEnabled:    true,
-            dragHandle:     '.drag-handle',           // header bar is the drag handle
-            dragStartPredicate: { distance: 5, delay: 0 },
-        });
-        console.log("[autoChart] Muuri grid initialised.");
+        _ensureMuuriGrid();
 
-        // ── Group samples by panelIndex ───────────────────────────────────
         const groupedResults = result.reduce((acc, sample) => {
             if (!acc[sample.panelIndex]) acc[sample.panelIndex] = [];
             acc[sample.panelIndex].push(sample);
@@ -506,351 +517,10 @@ export async function autoChart() {
         }, {});
 
         Object.keys(groupedResults).sort((a, b) => a - b).forEach(pIdx => {
-            const panelSamples = groupedResults[pIdx];
-            const panelDivCopy = panelDivTemplate.cloneNode();
-            panelDivCopy.id = "panel" + pIdx;
-
-            const wrappers = [];
-
-            panelSamples.forEach((sample, sIdx) => {
-                const wrapper = document.createElement("div");
-                wrapper.className = "flex flex-col flex-1 relative";
-                if (sIdx > 0) wrapper.style.display = 'none';
-
-                wrapper.dataset.chartTitle = sample.title || `Chart ${sIdx + 1}`;
-
-                const ctx = document.createElement("canvas");
-                wrapper.appendChild(ctx);
-                panelDivCopy.appendChild(wrapper);
-                wrappers.push(wrapper);
-
-                const isMatrix          = chartArray[sample.chartType] === 'matrix';
-                const isMixed           = sample.chartType === 7;
-                const isMixed_notStacked = sample.chartType === 9;
-                const isBubble          = sample.chartType === 10;
-                const isBar             = chartArray[sample.chartType] === 'bar';
-                const isPie             = chartArray[sample.chartType] === 'pie';
-                const isLine            = chartArray[sample.chartType] === 'line';
-                const isHorizontalBar   = sample.chartType === 6;
-
-                // Box plot: backend emits exactly 5 Y datasets named Min/Q1/Median/Q3/Max
-                const isBoxPlot = !isMatrix && !isBubble
-                    && sample.y.length >= 5
-                    && sample.y[2]?.label === 'Median';
-
-                const datasets = isMatrix
-                    ? buildMatrixDataset(sample)
-                    : isBubble
-                        // Bubble: no labels array, type on each dataset
-                        ? sample.y.map(ds => ({
-                            type: 'bubble',
-                            label: ds.label,
-                            data: ds.data,
-                        }))
-                        : [
-                            ...sample.y.map(ds => {
-                                const base = {
-                                    ...((isMixed || isMixed_notStacked) && {
-                                        type: chartArray[ds.chartType]
-                                    }),
-                                    label: ds.label,
-                                    data: ds.data,
-                                    yAxisID: 'y',
-                                    ...(isBar && { borderRadius: 4 }),
-                                    ...(isLine && {
-                                        tension: 0.3,
-                                        pointRadius: 3,
-                                        pointHoverRadius: 6,
-                                    }),
-                                };
-                                // Regression trend line: showLine scatter, dashed, no points
-                                if (typeof ds.label === 'string' && ds.label.startsWith('Trend:')) {
-                                    return {
-                                        ...base,
-                                        type: 'scatter',
-                                        showLine: true,
-                                        pointRadius: 0,
-                                        pointHoverRadius: 0,
-                                        borderDash: [6, 4],
-                                    };
-                                }
-                                return base;
-                            })
-                        ];
-
-                // Box plot: keep 5 stat datasets invisible for y-axis scaling;
-                // a per-chart inline plugin (set up below) draws the visual.
-                let boxData = null;
-                if (isBoxPlot) {
-                    const yVal = d => (d !== null && typeof d === 'object' && 'y' in d) ? d.y : d;
-                    boxData = {
-                        labels: sample.x,
-                        min: datasets[0].data.map(yVal),
-                        q1:  datasets[1].data.map(yVal),
-                        med: datasets[2].data.map(yVal),
-                        q3:  datasets[3].data.map(yVal),
-                        max: datasets[4].data.map(yVal),
-                    };
-                    datasets.forEach(ds => {
-                        ds.pointRadius      = 0;
-                        ds.pointHoverRadius = 1;
-                        ds.showLine         = false;
-                        ds.borderColor      = 'transparent';
-                        ds.backgroundColor  = 'transparent';
-                    });
-                }
-
-                if (!isMatrix && !isBubble && sample.z?.length > 0) {
-                    datasets.push(
-                        ...sample.z.map(ds => ({
-                            ...((isMixed || isMixed_notStacked) && {
-                                type: chartArray[ds.chartType]
-                            }),
-                            label: ds.label,
-                            data: ds.data,
-                            yAxisID: 'z',
-                        }))
-                    );
-                }
-
-                const cfg = {
-                    // Bubble: type lives on each dataset, not at root
-                    ...(!isBubble && !(isMixed || isMixed_notStacked) && {
-                        type: chartArray[sample.chartType]
-                    }),
-
-                    data: {
-                        // Bubble and pure scatter use {x,y,r} — no labels array
-                        ...(isMatrix || isBubble ? {} : { labels: sample.x }),
-                        datasets
-                    },
-
-                    options: {
-                        animations: false,
-                        responsive: true,
-
-                        plugins: {
-                            legend: {
-                                labels: {
-                                    color: LIGHT_TEXT,
-                                    padding: 12,
-                                    borderRadius: 4,
-                                }
-                            },
-                            title: {
-                                display: true,
-                                // Backend now populates sample.title for new chart types
-                                text: sample.title || "My Chart",
-                                color: LIGHT_TITLE,
-                                font: { size: 12, weight: '600', family: "'DM Sans', system-ui, sans-serif" },
-                                padding: { top: 10, bottom: 6 },
-                            }
-                        },
-
-                        scales: isMatrix
-                            ? {
-                                x: {
-                                    type: "category",
-                                    labels: sample.x,
-                                    offset: true,
-                                    ...axisStyle
-                                },
-                                y: {
-                                    type: "category",
-                                    labels: sample.y.map(r => r.label),
-                                    offset: true,
-                                    ...axisStyle
-                                }
-                            }
-                            : isBubble
-                                // Bubble needs linear x+y, no category axis
-                                ? {
-                                    x: { type: 'linear', ...axisStyle },
-                                    y: { type: 'linear', ...axisStyle }
-                                }
-                                : isBoxPlot
-                                    // Box plot: offset:true gives half-category padding on each side so
-                                    // edge boxes aren't clipped by the chart area boundary
-                                    ? {
-                                        x: { type: 'category', labels: sample.x, offset: true, ...axisStyle, grid: { ...axisStyle.grid, display: false } },
-                                        y: { position: 'left', ...axisStyle }
-                                    }
-                                    : isMixed
-                                        ? {
-                                            x: stackedAxis,
-                                            y: {
-                                                position: "left",
-                                                ...stackedAxis
-                                            }
-                                        }
-                                        : isPie
-                                            ? {
-                                                x: { display: false },
-                                                y: { display: false }
-                                            }
-                                            : {
-                                                x: {
-                                                    ...axisStyle,
-                                                    ...(isBar && !isHorizontalBar && { grid: { ...axisStyle.grid, display: false } })
-                                                },
-                                                y: {
-                                                    position: "left",
-                                                    ...axisStyle,
-                                                    ...(isHorizontalBar && { grid: { ...axisStyle.grid, display: false } })
-                                                }
-                                            }
-                    }
-                };
-
-                if (isBoxPlot && boxData) {
-                    // Inline plugin: only active on this chart instance
-                    cfg.plugins = [{
-                        id: 'lqBoxPlot',
-                        afterDatasetsDraw: (chart) => drawBoxPlot(chart, boxData),
-                    }];
-                    cfg.options.plugins.legend = { display: false };
-                    cfg.options.interaction = { mode: 'index', axis: 'x', intersect: false };
-                    cfg.options.plugins.tooltip = {
-                        callbacks: {
-                            title: (items) => boxData.labels[items[0]?.dataIndex ?? 0] ?? '',
-                            label: (ctx) => {
-                                const names = ['Min', 'Q1', 'Median', 'Q3', 'Max'];
-                                const val   = ctx.raw?.y ?? ctx.raw;
-                                const fmt   = v => typeof v === 'number'
-                                    ? v.toLocaleString(undefined, { maximumFractionDigits: 4 })
-                                    : String(v);
-                                return ` ${names[ctx.datasetIndex] ?? ''}:  ${fmt(val)}`;
-                            },
-                            labelColor: () => ({
-                                borderColor:     'rgba(233,150,122,0.8)',
-                                backgroundColor: 'rgba(233,150,122,0.3)',
-                                borderRadius: 2,
-                            }),
-                        }
-                    };
-                }
-
-                if (isMatrix) {
-                    cfg.options.plugins = cfg.options.plugins || {};
-                    cfg.options.plugins.tooltip = cfg.options.plugins.tooltip || {};
-                    cfg.options.plugins.tooltip.callbacks =
-                        cfg.options.plugins.tooltip.callbacks || {};
-
-                    cfg.options.plugins.tooltip.callbacks.title = (items) => {
-                        const d = items[0].raw;
-                        return `${d.y} / ${d.x}`;
-                    };
-
-                    cfg.options.plugins.tooltip.callbacks.label = (ctx) => {
-                        const v = ctx.raw.v;
-                        const isCorr = (sample.title || '').toLowerCase().includes('correlation');
-                        return isCorr ? `r = ${v.toFixed(2)}` : `Value: ${v}`;
-                    };
-
-                    // Correlation matrices: cell text + color bar
-                    const isCorr = (sample.title || '').toLowerCase().includes('correlation');
-                    if (isCorr) {
-                        cfg.options.layout = { padding: { right: 62 } };
-
-                        cfg.plugins = [{
-                            id: 'corrCellText',
-                            afterDraw(chart) {
-                                const { ctx, data: { datasets }, chartArea: ca } = chart;
-                                const meta = chart.getDatasetMeta(0);
-
-                                // ── Cell values ───────────────────────────
-                                datasets[0].data.forEach((d, i) => {
-                                    const el = meta.data[i];
-                                    if (!el) return;
-                                    ctx.save();
-                                    ctx.fillStyle = Math.abs(d.v) > 0.5 ? '#ffffff' : '#333333';
-                                    ctx.font = 'bold 11px sans-serif';
-                                    ctx.textAlign = 'center';
-                                    ctx.textBaseline = 'middle';
-                                    const cp = el.getCenterPoint ? el.getCenterPoint() : { x: el.x, y: el.y };
-                                    ctx.fillText(d.v.toFixed(2), cp.x, cp.y);
-                                    ctx.restore();
-                                });
-
-                                // ── Color bar ─────────────────────────────
-                                const barX = ca.right + 14;
-                                const barY = ca.top;
-                                const barW = 14;
-                                const barH = ca.bottom - ca.top;
-
-                                const grad = ctx.createLinearGradient(0, barY, 0, barY + barH);
-                                grad.addColorStop(0,   'rgba(178,24,43,0.92)');
-                                grad.addColorStop(0.5, 'rgba(238,238,238,0.92)');
-                                grad.addColorStop(1,   'rgba(58,76,192,0.92)');
-
-                                ctx.save();
-                                ctx.beginPath();
-                                if (ctx.roundRect) ctx.roundRect(barX, barY, barW, barH, 3);
-                                else               ctx.rect(barX, barY, barW, barH);
-                                ctx.fillStyle   = grad;
-                                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-                                ctx.lineWidth   = 0.5;
-                                ctx.fill();
-                                ctx.stroke();
-
-                                // Tick marks and labels
-                                const tickColor = chart.options.scales?.x?.ticks?.color ?? 'white';
-                                const tickAlpha = tickColor === 'white' ? '0.75' : '0.8';
-                                const lineAlpha = tickColor === 'white' ? '0.5'  : '0.4';
-                                ctx.fillStyle   = tickColor === 'white'
-                                    ? `rgba(255,255,255,${tickAlpha})`
-                                    : `rgba(0,0,0,${tickAlpha})`;
-                                ctx.font        = '10px sans-serif';
-                                ctx.textAlign   = 'left';
-                                ctx.textBaseline = 'middle';
-                                [1, 0.5, 0, -0.5, -1].forEach(v => {
-                                    const ty = barY + (1 - (v + 1) / 2) * barH;
-                                    ctx.beginPath();
-                                    ctx.strokeStyle = tickColor === 'white'
-                                        ? `rgba(255,255,255,${lineAlpha})`
-                                        : `rgba(0,0,0,${lineAlpha})`;
-                                    ctx.lineWidth   = 1;
-                                    ctx.moveTo(barX + barW,     ty);
-                                    ctx.lineTo(barX + barW + 4, ty);
-                                    ctx.stroke();
-                                    ctx.fillText(v === 0 ? '0' : v.toFixed(1), barX + barW + 7, ty);
-                                });
-
-                                ctx.restore();
-                            }
-                        }];
-                    }
-                }
-
-                if (!isMatrix && !isBubble && sample.z?.length > 0) {
-                    cfg.options.scales.z = {
-                        position: 'right',
-                        ...axisStyle,
-                    };
-                }
-
-                if (sample.chartType === 6) {
-                    cfg.options.indexAxis = 'y';
-                }
-
-                if (chartArray[sample.chartType] === 'scatter') {
-                    cfg.options.plugins.tooltip = { enabled: false };
-                }
-
-                const chartInstance = new Chart(ctx, cfg);
-                chartInstances.push(chartInstance);
-            });
-
-            // Delegate DOM append + header wiring + grid registration
-            appendChart(panelSamples, pIdx, wrappers, panelDivCopy);
+            _buildPanel(groupedResults[pIdx], pIdx);
         });
 
-        // Refresh chart sizes after Muuri has laid out all items
-        muuriGrid.on('layoutEnd', () => {
-            chartInstances.forEach(c => c.resize());
-        });
         muuriGrid.layout();
-        console.log(`[autoChart] Layout triggered for ${Object.keys(groupedResults).length} panel(s).`);
     }
     catch (error) {
         if (error.name !== 'AbortError') {
@@ -1127,17 +797,9 @@ function _onEscClose(e) {
 }
 
 // ── appendChart ───────────────────────────────────────────────────────────────
-// Responsible for everything that happens AFTER a panel's charts are created:
-//   1. Build ONE panel-level header toolbar (always in the DOM, never hidden)
-//   2. Wrap the panel content in a Muuri grid item shell
-//   3. Register the item with muuriGrid
-//
-// KEY DESIGN: The drag-handle lives on the single panel header, NOT on the
-// individual chart wrappers. Previously each wrapper had its own header with
-// drag-handle, so hiding a wrapper also hid its header. Muuri's querySelector
-// could then resolve to a hidden element and treat the item as immovable.
-// With one persistent header the drag-handle is always present and visible.
-function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
+// Builds ONE panel-level header toolbar, wraps in Muuri grid item, registers.
+// groupId / fieldIndexes: when provided, stored on the DOM for drop-onto-card.
+function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, groupId = null, fieldIndexes = null) {
     // ── 1. Build ONE panel-level header (always visible, owns drag-handle) ─
     const header = document.createElement("div");
     header.className = "drag-handle flex justify-between items-center px-3 py-1.5 border-b border-zinc-100 bg-white/90 backdrop-blur-sm relative z-50 select-none cursor-grab active:cursor-grabbing rounded-t-2xl";
@@ -1292,6 +954,19 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
         openZoom(activeWrapper);
     };
 
+    // ── Remove group button (only for drag-created groups) ────────────────
+    if (groupId !== null) {
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "cursor-pointer h-7 w-7 flex items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-400 hover:text-red-400 hover:border-red-200 hover:bg-red-50/50 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none";
+        removeBtn.title = "Remove chart";
+        removeBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>`;
+        removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            removeChartGroup(groupId);
+        };
+        container.appendChild(removeBtn);
+    }
+
     container.appendChild(bgbtnWrapper);
     container.appendChild(zoomBtn);
     header.appendChild(grip);
@@ -1301,9 +976,6 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     panelDivCopy.prepend(header);
 
     // ── 2. Wrap in Muuri grid item shell ──────────────────────────────────
-    // Structure: .grid-item > .grid-item-content > panelDivCopy
-    // .grid-item      — Muuri positions this absolutely
-    // .grid-item-content — provides padding, border, rounded corners
     const gridItem = document.createElement("div");
     gridItem.className = "grid-item";
 
@@ -1312,10 +984,505 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy) {
     gridItemContent.appendChild(panelDivCopy);
     gridItem.appendChild(gridItemContent);
 
+    // ── Store group metadata on DOM for drop-onto-card ────────────────────
+    if (groupId !== null) {
+        gridItem.dataset.groupId      = String(groupId);
+        gridItem.dataset.fieldIndexes = JSON.stringify(fieldIndexes ? [...fieldIndexes] : []);
+    }
+
+    // ── Drop zone: another header dragged onto this card ──────────────────
+    if (groupId !== null) {
+        gridItemContent.addEventListener('dragover', e => {
+            if (!e.dataTransfer.types.includes('application/json')) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            gridItemContent.classList.add('chart-drop-target');
+        });
+        gridItemContent.addEventListener('dragleave', e => {
+            if (!gridItemContent.contains(e.relatedTarget))
+                gridItemContent.classList.remove('chart-drop-target');
+        });
+        gridItemContent.addEventListener('drop', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            gridItemContent.classList.remove('chart-drop-target');
+            try {
+                const dragged  = JSON.parse(e.dataTransfer.getData('application/json'));
+                const existing = JSON.parse(gridItem.dataset.fieldIndexes || '[]');
+                const combined = [...new Set([...existing, ...dragged])];
+                if (typeof window._chartDropOnCard === 'function')
+                    window._chartDropOnCard(combined, groupId);
+            } catch {}
+        });
+    }
+
     // ── 3. Register with Muuri ────────────────────────────────────────────
-    // appendChildToGrid=false: we mount the DOM element ourselves so Muuri
-    // doesn't double-append it. Then we call add() to let Muuri track it.
     document.getElementById("chartGrid").appendChild(gridItem);
-    muuriGrid.add(gridItem, { layout: false }); // layout:false — batch; called once after all panels
-    console.log(`[appendChart] Panel ${pIdx} added to grid (${panelSamples.length} variant(s)).`);
+    muuriGrid.add(gridItem, { layout: false });
+    return gridItem;
+}
+
+// ── _buildPanel ───────────────────────────────────────────────────────────────
+// Builds one panel (a set of chart variants for a single panelIndex),
+// creates Chart.js instances, and registers with muuriGrid via appendChart.
+function _buildPanel(panelSamples, pIdx, groupId = null, fieldIndexes = null) {
+    const panelDiv = document.createElement("div");
+    panelDiv.classList.add("flex", "flex-col", "h-full");
+    panelDiv.id = "panel" + pIdx;
+
+    const wrappers = [];
+
+    panelSamples.forEach((sample, sIdx) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "flex flex-col flex-1 relative";
+        if (sIdx > 0) wrapper.style.display = 'none';
+
+        wrapper.dataset.chartTitle = sample.title || `Chart ${sIdx + 1}`;
+
+        const ctx = document.createElement("canvas");
+        wrapper.appendChild(ctx);
+        panelDiv.appendChild(wrapper);
+        wrappers.push(wrapper);
+
+        const isMatrix          = chartArray[sample.chartType] === 'matrix';
+        const isMixed           = sample.chartType === 7;
+        const isMixed_notStacked = sample.chartType === 9;
+        const isBubble          = sample.chartType === 10;
+        const isBar             = chartArray[sample.chartType] === 'bar';
+        const isPie             = chartArray[sample.chartType] === 'pie';
+        const isLine            = chartArray[sample.chartType] === 'line';
+        const isHorizontalBar   = sample.chartType === 6;
+
+        const isBoxPlot = !isMatrix && !isBubble
+            && sample.y.length >= 5
+            && sample.y[2]?.label === 'Median';
+
+        const datasets = isMatrix
+            ? buildMatrixDataset(sample)
+            : isBubble
+                ? sample.y.map(ds => ({
+                    type: 'bubble',
+                    label: ds.label,
+                    data: ds.data,
+                }))
+                : [
+                    ...sample.y.map(ds => {
+                        const base = {
+                            ...((isMixed || isMixed_notStacked) && {
+                                type: chartArray[ds.chartType]
+                            }),
+                            label: ds.label,
+                            data: ds.data,
+                            yAxisID: 'y',
+                            ...(isBar && { borderRadius: 4 }),
+                            ...(isLine && {
+                                tension: 0.3,
+                                pointRadius: 3,
+                                pointHoverRadius: 6,
+                            }),
+                        };
+                        if (typeof ds.label === 'string' && ds.label.startsWith('Trend:')) {
+                            return {
+                                ...base,
+                                type: 'scatter',
+                                showLine: true,
+                                pointRadius: 0,
+                                pointHoverRadius: 0,
+                                borderDash: [6, 4],
+                            };
+                        }
+                        return base;
+                    })
+                ];
+
+        let boxData = null;
+        if (isBoxPlot) {
+            const yVal = d => (d !== null && typeof d === 'object' && 'y' in d) ? d.y : d;
+            boxData = {
+                labels: sample.x,
+                min: datasets[0].data.map(yVal),
+                q1:  datasets[1].data.map(yVal),
+                med: datasets[2].data.map(yVal),
+                q3:  datasets[3].data.map(yVal),
+                max: datasets[4].data.map(yVal),
+            };
+            datasets.forEach(ds => {
+                ds.pointRadius      = 0;
+                ds.pointHoverRadius = 1;
+                ds.showLine         = false;
+                ds.borderColor      = 'transparent';
+                ds.backgroundColor  = 'transparent';
+            });
+        }
+
+        if (!isMatrix && !isBubble && sample.z?.length > 0) {
+            datasets.push(
+                ...sample.z.map(ds => ({
+                    ...((isMixed || isMixed_notStacked) && {
+                        type: chartArray[ds.chartType]
+                    }),
+                    label: ds.label,
+                    data: ds.data,
+                    yAxisID: 'z',
+                }))
+            );
+        }
+
+        const cfg = {
+            ...(!isBubble && !(isMixed || isMixed_notStacked) && {
+                type: chartArray[sample.chartType]
+            }),
+            data: {
+                ...(isMatrix || isBubble ? {} : { labels: sample.x }),
+                datasets
+            },
+            options: {
+                animations: false,
+                responsive: true,
+                plugins: {
+                    legend: {
+                        labels: { color: LIGHT_TEXT, padding: 12, borderRadius: 4 }
+                    },
+                    title: {
+                        display: true,
+                        text: sample.title || "My Chart",
+                        color: LIGHT_TITLE,
+                        font: { size: 12, weight: '600', family: "'DM Sans', system-ui, sans-serif" },
+                        padding: { top: 10, bottom: 6 },
+                    }
+                },
+                scales: isMatrix
+                    ? {
+                        x: { type: "category", labels: sample.x, offset: true, ...axisStyle },
+                        y: { type: "category", labels: sample.y.map(r => r.label), offset: true, ...axisStyle }
+                    }
+                    : isBubble
+                        ? { x: { type: 'linear', ...axisStyle }, y: { type: 'linear', ...axisStyle } }
+                        : isBoxPlot
+                            ? {
+                                x: { type: 'category', labels: sample.x, offset: true, ...axisStyle, grid: { ...axisStyle.grid, display: false } },
+                                y: { position: 'left', ...axisStyle }
+                            }
+                            : isMixed
+                                ? { x: stackedAxis, y: { position: "left", ...stackedAxis } }
+                                : isPie
+                                    ? { x: { display: false }, y: { display: false } }
+                                    : {
+                                        x: {
+                                            ...axisStyle,
+                                            ...(isBar && !isHorizontalBar && { grid: { ...axisStyle.grid, display: false } })
+                                        },
+                                        y: {
+                                            position: "left",
+                                            ...axisStyle,
+                                            ...(isHorizontalBar && { grid: { ...axisStyle.grid, display: false } })
+                                        }
+                                    }
+            }
+        };
+
+        if (isBoxPlot && boxData) {
+            cfg.plugins = [{
+                id: 'lqBoxPlot',
+                afterDatasetsDraw: (chart) => drawBoxPlot(chart, boxData),
+            }];
+            cfg.options.plugins.legend = { display: false };
+            cfg.options.interaction = { mode: 'index', axis: 'x', intersect: false };
+            cfg.options.plugins.tooltip = {
+                callbacks: {
+                    title: (items) => boxData.labels[items[0]?.dataIndex ?? 0] ?? '',
+                    label: (ctx) => {
+                        const names = ['Min', 'Q1', 'Median', 'Q3', 'Max'];
+                        const val   = ctx.raw?.y ?? ctx.raw;
+                        const fmt   = v => typeof v === 'number'
+                            ? v.toLocaleString(undefined, { maximumFractionDigits: 4 })
+                            : String(v);
+                        return ` ${names[ctx.datasetIndex] ?? ''}:  ${fmt(val)}`;
+                    },
+                    labelColor: () => ({
+                        borderColor:     'rgba(233,150,122,0.8)',
+                        backgroundColor: 'rgba(233,150,122,0.3)',
+                        borderRadius: 2,
+                    }),
+                }
+            };
+        }
+
+        if (isMatrix) {
+            cfg.options.plugins = cfg.options.plugins || {};
+            cfg.options.plugins.tooltip = cfg.options.plugins.tooltip || {};
+            cfg.options.plugins.tooltip.callbacks = cfg.options.plugins.tooltip.callbacks || {};
+
+            cfg.options.plugins.tooltip.callbacks.title = (items) => {
+                const d = items[0].raw;
+                return `${d.y} / ${d.x}`;
+            };
+            cfg.options.plugins.tooltip.callbacks.label = (ctx) => {
+                const v = ctx.raw.v;
+                const isCorr = (sample.title || '').toLowerCase().includes('correlation');
+                return isCorr ? `r = ${v.toFixed(2)}` : `Value: ${v}`;
+            };
+
+            const isCorr = (sample.title || '').toLowerCase().includes('correlation');
+            if (isCorr) {
+                cfg.options.layout = { padding: { right: 62 } };
+                cfg.plugins = [{
+                    id: 'corrCellText',
+                    afterDraw(chart) {
+                        const { ctx, data: { datasets }, chartArea: ca } = chart;
+                        const meta = chart.getDatasetMeta(0);
+
+                        datasets[0].data.forEach((d, i) => {
+                            const el = meta.data[i];
+                            if (!el) return;
+                            ctx.save();
+                            ctx.fillStyle = Math.abs(d.v) > 0.5 ? '#ffffff' : '#333333';
+                            ctx.font = 'bold 11px sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            const cp = el.getCenterPoint ? el.getCenterPoint() : { x: el.x, y: el.y };
+                            ctx.fillText(d.v.toFixed(2), cp.x, cp.y);
+                            ctx.restore();
+                        });
+
+                        const barX = ca.right + 14, barY = ca.top, barW = 14, barH = ca.bottom - ca.top;
+                        const grad = ctx.createLinearGradient(0, barY, 0, barY + barH);
+                        grad.addColorStop(0,   'rgba(178,24,43,0.92)');
+                        grad.addColorStop(0.5, 'rgba(238,238,238,0.92)');
+                        grad.addColorStop(1,   'rgba(58,76,192,0.92)');
+
+                        ctx.save();
+                        ctx.beginPath();
+                        if (ctx.roundRect) ctx.roundRect(barX, barY, barW, barH, 3);
+                        else               ctx.rect(barX, barY, barW, barH);
+                        ctx.fillStyle   = grad;
+                        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                        ctx.lineWidth   = 0.5;
+                        ctx.fill(); ctx.stroke();
+
+                        const tickColor = chart.options.scales?.x?.ticks?.color ?? 'white';
+                        const tickAlpha = tickColor === 'white' ? '0.75' : '0.8';
+                        const lineAlpha = tickColor === 'white' ? '0.5'  : '0.4';
+                        ctx.fillStyle   = tickColor === 'white'
+                            ? `rgba(255,255,255,${tickAlpha})`
+                            : `rgba(0,0,0,${tickAlpha})`;
+                        ctx.font        = '10px sans-serif';
+                        ctx.textAlign   = 'left';
+                        ctx.textBaseline = 'middle';
+                        [1, 0.5, 0, -0.5, -1].forEach(v => {
+                            const ty = barY + (1 - (v + 1) / 2) * barH;
+                            ctx.beginPath();
+                            ctx.strokeStyle = tickColor === 'white'
+                                ? `rgba(255,255,255,${lineAlpha})`
+                                : `rgba(0,0,0,${lineAlpha})`;
+                            ctx.lineWidth = 1;
+                            ctx.moveTo(barX + barW, ty); ctx.lineTo(barX + barW + 4, ty);
+                            ctx.stroke();
+                            ctx.fillText(v === 0 ? '0' : v.toFixed(1), barX + barW + 7, ty);
+                        });
+                        ctx.restore();
+                    }
+                }];
+            }
+        }
+
+        if (!isMatrix && !isBubble && sample.z?.length > 0) {
+            cfg.options.scales.z = { position: 'right', ...axisStyle };
+        }
+
+        if (sample.chartType === 6) cfg.options.indexAxis = 'y';
+        if (chartArray[sample.chartType] === 'scatter') cfg.options.plugins.tooltip = { enabled: false };
+
+        const chartInstance = new Chart(ctx, cfg);
+        chartInstances.push(chartInstance);
+    });
+
+    appendChart(panelSamples, pIdx, wrappers, panelDiv, groupId, fieldIndexes);
+}
+
+// ── createChartGroup ──────────────────────────────────────────────────────────
+// Creates an independent chart group from a set of field indexes.
+// Returns the groupId, or null on failure.
+export async function createChartGroup(fieldIndexes) {
+    const groupId    = ++_groupCounter;
+    const instBefore = chartInstances.length;
+
+    const selPlot   = document.getElementById("selPlot");
+    const noPlot    = document.getElementById("noPlot");
+    const loader    = document.getElementById("loader");
+
+    selPlot.hidden = true;
+    noPlot.hidden  = true;
+    loader.hidden  = false;
+
+    appState.controller = new AbortController();
+    try {
+        const response = await fetch("/workspace", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([...fieldIndexes].map(Number)),
+            signal: appState.controller.signal,
+        });
+        const result = await response.json();
+
+        loader.hidden = true;
+
+        if (result.length === 0) {
+            if (_groupData.size === 0) {
+                selPlot.hidden = true;
+                noPlot.hidden  = false;
+            }
+            return null;
+        }
+
+        _ensureMuuriGrid();
+
+        const grouped = result.reduce((acc, s) => {
+            (acc[s.panelIndex] = acc[s.panelIndex] || []).push(s);
+            return acc;
+        }, {});
+
+        // Track Muuri item count before adding new items
+        const muuriItemsBefore = muuriGrid.getItems().length;
+
+        Object.keys(grouped).sort((a, b) => +a - +b).forEach(pIdx => {
+            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, groupId, fieldIndexes);
+        });
+
+        // Capture new instances and grid items
+        const newInstances = chartInstances.slice(instBefore);
+        const allMuuriItems = muuriGrid.getItems();
+        const newGridItems  = allMuuriItems.slice(muuriItemsBefore).map(i => i.getElement());
+
+        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances });
+
+        muuriGrid.layout();
+        _logGroups('after create');
+        return groupId;
+    } catch (error) {
+        loader.hidden = true;
+        if (error.name !== 'AbortError') console.error("[createChartGroup] Error:", error);
+        if (_groupData.size === 0) {
+            selPlot.hidden = true;
+            noPlot.hidden  = false;
+        }
+        return null;
+    }
+}
+
+// ── removeChartGroup ──────────────────────────────────────────────────────────
+export function removeChartGroup(groupId) {
+    const data = _groupData.get(groupId);
+    if (!data) return;
+
+    data.instances.forEach(c => {
+        c.destroy();
+        const i = chartInstances.indexOf(c);
+        if (i !== -1) chartInstances.splice(i, 1);
+    });
+
+    if (muuriGrid) {
+        const muuriItems = data.gridItems
+            .map(el => muuriGrid.getItems(el)[0])
+            .filter(Boolean);
+        if (muuriItems.length) muuriGrid.remove(muuriItems, { removeElements: true });
+    }
+
+    _groupData.delete(groupId);
+    _logGroups('after remove');
+
+    if (_groupData.size === 0) {
+        if (muuriGrid) { muuriGrid.destroy(); muuriGrid = null; }
+        const chartGrid = document.getElementById("chartGrid");
+        if (chartGrid) chartGrid.innerHTML = '';
+        const selPlot = document.getElementById("selPlot");
+        const noPlot  = document.getElementById("noPlot");
+        if (selPlot) selPlot.hidden = false;
+        if (noPlot)  noPlot.hidden  = true;
+    }
+}
+
+// ── replaceChartGroup ─────────────────────────────────────────────────────────
+// Replaces an existing chart group in-place with a new one built from newFieldIndexes.
+export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
+    const oldData = _groupData.get(oldGroupId);
+    if (!oldData) return createChartGroup(newFieldIndexes);
+
+    // Capture the position of the first old item before removing anything
+    const insertIndex = muuriGrid.getItems().findIndex(
+        item => oldData.gridItems.includes(item.getElement())
+    );
+
+    const groupId    = ++_groupCounter;
+    const instBefore = chartInstances.length;
+
+    const loader  = document.getElementById("loader");
+    const selPlot = document.getElementById("selPlot");
+    const noPlot  = document.getElementById("noPlot");
+    loader.hidden = false;
+
+    appState.controller = new AbortController();
+    try {
+        const response = await fetch("/workspace", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([...newFieldIndexes].map(Number)),
+            signal: appState.controller.signal,
+        });
+        const result = await response.json();
+        loader.hidden = true;
+
+        if (result.length === 0) return null;
+
+        // Remove old group without triggering a layout yet
+        oldData.instances.forEach(c => {
+            c.destroy();
+            const i = chartInstances.indexOf(c);
+            if (i !== -1) chartInstances.splice(i, 1);
+        });
+        const oldMuuriItems = oldData.gridItems
+            .map(el => muuriGrid.getItems(el)[0])
+            .filter(Boolean);
+        if (oldMuuriItems.length)
+            muuriGrid.remove(oldMuuriItems, { removeElements: true, layout: false });
+        _groupData.delete(oldGroupId);
+
+        // Build new panels (appended at the end of chartGrid)
+        const muuriItemsBefore = muuriGrid.getItems().length;
+        const grouped = result.reduce((acc, s) => {
+            (acc[s.panelIndex] = acc[s.panelIndex] || []).push(s);
+            return acc;
+        }, {});
+        Object.keys(grouped).sort((a, b) => +a - +b).forEach(pIdx => {
+            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, groupId, newFieldIndexes);
+        });
+
+        const newInstances  = chartInstances.slice(instBefore);
+        const newGridItems  = muuriGrid.getItems().slice(muuriItemsBefore).map(i => i.getElement());
+        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances });
+
+        // Move new items to where the old card was
+        if (insertIndex >= 0) {
+            const newMuuriItems = newGridItems
+                .map(el => muuriGrid.getItems(el)[0])
+                .filter(Boolean);
+            newMuuriItems.forEach((item, i) => {
+                muuriGrid.move(item, insertIndex + i, { layout: false });
+            });
+        }
+
+        muuriGrid.layout();
+        _logGroups('after replace');
+        return groupId;
+    } catch (error) {
+        loader.hidden = true;
+        if (error.name !== 'AbortError') console.error("[replaceChartGroup] Error:", error);
+        if (_groupData.size === 0) { selPlot.hidden = false; noPlot.hidden = true; }
+        return null;
+    }
+}
+
+// ── clearAllChartGroups ───────────────────────────────────────────────────────
+export function clearAllChartGroups() {
+    [..._groupData.keys()].forEach(removeChartGroup);
 }

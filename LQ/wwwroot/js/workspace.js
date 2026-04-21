@@ -1,5 +1,6 @@
 // ── Shared state ──────────────────────────────────────────────────────────────
-export const listIndexes = new Set();
+export const listIndexes    = new Set();
+export const pendingIndexes = new Set();  // selected but not yet charted
 export const appState = { controller: null };
 
 // ── Navigation ────────────────────────────────────────────────────────────────
