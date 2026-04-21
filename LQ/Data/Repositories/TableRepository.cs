@@ -49,6 +49,19 @@ public class TableRepository : TableRepositoryAbstract
             .AnyAsync(f => f.AnalystID == analyst.Id && f.Name == fileName);
     }
 
+    public override async Task<CSVFile> GetFile(string guestToken, string fileName)
+        => await _lqDbContext.CSVFiles.SingleAsync(f => f.GuestToken == guestToken && f.Name == fileName);
+
+    public override async Task<List<CSVFile>> GetAllFiles(string guestToken)
+        => await _lqDbContext.CSVFiles.Where(f => f.GuestToken == guestToken).ToListAsync();
+    
+    public override async Task<bool> FileExists(string guestToken, string fileName)
+        => await _lqDbContext.CSVFiles.AnyAsync(f => f.GuestToken == guestToken && f.Name == fileName);
+
+    protected override async Task RemoveFileByGuest(string guestToken, string fileName)
+        => await _lqDbContext.CSVFiles.Where(f => f.GuestToken == guestToken && f.Name == fileName)
+            .ExecuteDeleteAsync();
+    
     protected override async Task RemoveFile(CSVFile csvFile)
     {
         await _lqDbContext.CSVFiles

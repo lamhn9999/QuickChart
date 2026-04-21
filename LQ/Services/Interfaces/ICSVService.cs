@@ -9,6 +9,12 @@ public interface ICSVService
     public Task<bool> Validate(Analyst analyst, IFormFile file);
     public Task<bool> ProcessUploaded(Analyst analyst, string path);
     public Task<bool> ProcessUploaded(Analyst analyst, IFormFile file);
+    
+    Task<bool> ProcessUploadedGuest(string guestToken, IFormFile file);
+    Task<CSVFile> GetFileGuest(string guestToken, string fileName);
+    Task<List<CSVFile>> GetAllFilesGuest(string guestToken);                               
+    Task RemoveFileGuest(string guestToken, string fileName);     
+    
     public Task<TryChangeFieldTypeDTO> ChangeFieldType(CSVFile csvFile, int fieldIndex, string newType, char? listSplitChar);
     public Task<CSVFile> GetFile(Analyst analyst, string fileName);
     public Task<CSVFile> GetFile(int csvFileId);

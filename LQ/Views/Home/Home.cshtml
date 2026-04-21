@@ -326,6 +326,45 @@
         }
         .signin-nudge a:hover { text-decoration: underline; }
 
+        /* ── Guest file list ── */
+        .guest-file-list {
+            margin-top: 1.25rem;
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.07);
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        }
+        .guest-file-list-title {
+            font-weight: 700; font-size: 0.8rem; color: var(--text-light);
+            text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 0.7rem 1.1rem 0.4rem;
+            margin: 0;
+        }
+        .guest-file-row {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.7rem 1.1rem;
+            border-top: 1px solid rgba(0,0,0,0.055);
+            cursor: pointer; transition: background 0.13s;
+        }
+        .guest-file-row:hover { background: rgba(233,150,122,0.06); }
+        .guest-file-name { flex: 1; font-weight: 600; font-size: 0.88rem; color: var(--text); }
+        .guest-file-date { font-size: 0.76rem; color: var(--text-light); white-space: nowrap; }
+        .guest-file-delete {
+            background: none; border: none; cursor: pointer;
+            color: #EF4444; font-size: 0.76rem; font-weight: 600;
+            padding: 0.25rem 0.5rem; border-radius: 0.35rem;
+            transition: background 0.13s;
+        }
+        .guest-file-delete:hover { background: rgba(239,68,68,0.08); }
+        .guest-file-expiry-note {
+            font-size: 0.74rem; color: var(--text-light);
+            padding: 0.6rem 1.1rem; margin: 0;
+            border-top: 1px solid rgba(0,0,0,0.055);
+        }
+        .guest-file-expiry-note a { color: var(--accent); font-weight: 600; text-decoration: none; }
+        .guest-file-expiry-note a:hover { text-decoration: underline; }
+
         /* ── AUTH MODAL ── */
         .auth-overlay {
             position: fixed; inset: 0; z-index: 200;
@@ -544,12 +583,8 @@
             setTimeout(() => input.classList.remove('shake'), 420);
         }
 
-        // Upload zone — sign-in required (no anon upload on backend)
-        function promptSignIn(e) {
-            if (e) e.stopPropagation();
-            document.getElementById('uploadPrompt').classList.add('show');
-            openModal('signin');
-        }
+        // Upload zone — guest upload
+        function triggerFilePicker() { document.getElementById('guestFileInput').click(); }
         function handleDragOver(e) {
             e.preventDefault();
             document.getElementById('uploadZone').classList.add('drag-active');
@@ -560,7 +595,34 @@
         function handleDrop(e) {
             e.preventDefault();
             document.getElementById('uploadZone').classList.remove('drag-active');
-            promptSignIn();
+            const file = e.dataTransfer.files[0];
+            if (file) uploadGuestFile(file);
+        }
+
+        async function uploadGuestFile(file) {
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await fetch('/guest-upload', { method: 'POST', body: fd });
+            const r = await res.json();
+            if (r.received) location.reload();
+            else alert(`"${r.badcsv || file.name}" is not a valid CSV, or a file with that name already exists.`);
+        }
+
+        async function removeGuestFile(filename, containerId, e) {
+            e.stopPropagation();
+            if (!confirm(`Delete "${filename}"? This cannot be undone.`)) return;
+            const res = await fetch('/guest-remove?' + new URLSearchParams({ filename }), { method: 'DELETE' });
+            if (await res.json() === 'OK') document.getElementById(containerId).remove();
+        }
+
+        async function selectGuestFile(filename) {
+            const res = await fetch('/table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `filename=${encodeURIComponent(filename)}`
+            });
+            if (res.ok) window.location.href = '/workspace';
         }
 
         // Star canvas
@@ -727,9 +789,11 @@
 
         <!-- RIGHT — Upload zone + trust -->
         <div class="action-col">
+            <input type="file" id="guestFileInput" accept=".csv" style="display:none"
+                   onchange="uploadGuestFile(this.files[0])">
             <div class="upload-zone"
                  id="uploadZone"
-                 onclick="promptSignIn(event)"
+                 onclick="triggerFilePicker()"
                  ondragover="handleDragOver(event)"
                  ondragleave="handleDragLeave(event)"
                  ondrop="handleDrop(event)">
@@ -747,9 +811,6 @@
                     Upload CSV
                 </div>
                 <p class="upload-formats">.csv &nbsp;&middot;&nbsp; up to 200 MB</p>
-                <p class="upload-prompt" id="uploadPrompt">
-                    &rarr;&nbsp; Sign in to upload and start analyzing
-                </p>
             </div>
 
             <div class="trust-row">
@@ -767,6 +828,31 @@
                 <a href="#" onclick="openModal('signin'); return false;">Sign in</a>
                 to save files and access your full workspace
             </p>
+
+            @if (Model != null && Model.Any())
+            {
+                <div class="guest-file-list">
+                    <p class="guest-file-list-title">Your uploaded files</p>
+                    @foreach (var (file, i) in Model.Select((f, i) => (f, i)))
+                    {
+                        <div id="guestfile-@i"
+                             class="guest-file-row"
+                             onclick="selectGuestFile('@file.Name')">
+                            <span class="guest-file-name">@file.Name</span>
+                            <span class="guest-file-date">@file.CreatedTime.ToString("MMM d, yyyy")</span>
+                            <button class="guest-file-delete"
+                                    onclick="removeGuestFile('@file.Name','guestfile-@i',event)">
+                                Delete
+                            </button>
+                        </div>
+                    }
+                    <p class="guest-file-expiry-note">
+                        Guest files are deleted after 7 days. &nbsp;
+                        <a href="#" onclick="openModal('signin'); return false;">Sign in</a>
+                        to keep them permanently.
+                    </p>
+                </div>
+            }
         </div>
     </div>
 

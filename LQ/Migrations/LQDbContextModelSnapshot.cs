@@ -83,11 +83,13 @@ namespace LQ.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ID"));
 
                     b.Property<string>("AnalystID")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedTime")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GuestToken")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("ModifiedTime")
                         .HasColumnType("timestamp with time zone");
@@ -99,6 +101,8 @@ namespace LQ.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("AnalystID");
+
+                    b.HasIndex("GuestToken");
 
                     b.ToTable("CSVFile", "app");
                 });
@@ -163,8 +167,7 @@ namespace LQ.Migrations
                     b.HasOne("LQ.Models.AnalystModels.Analyst", "Analyst")
                         .WithMany("CSVFiles")
                         .HasForeignKey("AnalystID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Analyst");
                 });

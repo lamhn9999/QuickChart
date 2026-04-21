@@ -31,7 +31,7 @@ public class CSVService : TableRepository, ICSVService
     {
     }
 
-    private static bool Validate(Analyst analyst, StreamReader reader)
+    private static bool Validate(StreamReader reader)
     {
         var numCommas = -1;
         var numLines = 0;
@@ -66,12 +66,12 @@ public class CSVService : TableRepository, ICSVService
 
     public async Task<bool> Validate(Analyst analyst, string path)
     {
-        return !await FileExists(analyst, Path.GetFileName(path)) && Validate(analyst, new StreamReader(path));
+        return !await FileExists(analyst, Path.GetFileName(path)) && Validate(new StreamReader(path));
     }
 
     public async Task<bool> Validate(Analyst analyst, IFormFile file)
     {
-        return !await FileExists(analyst, file.FileName) && Validate(analyst, new StreamReader(file.OpenReadStream()));
+        return !await FileExists(analyst, file.FileName) && Validate(new StreamReader(file.OpenReadStream()));
     }
     
     private static void DetectCategory(FieldValues fieldValues)
@@ -445,27 +445,23 @@ public class CSVService : TableRepository, ICSVService
 
     private List<string?> SplitField(string line)
     {
-        List<string?> splits = new();
+        var splits = new List<string?>();
         int cntQuotes = 0;
-        string temp = "";
-        foreach (char c in line)
+        var temp = new System.Text.StringBuilder();
+        foreach (var c in line)
         {
-            if (c == ',')
+            if (c == ',' && cntQuotes == 0)
             {
-                if (cntQuotes == 0)
-                {
-                    splits.Add(temp);
-                    temp = "";
-                }
-                else temp += c;
+                splits.Add(temp.ToString());
+                temp.Clear();
             }
             else
             {
-                temp += c;
+                temp.Append(c);
                 if (c == '"') cntQuotes ^= 1;
             }
         }
-        splits.Add(temp);
+        splits.Add(temp.ToString());
         return splits;
     }
     
@@ -492,7 +488,7 @@ public class CSVService : TableRepository, ICSVService
         
         for (int i = 0; i < fields.Count; i++)
         {
-            string trimmedfield = fields[i].Trim();
+            string trimmedfield = fields[i]?.Trim() ?? "";
             Field newField = new Field()
                 { Name = trimmedfield, CSVFile = csvFile, Index = i, Categories = new List<Category>() };
             newTable.Columns.Add(new FieldValues{Field = newField, Values = new List<Value>()});
@@ -553,6 +549,67 @@ public class CSVService : TableRepository, ICSVService
         await Insert(newTable);
         return true;  
     }
+
+    private Table? InterpretSinglePass(CSVFile csvFile, StreamReader reader)
+    {
+        string? headerLine = null;
+        while ((headerLine = reader.ReadLine()) != null)
+            if (!string.IsNullOrWhiteSpace(headerLine)) break;
+        if (headerLine == null) return null;
+
+        var fields = SplitField(headerLine);
+        int expectedColumns = fields.Count;
+        if (expectedColumns < 2) return null;
+
+        Table newTable = new Table(csvFile);
+        for (int i = 0; i < fields.Count; i++)
+        {
+            string trimmed = fields[i]?.Trim() ?? "";
+            Field newField = new Field { Name = trimmed, CSVFile = csvFile, Index = i, Categories = new List<Category>() };
+            newTable.Columns.Add(new FieldValues { Field = newField, Values = new List<Value>() });
+        }
+
+        int rowIndex = 0;
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var splits = SplitField(line);
+            if (splits.Count != expectedColumns) return null;
+            newTable.AddRow(rowIndex++, splits);
+        }
+
+        if (rowIndex == 0) return null;
+
+        Parallel.ForEach(newTable.Columns, fv =>
+        {
+            fv.Field.Type = DetectType(fv);
+            DetectCategory(fv);
+        });
+        return newTable;
+    }
+
+    public async Task<bool> ProcessUploadedGuest(string guestToken, IFormFile file)
+    {
+        if (await FileExists(guestToken, file.FileName)) return false;
+
+        CSVFile newFile = new CSVFile(guestToken, file.FileName, true);
+        using var reader = new StreamReader(file.OpenReadStream());
+        Table? newTable = InterpretSinglePass(newFile, reader);
+        if (newTable is null) return false;
+
+        await Insert(newTable);
+        return true;
+    }
+
+    public async Task<CSVFile> GetFileGuest(string guestToken, string fileName)
+        => await base.GetFile(guestToken, fileName);
+
+    public async Task<List<CSVFile>> GetAllFilesGuest(string guestToken)
+        => await base.GetAllFiles(guestToken);
+
+    public async Task RemoveFileGuest(string guestToken, string fileName)
+        => await base.RemoveFileByGuest(guestToken, fileName);
 
     public new async Task<CSVFile> GetFile(Analyst analyst, string fileName)
     {

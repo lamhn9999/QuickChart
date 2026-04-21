@@ -25,11 +25,14 @@ public class LQDbContext : DbContext
         {
             eb.ToTable("CSVFile", "app");
             eb.Property(f => f.AnalystID)
-                .IsRequired();
+                .IsRequired(false);
             eb.HasOne(f=> f.Analyst)
                 .WithMany(u => u.CSVFiles)
                 .HasForeignKey(f=> f.AnalystID)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
+            eb.Property(f => f.GuestToken).IsRequired(false);
+            eb.HasIndex(f => f.GuestToken);
         });
         modelBuilder.Entity<Field>().ToTable("Field", "app");
         modelBuilder.Entity<Value>(eb =>

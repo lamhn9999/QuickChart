@@ -37,26 +37,44 @@ public class HomeController : Controller
         }
     }
 
+    private const string GuestCookieName = "lq_guest";
+
+    private string? GuestToken =>
+        Request.Cookies.TryGetValue(GuestCookieName, out var raw) && Guid.TryParse(raw, out _)
+            ? raw : null;
+
+    private string EnsureGuestToken()
+    {
+        var existing = GuestToken;
+        if (existing is not null) return existing;
+        var token = Guid.NewGuid().ToString();
+        Response.Cookies.Append(GuestCookieName, token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = false,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddDays(30),
+            IsEssential = true
+        });
+        return token;
+    }
+
     [HttpGet]
     public async Task<IActionResult> Show()
     {
         HttpContext.Session.Remove("TableDTO");
         HttpContext.Session.Remove("ListValueFilterDTO");
-        
+
         var analystdto = CurrentAnalyst;
-        var analystId = analystdto?.ID ?? BaseDTO.DefaultAnalystID;
-        var analyst = await _analystService.FindById(analystId);
-        
         if (analystdto != null)
         {
+            var analyst = await _analystService.FindById(analystdto.ID);
             ViewBag.Username = analystdto.Name;
+            return View("NewHomeSpecific", await _csvService.GetAllFiles(analyst!));
         }
 
-        List<CSVFile> sampleCsvs = await _csvService.GetAllFiles(analyst!);
-        
-        return CurrentAnalyst is null ? 
-            View("Home", sampleCsvs) : 
-            View("NewHomeSpecific", sampleCsvs);
+        var token = EnsureGuestToken();
+        return View("Home", await _csvService.GetAllFilesGuest(token));
     }
 
     [HttpDelete("remove")]
@@ -103,19 +121,24 @@ public class HomeController : Controller
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> Select(string filename)
     {
+        CSVFile selectedFile;
         var analystdto = CurrentAnalyst;
-        var isGuest = analystdto is null;
-        var analystId = isGuest ? BaseDTO.DefaultAnalystID : analystdto!.ID;
-        var analyst = await _analystService.FindById(analystId);
-        if (analyst is null) return NotFound();
+        if (analystdto is not null)
+        {
+            var analyst = await _analystService.FindById(analystdto.ID);
+            if (analyst is null) return NotFound();
+            selectedFile = await _csvService.GetFile(analyst, filename);
+        }
+        else
+        {
+            var token = GuestToken;
+            if (token is null) return Unauthorized();
+            selectedFile = await _csvService.GetFileGuest(token, filename);
+        }
+        if (selectedFile is null) return NotFound();
 
-        CSVFile selectedFile = await _csvService.GetFile(analyst, filename);
-        if (selectedFile is null)
-            return NotFound();
-
-        HttpContext.Session.SetString("CSVFileDTO", JsonSerializer.Serialize(new CSVFileDTO{currentFileID = selectedFile.ID}));
+        HttpContext.Session.SetString("CSVFileDTO", JsonSerializer.Serialize(new CSVFileDTO { currentFileID = selectedFile.ID }));
         HttpContext.Session.Remove("ListValueFilterDTO");
-
         return Ok();
     }
 
@@ -133,5 +156,35 @@ public class HomeController : Controller
         return await _csvService.ProcessUploaded(analyst, file)
             ? Json(new { received = file.FileName })
             : Json(new { badcsv = file.FileName });
+    }
+
+    [HttpPost("guest-upload")]
+    [IgnoreAntiforgeryToken]
+    [RequestSizeLimit(209715200)]
+    public async Task<IActionResult> GuestUpload(IFormFile file)
+    {
+        if (CurrentAnalyst is not null) return BadRequest();
+        var token = EnsureGuestToken();
+        return await _csvService.ProcessUploadedGuest(token, file)
+            ? Json(new { received = file.FileName })
+            : Json(new { badcsv = file.FileName });
+    }
+
+    [HttpDelete("guest-remove")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> GuestRemove(string filename)
+    {
+        var token = GuestToken;
+        if (token is null) return Unauthorized();
+        try
+        {
+            await _csvService.RemoveFileGuest(token, filename);
+            return Json("OK");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return Json("NG");
+        }
     }
 }

@@ -1,4 +1,5 @@
 @using LQ.Models.DTOs
+@using LQ.Models.TableModels
 @model LQ.Models.DTOs.TableDisplayDTO;
 <!DOCTYPE html>
 <html lang="en-us">
@@ -7,58 +8,238 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="~/style_tw.css"/>
-    <link rel="stylesheet" href="~/style.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
     <script src="/node_modules/chart.js/dist/chart.umd.min.js"></script>
+    <script src="/node_modules/muuri/dist/muuri.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0"></script>
     <style>
-        body { font-family: 'Playfair Display', serif; }
+        body { font-family: 'DM Sans', system-ui, sans-serif; }
     </style>
     <script type="module" src="~/js/main.js"></script>
 </head>
-<body class="bg-zinc-950 text-white">
+<body class="bg-[#FAFAFA] text-[#18181B]">
 <div class="flex flex-col h-screen max-h-screen">
-    <nav class="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
-        <div class="flex items-center gap-3">
-            <h1 class="text-xl font-semibold tracking-tight text-white">
-                Demo: <span class="text-[#E9967A] italic">@Model.FileName</span>
-            </h1>
-        </div>
+    <nav class="bg-white/85 border-b border-zinc-100 backdrop-blur-md px-6 py-3.5 flex justify-between items-center sticky top-0 z-50 shadow-sm">
+        <a href="/" class="flex items-center gap-2 no-underline hover:opacity-80 transition-opacity" style="font-family:'Syne',sans-serif">
+            <img src="/01384a5a5e3c1ea5887b428641e12121.gif" alt="" style="width:18px;height:auto;">
+            <span class="text-[0.95rem] font-bold tracking-tight text-[#18181B]">ACPTDA<span class="text-[#E9967A]">.</span></span>
+        </a>
         <div class="flex items-center gap-4">
-            <button id="back" class="hover:cursor-pointer text-sm font-medium text-zinc-400 hover:text-white transition-colors flex items-center gap-2" onclick="window.location.href='/'">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            <span class="text-[0.82rem] font-medium text-zinc-400 pr-4 border-r border-zinc-200 flex items-center gap-1.5">
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#E9967A]/70"></span>
+                Guest session
+            </span>
+            <a href="/" class="hover:cursor-pointer flex items-center gap-1.5 text-[0.82rem] font-medium text-zinc-400 hover:text-[#18181B] bg-transparent border-none transition-colors px-2 py-1.5 rounded-lg hover:bg-zinc-50 no-underline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 12H5"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
                 Back to Home
-            </button>
+            </a>
         </div>
     </nav>
 
-    <div class="flex flex-1 flex-col md:flex-row min-h-0 md:max-h-full">
+    <div id="mainWrapper" class="group flex flex-1 flex-col md:flex-row min-h-0 md:max-h-full relative">
+
+        <!-- Floating Expand/Collapse Button -->
+        <button
+            onclick="const tp = document.getElementById('tablePanel'); tp.style.transition = 'all 0.5s ease-in-out'; document.getElementById('mainWrapper').classList.toggle('is-collapsed'); setTimeout(() => tp.style.transition = '', 500);"
+            class="absolute bottom-6 left-6 z-[60] flex items-center justify-center w-12 h-12 bg-white hover:bg-zinc-50 text-zinc-500 hover:text-[#18181B] rounded-full border border-zinc-200 shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            title="Toggle Table"
+        >
+            <svg class="w-6 h-6 transition-transform duration-500 group-[.is-collapsed]:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 3v18" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+
+        <!-- Table Panel -->
         <div
             id="tablePanel"
-            class="overflow-auto
-                   w-full md:w-1/2 md:min-w-1/5">
-            <table id="dataTable" class="w-full border-separate border-spacing-0">
-                <thead class="sticky top-0">
-                <tr>
+            class="overflow-auto w-full md:w-1/2 md:min-w-1/5 group-[.is-collapsed]:md:!w-80 group-[.is-collapsed]:md:!min-w-[20rem] group-[.is-collapsed]:md:!max-w-[20rem] group-[.is-collapsed]:md:!flex-none relative z-20">
+
+            <table id="dataTable" class="w-full border-separate border-spacing-0 group-[.is-collapsed]:block">
+                <thead class="sticky top-0 shadow-[0_2px_8px_0_rgba(0,0,0,0.06)] group-[.is-collapsed]:block group-[.is-collapsed]:static group-[.is-collapsed]:shadow-none">
+                <tr class="group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:items-stretch group-[.is-collapsed]:w-[calc(100%-2rem)] group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-100 group-[.is-collapsed]:rounded-2xl group-[.is-collapsed]:p-2 group-[.is-collapsed]:gap-1.5 group-[.is-collapsed]:m-4 group-[.is-collapsed]:bg-zinc-50/70 group-[.is-collapsed]:shadow-sm transition-all">
                     @{
                         foreach (var f in Model.Fields)
                         {
-                            <th onclick="fieldClicked(@f.Index)">
-                                @f.Name
+                            <th onclick="fieldClicked(@f.Index)" class="relative align-top p-2 bg-[#FAFAFA] border-b border-b-zinc-200 border-r border-r-zinc-200 last:border-r-0 has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-white group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-100 group-[.is-collapsed]:rounded-xl group-[.is-collapsed]:hover:border-[#E9967A]/40 group-[.is-collapsed]:hover:bg-[#E9967A]/[0.03] group-[.is-collapsed]:cursor-pointer transition-colors" data-index="@f.Index">
+                                <div class="flex flex-col w-full">
+                                    @{
+                                        string typeSvg = f.TypeName switch {
+                                            "Int32"    => """<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>""",
+                                            "Double"   => """<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/><circle cx="19" cy="19" r="1.5" fill="currentColor" stroke="none"/>""",
+                                            "DateTime" => """<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>""",
+                                            "Boolean"  => """<rect x="1" y="7" width="22" height="10" rx="5"/><circle cx="16" cy="12" r="3" fill="currentColor" stroke="none"/>""",
+                                            _ when f.TypeName.StartsWith("List") => """<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/>""",
+                                            _          => """<text x="12" y="19" text-anchor="middle" font-family="'Times New Roman', Times, serif" font-size="20" font-weight="bold" fill="currentColor" stroke="none">T</text>"""
+                                        };
+                                        string typeLabel = f.TypeName switch {
+                                            "Int32" => "Integer", "Double" => "Float", "DateTime" => "DateTime",
+                                            "Boolean" => "Boolean", "String" => "Text",
+                                            _ when f.TypeName.StartsWith("List") => "List", _ => f.TypeName
+                                        };
+                                        string ctName = f.TypeName switch {
+                                            "String" => "string", "Int32" => "int", "Double" => "double",
+                                            "DateTime" => "datetime", "Boolean" => "bool",
+                                            _ when f.TypeName.StartsWith("List") => "list", _ => ""
+                                        };
+                                        var allTypes = new string[] { "string", "int", "double", "datetime", "bool", "list" };
+                                    }
+
+                                    <!-- Zone 1: type icon · field name · gear · filter -->
+                                    <div class="flex items-center gap-1.5 pb-1.5 mb-1.5 border-b border-zinc-200 group-[.is-collapsed]:gap-2 group-[.is-collapsed]:pb-2 group-[.is-collapsed]:mb-2 group-[.is-collapsed]:border-zinc-100">
+                                        <span class="text-zinc-400 shrink-0 group-[.is-collapsed]:text-[#E9967A]/70" id="fieldType-@f.Index" title="@typeLabel">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">@Html.Raw(typeSvg)</svg>
+                                        </span>
+                                        <span class="font-medium text-[11px] text-[#27272A] flex-1 truncate leading-none min-w-0 group-[.is-collapsed]:text-[13px] group-[.is-collapsed]:font-semibold group-[.is-collapsed]:text-zinc-700 group-[.is-collapsed]:leading-tight">@f.Name</span>
+                                        <!-- Gear -->
+                                        <div class="relative shrink-0">
+                                            <button class="gear-btn hover:cursor-pointer text-zinc-400 hover:text-zinc-700 transition-colors relative z-40 focus:outline-none p-0.5 rounded group-[.is-collapsed]:p-1 group-[.is-collapsed]:rounded-md group-[.is-collapsed]:hover:bg-zinc-100" onclick="gearBtnClicked(event, this)">
+                                                <svg class="w-3 h-3 transition-transform duration-500 group-[.is-collapsed]:w-3.5 group-[.is-collapsed]:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <circle cx="12" cy="12" r="3"></circle>
+                                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                                </svg>
+                                            </button>
+                                            <div class="hidden gearPopup fixed border border-zinc-200 bg-white/97 backdrop-blur-xl shadow-2xl rounded-xl p-1 z-[9999] text-left font-normal" onclick="event.stopPropagation()">
+                                                <div class="relative">
+                                                    <div class="type-menu-btn px-3 py-2 hover:bg-zinc-100 rounded-lg cursor-pointer text-sm text-[#27272A] font-medium transition-colors flex items-center justify-between gap-3" onclick="toggleFieldTypeMenu(this)">
+                                                        Change Field Type
+                                                        <svg class="w-3.5 h-3.5 opacity-60 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                                    </div>
+                                                    <div class="hidden type-menu-popup absolute top-0 left-full ml-1 w-max min-w-[120px] bg-white/97 backdrop-blur-3xl border border-zinc-200 rounded-xl p-1 shadow-2xl flex flex-col gap-0.5 z-[9999]">
+                                                        @foreach (var t in allTypes) { if (t != ctName) { <button onclick="changeFieldType(event, @f.Index, '@t')" class="text-left px-3 py-1.5 text-xs text-zinc-600 hover:text-[#18181B] hover:bg-zinc-100 rounded-lg transition-colors w-full tracking-wide">@t</button> } }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Filter -->
+                                        <div class="relative z-50 shrink-0 focus-within:z-[101] has-[.filterPopup:not(.hidden)]:z-[101]">
+                                            <button class="filter-btn hover:cursor-pointer relative z-40 text-zinc-400 hover:text-zinc-600 transition-colors p-0.5 rounded group-[.is-collapsed]:p-1 group-[.is-collapsed]:rounded-md group-[.is-collapsed]:hover:bg-zinc-100" onclick="filterClicked(event, this)">
+                                                <span class="filter-chip hidden absolute -top-1 -left-1 bg-[#E9967A] text-black text-[9px] font-bold h-3.5 min-w-[14px] flex items-center justify-center rounded-full pointer-events-none z-10 px-0.5"></span>
+                                                <svg width="13" height="13" viewBox="0 0 24 24"><path d="M3 5H21L14 13V19L10 21V13L3 5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                            </button>
+                                            @if (f.TypeName == "Int32" || f.TypeName == "Double")
+                                            {
+                                                <div class="hidden filterPopup w-64 bg-white border border-zinc-200 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="@(f.TypeName == "Int32" ? "Int" : "Double")" onclick="filterPopupClicked(event, this)">
+                                                    <div class="flex flex-col gap-3">
+                                                        <div>
+                                                            <label class="block text-xs text-zinc-500 mb-1">Specific Values</label>
+                                                            <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                            <input type="number" step="any" placeholder="Add specific number..." class="int-specific-input rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-50 border border-zinc-200 text-[#18181B] placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntSpecificKey(event, this)" />
+                                                        </div>
+                                                        <div class="text-xs text-zinc-500 text-center uppercase tracking-widest font-semibold mt-1">OR</div>
+                                                        <div>
+                                                            <label class="block text-xs text-zinc-500 mb-1">Range</label>
+                                                            <div class="flex items-center gap-2">
+                                                                <input type="number" step="any" placeholder="Min" class="int-range-min rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-50 border border-zinc-200 text-[#18181B] placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntRangeKey(event, this)" />
+                                                                <span class="text-zinc-400 text-xs">to</span>
+                                                                <input type="number" step="any" placeholder="Max" class="int-range-max rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-50 border border-zinc-200 text-[#18181B] placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onkeydown="filterIntRangeKey(event, this)" />
+                                                            </div>
+                                                            <button class="mt-2 text-xs w-full font-medium bg-zinc-100 hover:bg-zinc-200 text-zinc-600 hover:text-[#18181B] py-1.5 rounded transition" onclick="applyIntRangeFilter(event, this)">Apply Range</button>
+                                                        </div>
+                                                        <label class="flex items-center gap-1.5 mt-1 cursor-pointer text-xs text-zinc-500">
+                                                            <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-white border border-zinc-300 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeIntCheckboxClicked(event, this)" />
+                                                            Exclude results
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (f.TypeName == "DateTime")
+                                            {
+                                                <div class="hidden filterPopup w-64 bg-white border border-zinc-200 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="DateTime" onclick="filterPopupClicked(event, this)">
+                                                    <div class="flex flex-col gap-3">
+                                                        <div>
+                                                            <label class="block text-xs text-zinc-500 mb-1">Date Range</label>
+                                                            <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                            <div class="flex flex-col gap-2">
+                                                                <input type="datetime-local" placeholder="Min Date" class="dt-range-min rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-50 border border-zinc-200 text-[#18181B] placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" />
+                                                                <span class="text-zinc-500 text-xs text-center">to</span>
+                                                                <input type="datetime-local" placeholder="Max Date" class="dt-range-max rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-50 border border-zinc-200 text-[#18181B] placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-[#E9967A]" />
+                                                            </div>
+                                                            <button class="mt-2 text-xs w-full font-medium bg-zinc-100 hover:bg-zinc-200 text-zinc-600 hover:text-[#18181B] py-1.5 rounded transition" onclick="applyDtRangeFilter(event, this)">Apply Range</button>
+                                                        </div>
+                                                        <label class="flex items-center gap-1.5 mt-1 cursor-pointer text-xs text-zinc-500">
+                                                            <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-white border border-zinc-300 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeDtCheckboxClicked(event, this)" />
+                                                            Exclude results
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (f.TypeName == "Boolean")
+                                            {
+                                                <div class="hidden filterPopup w-56 bg-white border border-zinc-200 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="Bool" onclick="filterPopupClicked(event, this)">
+                                                    <label class="block text-xs text-zinc-500 mb-2">Filter @f.Name</label>
+                                                    <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                    <div class="flex gap-2 mb-2">
+                                                        <button class="flex-1 text-xs font-medium bg-zinc-100 hover:bg-zinc-200 text-zinc-600 py-1.5 rounded transition" onclick="applyBoolFilter(event, this, 'true')">True</button>
+                                                        <button class="flex-1 text-xs font-medium bg-zinc-100 hover:bg-zinc-200 text-zinc-600 py-1.5 rounded transition" onclick="applyBoolFilter(event, this, 'false')">False</button>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (f.TypeName.StartsWith("List"))
+                                            {
+                                                <div class="hidden filterPopup w-56 bg-white border border-zinc-200 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="ListString" onclick="filterPopupClicked(event, this)">
+                                                    <label class="block text-xs text-zinc-500 mb-1">Search items in @f.Name</label>
+                                                    <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                    <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-50 border border-zinc-200 text-[#18181B] placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
+                                                    <label class="flex items-center gap-1.5 mt-3 cursor-pointer text-xs text-zinc-600">
+                                                        <input type="checkbox" name="IsPartialMatch" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-white border border-zinc-300 rounded-sm checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="partialMatchStrCheckboxClicked(event, this)" />
+                                                        Must contain ANY (default ALL)
+                                                    </label>
+                                                    <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-500">
+                                                        <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-white border border-zinc-300 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeCheckboxClicked(event, this)" />
+                                                        Exclude results
+                                                    </label>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="hidden filterPopup w-56 bg-white border border-zinc-200 rounded-lg shadow-2xl p-3 z-[9999] text-left font-normal" data-field-type="String" onclick="filterPopupClicked(event, this)">
+                                                    <label class="block text-xs text-zinc-500 mb-1">Search in @f.Name</label>
+                                                    <div class="filterValues flex flex-wrap gap-1 mb-2 w-full"></div>
+                                                    <input type="text" placeholder="Type to filter..." onkeydown="filterInputKey(event, this)" class="rounded-sm w-full px-2 py-1.5 text-xs bg-zinc-50 border border-zinc-200 text-[#18181B] placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-[#E9967A] transition" />
+                                                    <label class="flex items-center gap-1.5 mt-3 cursor-pointer text-xs text-zinc-600">
+                                                        <input type="checkbox" name="IsPartialMatch" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-white border border-zinc-300 rounded-sm checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="partialMatchStrCheckboxClicked(event, this)" />
+                                                        Partial Match
+                                                    </label>
+                                                    <label class="flex items-center gap-1.5 mt-2 cursor-pointer text-xs text-zinc-500">
+                                                        <input type="checkbox" name="IsNot" value="true" class="w-3 h-3 hover:cursor-pointer appearance-none bg-white border border-zinc-300 rounded-4xl checked:bg-[#E9967A] checked:border-[#E9967A] focus:outline-none focus:ring-1 focus:ring-[#E9967A]" onclick="excludeCheckboxClicked(event, this)" />
+                                                        Exclude results
+                                                    </label>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Zone 3: field visual -->
+                                    <div class="mt-1.5 group-[.is-collapsed]:mt-2.5 group-[.is-collapsed]:min-h-[48px]" data-spark-col="@f.Index" data-spark-type="@f.TypeName" data-spark-categorical="@(f.Categories.Contains(Category.Categorical).ToString().ToLower())">
+                                        <canvas class="sparkline-canvas w-full block" style="height:28px"></canvas>
+                                        <div class="sparkline-stat text-[9px] text-zinc-400 mt-0.5 group-[.is-collapsed]:text-[10px] group-[.is-collapsed]:mt-1"></div>
+                                    </div>
+                                </div>
                             </th>
                         }
                     }
                 </tr>
                 </thead>
-                <tbody>
+                <tbody class="group-[.is-collapsed]:hidden">
                 @foreach (var row in Model.Values)
                 {
-                    <tr>
-                        @foreach (var cell in row)
+                    <tr class="even:bg-zinc-50/70 hover:bg-[#E9967A]/5 transition-colors duration-75 group/row cursor-default">
+                        @for (int ci = 0; ci < row.Length; ci++)
                         {
-                            <td>@cell</td>
+                            var fieldType = Model.Fields[ci].TypeName;
+                            var isNum     = fieldType is "Int32" or "Double";
+                            var cellVal   = row[ci];
+                            var isEmpty   = string.IsNullOrEmpty(cellVal);
+                            var isZero    = isNum && (cellVal == "0" || cellVal == "0.0" || cellVal == "0.00");
+                            <td class="px-3 py-2 text-xs border-b border-zinc-100 whitespace-nowrap max-w-[220px] overflow-hidden text-ellipsis transition-colors duration-75
+                                       @(isNum ? "text-right tabular-nums" : "")
+                                       @(isEmpty ? "text-zinc-300" : isZero ? "text-zinc-400 group-hover/row:text-zinc-600" : "text-zinc-500 group-hover/row:text-zinc-900")">@cellVal</td>
                         }
                     </tr>
                 }
@@ -66,17 +247,20 @@
             </table>
         </div>
 
+        <!-- Drag Handle -->
         <div
             id="drag"
-            class="hidden md:block mx-1 w-1 rounded-full
-                   cursor-col-resize bg-gray-500"
+            class="hidden md:block mx-1 w-1 rounded-full cursor-col-resize bg-zinc-200 transition-opacity duration-500 group-[.is-collapsed]:opacity-0 group-[.is-collapsed]:pointer-events-none"
         ></div>
-        <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto" id="plotPanel">
-            <div class="flex-1 border-2 border-gray-500 content-center" id="selPlot">
-                <p class="p-10 text-3xl text-center text-gray-500">Please click a table header to select a column. We will generate appropriate plots based on your selection.</p>
+        <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto relative z-10" id="plotPanel">
+            <div class="chartGrid" id="chartGrid">
+                @* MUURI CHART GRID *@
             </div>
-            <div hidden class="flex-1 border-2 border-red-600 content-center" id="noPlot">
-                <p class="p-10 text-3xl text-center text-red-500">ZERO ZERO</p>
+            <div class="flex-1 border-2 border-zinc-200 content-center" id="selPlot">
+                <p class="p-10 text-3xl text-center text-zinc-400">Please click a table header to select a column. We will generate appropriate plots based on your selection.</p>
+            </div>
+            <div hidden class="flex-1 border-2 border-zinc-200 content-center" id="noPlot">
+                <p class="p-10 text-3xl text-center text-zinc-400">No chart generated.</p>
             </div>
             <div hidden class="flex-1 content-center" id="loader">
                 <div class="loader">
@@ -91,6 +275,248 @@
         </div>
     </div>
 </div>
+<script>
+    const box = document.getElementById("tablePanel");
 
+    let isDragging = false;
+    let startX, startY;
+    let scrollLeft, scrollTop;
+
+    box.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        box.classList.add("grabbing");
+        box.style.setProperty('transition', 'none', 'important');
+        document.body.style.setProperty('user-select', 'none', 'important');
+        startX = e.pageX;
+        startY = e.pageY;
+        scrollLeft = box.scrollLeft;
+        scrollTop = box.scrollTop;
+    });
+
+    document.addEventListener("mouseup", () => {
+        if (!isDragging) return;
+        isDragging = false;
+        box.classList.remove("grabbing");
+        box.style.removeProperty('transition');
+        document.body.style.removeProperty('user-select');
+    });
+
+    document.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const dx = e.pageX - startX;
+        const dy = e.pageY - startY;
+        box.scrollLeft = scrollLeft - dx;
+        box.scrollTop = scrollTop - dy;
+    });
+</script>
+
+@* HIDDEN SECTION FOR TAILWIND *@
+<div class="hidden">
+    <div class="rounded-xl bg-[darksalmon] text-black px-2 py-1 text-xs flex items-center gap-1 truncate"></div>
+    <div class="flex justify-end p-2 border-b border-zinc-100 bg-zinc-50/50">
+        <div class="relative flex flex-col items-end">
+            <button class="hover:cursor-pointer text-sm tracking-wider font-bold bg-zinc-100 border border-zinc-200 px-2 py-1 rounded text-zinc-500 hover:text-[#18181B] transition-all flex items-center gap-1.5">
+                Turn into
+                <svg class="w-2.5 h-2.5 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div class="absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-white border border-zinc-200 rounded shadow-2xl py-1 z-30">
+                <button class="w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate text-[#E9967A] font-semibold bg-zinc-50 hover:bg-zinc-100">Item</button>
+                <button class="w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate text-zinc-500 hover:bg-zinc-100 hover:text-[#18181B]">Item</button>
+            </div>
+        </div>
+        <div class="relative flex flex-col items-end">
+            <button class="hover:cursor-pointer text-sm tracking-wider px-2 py-1 rounded text-zinc-500 hover:text-[#18181B] transition-all flex items-center gap-1.5">
+                Background color
+                <svg class="w-2.5 h-2.5 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div class="absolute top-full right-0 mt-1 min-w-[120px] w-max max-w-[200px] bg-zinc-900 border border-zinc-700/60 rounded shadow-2xl py-1 z-30">
+                <img style="margin-right:2px;" src="img_colormap.gif" alt="colormap">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Chart zoom overlay ─────────────────────────────────────── -->
+<div id="zoomOverlay"
+     class="hidden fixed inset-0 z-[400] bg-[#F7F7F8]/98 backdrop-blur-2xl flex flex-col">
+
+    <!-- Header bar -->
+    <div class="flex items-center justify-between shrink-0 px-6 py-3 border-b border-zinc-200/80 bg-white/70 backdrop-blur-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-1.5 h-5 rounded-full bg-[#E9967A]/70"></div>
+            <span id="zoomTitle"
+                  class="text-sm font-semibold text-zinc-700 tracking-tight truncate pr-4" style="font-family:'Syne',sans-serif"></span>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs text-zinc-400 shrink-0">
+            <span class="hidden sm:flex items-center gap-1.5">
+                Press <kbd class="px-1.5 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 font-mono text-zinc-500 text-[10px]">Esc</kbd> to exit
+            </span>
+            <button onclick="closeZoom()"
+                    class="hover:cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg
+                           border border-zinc-200 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 hover:border-zinc-300 transition-all text-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h6V4m0 6-7-7"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 10h-6V4m0 6 7-7"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 14h6v6m0-6-7 7"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 14h-6v6m0-6 7 7"/>
+                </svg>
+                <span class="hidden sm:inline text-xs font-medium">Exit zoom</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Chart container -->
+    <div class="flex flex-1 min-h-0">
+        <div class="flex-5/6 min-h-0 flex flex-col">
+            <div id="zoomContent" class="flex-1 min-h-0 flex flex-col items-center p-4"></div>
+
+            <!-- ── Navigator ── -->
+            <div id="zoomNavigator"
+                 class="hidden h-[72px] shrink-0 border-t border-zinc-200/80 bg-white/60 px-5 py-2 select-none">
+                <div id="navTrack" class="relative h-full rounded-lg overflow-hidden cursor-crosshair bg-zinc-100/60">
+                    <canvas id="navigatorCanvas" class="absolute inset-0 w-full h-full"></canvas>
+                    <div id="navMaskLeft" class="absolute top-0 left-0 h-full bg-zinc-400/15 pointer-events-none" style="width:0%"></div>
+                    <div id="navMaskRight" class="absolute top-0 right-0 h-full bg-zinc-400/15 pointer-events-none" style="width:0%"></div>
+                    <div id="navWindow" class="absolute top-0 h-full cursor-grab active:cursor-grabbing" style="left:0%;width:100%;">
+                        <div class="absolute inset-x-0 top-0 h-[1.5px] bg-[#E9967A]/70 pointer-events-none rounded-full"></div>
+                        <div class="absolute inset-x-0 bottom-0 h-[1.5px] bg-[#E9967A]/70 pointer-events-none rounded-full"></div>
+                        <div id="navHandleLeft" class="absolute left-0 top-0 h-full w-3 -translate-x-1/2 bg-[#E9967A] cursor-ew-resize z-10 flex items-center justify-center gap-px rounded">
+                            <div class="h-3.5 w-px bg-white/70 rounded"></div>
+                            <div class="h-3.5 w-px bg-white/70 rounded"></div>
+                        </div>
+                        <div id="navHandleRight" class="absolute right-0 top-0 h-full w-3 translate-x-1/2 bg-[#E9967A] cursor-ew-resize z-10 flex items-center justify-center gap-px rounded">
+                            <div class="h-3.5 w-px bg-white/70 rounded"></div>
+                            <div class="h-3.5 w-px bg-white/70 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="zoomOptionPane" class="flex-1/6 min-h-0 border-l border-zinc-200/60"></div>
+    </div>
+</div>
+
+<script>
+// ── Header sparklines ─────────────────────────────────────────────────────────
+(function () {
+    const [SR, SG, SB] = [233, 150, 122];
+    const ac = a => `rgba(${SR},${SG},${SB},${a})`;
+    const fmtN = n => Math.abs(n) >= 1e9 ? (n/1e9).toFixed(1)+'B'
+                    : Math.abs(n) >= 1e6 ? (n/1e6).toFixed(1)+'M'
+                    : Math.abs(n) >= 1e3 ? (n/1e3).toFixed(1)+'k'
+                    : Number.isInteger(n) ? String(n) : n.toPrecision(3);
+    const NA_RE = /^(n\/a|null|none|\(empty\)|unknown|-|)$/i;
+
+    function draw(canvas, statEl, sample) {
+        const W = canvas.offsetWidth || 120;
+        const H = canvas.offsetHeight || 28;
+        canvas.width  = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        const type   = sample.chartType;
+        const labels = sample.x ?? [];
+        const y0     = sample.y?.[0];
+        if (!y0?.data?.length) return;
+        const nums = y0.data.map(Number).filter(n => !isNaN(n));
+        if (!nums.length) return;
+        let stat = '';
+
+        if (type === 0) {
+            const PIE_COLORS = ['rgba(233,150,122,0.9)','rgba(99,179,237,0.82)','rgba(154,230,180,0.82)','rgba(113,113,122,0.55)'];
+            const total = nums.reduce((a, b) => a + b, 0);
+            if (!total) return;
+            let sliceData, sliceLabels;
+            if (nums.length <= 3) { sliceData = nums.slice(); sliceLabels = labels.map(String); }
+            else { const otherSum = nums.slice(3).reduce((a, b) => a + b, 0); sliceData = [nums[0], nums[1], nums[2], otherSum]; sliceLabels = [String(labels[0]), String(labels[1]), String(labels[2]), 'Other']; }
+            canvas.style.display = 'none';
+            if (statEl) statEl.style.display = 'none';
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:7px;align-items:center;margin-top:2px';
+            const SZ = 38;
+            const pc = document.createElement('canvas');
+            pc.width = SZ; pc.height = SZ;
+            pc.style.cssText = `width:${SZ}px;height:${SZ}px;flex-shrink:0`;
+            const pctx = pc.getContext('2d');
+            const cx = SZ/2, cy = SZ/2, r = SZ/2 - 0.5;
+            const sliceTotal = sliceData.reduce((a, b) => a + b, 0);
+            let angle = -Math.PI / 2;
+            sliceData.forEach((v, i) => { const sweep = (v/sliceTotal)*Math.PI*2; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.arc(cx, cy, r, angle, angle+sweep); pctx.closePath(); pctx.fillStyle = PIE_COLORS[i]; pctx.fill(); angle += sweep; });
+            const legend = document.createElement('div');
+            legend.style.cssText = 'display:flex;flex-direction:column;gap:2px;flex:1;min-width:0';
+            sliceData.forEach((v, i) => { const pct = Math.round(v/total*100); const lbl = (sliceLabels[i]||'(empty)').replace(/^"+|"+$/g,'').slice(0,18); const item = document.createElement('div'); item.style.cssText='display:flex;align-items:center;gap:3px;font-size:9px;color:#71717A;line-height:1.45'; item.innerHTML=`<span style="width:6px;height:6px;border-radius:1px;background:${PIE_COLORS[i]};flex-shrink:0;display:inline-block"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${lbl}</span><span style="flex-shrink:0;font-variant-numeric:tabular-nums">${pct}%</span>`; legend.appendChild(item); });
+            row.appendChild(pc); row.appendChild(legend);
+            canvas.parentElement.querySelectorAll('.spark-row').forEach(el => el.remove());
+            canvas.parentElement.appendChild(row);
+            return;
+        } else if (type === 2) {
+            const peak = Math.max(...nums), trough = Math.min(...nums);
+            const range = peak - trough || 1;
+            const n = nums.length;
+            const toX = i => (i/(n-1))*W;
+            const toY = v => H-2-((v-trough)/range)*(H-4);
+            const grad = ctx.createLinearGradient(0,0,0,H);
+            grad.addColorStop(0, ac(0.22)); grad.addColorStop(1, ac(0.02));
+            ctx.beginPath(); ctx.moveTo(toX(0), H);
+            nums.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
+            ctx.lineTo(toX(n-1), H); ctx.closePath();
+            ctx.fillStyle = grad; ctx.fill();
+            ctx.beginPath();
+            nums.forEach((v, i) => i===0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
+            ctx.strokeStyle = ac(0.8); ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke();
+            if (labels.length >= 2) stat = `${String(labels[0]).slice(0,10)}  –  ${String(labels[labels.length-1]).slice(0,10)}`;
+        } else if (type === 3) {
+            const peak = Math.max(...nums);
+            if (!peak) return;
+            const bw = W/nums.length;
+            const grad = ctx.createLinearGradient(0,0,0,H);
+            grad.addColorStop(0, ac(0.75)); grad.addColorStop(1, ac(0.25));
+            ctx.fillStyle = grad;
+            for (let i=0;i<nums.length;i++) { const bh=Math.max(1,(nums[i]/peak)*(H-2)); ctx.fillRect(i*bw+0.5,H-bh-1,Math.max(1,bw-1.5),bh); }
+            const first=String(labels[0]??''), last=String(labels[labels.length-1]??'');
+            const lo=parseFloat(first.replace(/[\[\(]/,'')), hi=parseFloat(last.split(',')[1]);
+            if (!isNaN(lo)&&!isNaN(hi)) stat=`${fmtN(lo)} – ${fmtN(hi)}`;
+        } else {
+            const peak = Math.max(...nums);
+            if (!peak) return;
+            const total = nums.reduce((a,b)=>a+b,0);
+            const bw = W/nums.length;
+            for (let i=0;i<nums.length;i++) { const ratio=nums[i]/peak; const bh=Math.max(1,ratio*(H-2)); const alpha=0.15+0.65*Math.pow(ratio,0.5); ctx.fillStyle=ac(alpha); ctx.fillRect(i*bw+0.5,H-bh-1,Math.max(1,bw-1),bh); }
+            const firstLbl=String(labels[0]??'');
+            if (/\d{4}/.test(firstLbl)&&nums.length>=4) { stat=`${firstLbl.slice(0,10)}  –  ${String(labels[labels.length-1]??'').slice(0,10)}`; }
+            else if (labels.length>0) { let topIdx=0; for(let i=0;i<labels.length;i++){if(!NA_RE.test(String(labels[i]).trim())){topIdx=i;break;}} const topPct=Math.round(nums[topIdx]/total*100); stat=`${String(labels[topIdx]??'').slice(0,16)} · ${topPct}%  ·  ${nums.length} cat`; }
+            else { stat=`${nums.length} values`; }
+        }
+        if (statEl) statEl.textContent = stat;
+    }
+
+    async function loadSparkline(container) {
+        const idx = container.dataset.sparkCol;
+        try {
+            const res = await fetch(`/workspace/sparkline/${idx}`);
+            if (!res.ok || res.status === 204) return;
+            const sample = await res.json();
+            const canvas = container.querySelector('.sparkline-canvas');
+            const statEl = container.querySelector('.sparkline-stat');
+            if (canvas) draw(canvas, statEl, sample);
+        } catch {}
+    }
+
+    async function loadAll() {
+        const containers = Array.from(document.querySelectorAll('[data-spark-col]'));
+        const BATCH = 4;
+        for (let i=0; i<containers.length; i+=BATCH)
+            await Promise.allSettled(containers.slice(i, i+BATCH).map(loadSparkline));
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadAll);
+    else loadAll();
+})();
+</script>
 </body>
 </html>

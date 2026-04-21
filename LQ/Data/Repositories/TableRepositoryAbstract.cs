@@ -12,8 +12,12 @@ public abstract class TableRepositoryAbstract
     public abstract Task<CSVFile> GetFile(Analyst analyst, string fileName);
     public abstract Task<CSVFile> GetFile(int csvFileId);
     public abstract Task<List<CSVFile>> GetAllFiles(Analyst analyst);
-
     public abstract Task<bool> FileExists(Analyst analyst, string fileName);
+    
+    public abstract Task<CSVFile> GetFile(string guestToken, string fileName);                                                                                                                                                          
+    public abstract Task<List<CSVFile>> GetAllFiles(string guestToken);
+    public abstract Task<bool> FileExists(string guestToken, string fileName);
+    protected abstract Task RemoveFileByGuest(string guestToken, string fileName);
 
     protected abstract Task RemoveFile(CSVFile csvFile);
     protected abstract Task RenameFile(CSVFile csvFile, string newName);
