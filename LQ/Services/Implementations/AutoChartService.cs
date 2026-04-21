@@ -659,7 +659,8 @@ public class AutoChartService : IAutoChartService
             bool noDateTime = categorical[ci].Type != typeof(DateTime) && categorical[cj].Type != typeof(DateTime);
             if (noDateTime)
             {
-                var k = Key(categorical[ci], categorical[cj], nf); Reg(k);
+                var k = Key(categorical[ci], categorical[cj], nf); // Reg(k);
+                if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 if (cardMap[categorical[ci].ID] <= 10 && cardMap[categorical[cj].ID] <= 10)
                     Add(await DetectMatrixAsync(categorical[ci], categorical[cj], rowFilter), k);
                 Add(await DetectGroupedBarAsync(nf, categorical[ci], categorical[cj], rowFilter), k);
@@ -668,7 +669,8 @@ public class AutoChartService : IAutoChartService
             {
                 var dtF  = categorical[ci].Type == typeof(DateTime) ? categorical[ci] : categorical[cj];
                 var catF = categorical[ci].Type == typeof(DateTime) ? categorical[cj] : categorical[ci];
-                var k = Key(dtF, catF, nf); Reg(k);
+                var k = Key(dtF, catF, nf); //Reg(k);
+                if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 Add(await DetectTimeSeriesCategoricalNumericAsync(nf, dtF, catF, rowFilter), k);
                 Add(await DetectTimeSeriesEnhancedAsync(dtF, new[] { nf }, rowFilter), k);
             }
@@ -681,7 +683,8 @@ public class AutoChartService : IAutoChartService
             foreach (var id in identifier)
             {
                 if (id == nf || id == catF) continue;
-                var k = Key(catF, nf, id); Reg(k);
+                var k = Key(catF, nf, id); // Reg(k);
+                if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 Add(await DetectMixedBarChartAsync(catF, nf, id, rowFilter), k);
             }
         }
@@ -692,7 +695,8 @@ public class AutoChartService : IAutoChartService
         for (int nj = ni + 1; nj < numeric.Count; nj++)
         {
             if (catF == numeric[ni] || catF == numeric[nj]) continue;
-            var k = Key(catF, numeric[ni], numeric[nj]); Reg(k);
+            var k = Key(catF, numeric[ni], numeric[nj]); //Reg(k);
+            if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
             Add(await DetectMixedLineChartAsync(catF, numeric[ni], numeric[nj], rowFilter), k);
 
             // Scatter: each category gets its own colored dataset of {x,y} points
@@ -715,17 +719,20 @@ public class AutoChartService : IAutoChartService
             var catA = categorical[ci]; var catB = categorical[cj];
             if (catA.Type == typeof(DateTime))
             {
-                var k = Key(catA, catB); Reg(k);
+                var k = Key(catA, catB); // Reg(k);
+                if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 Add(await DetectTimeSeriesCategoricalAsync(catA, catB, rowFilter), k);
             }
             else if (catB.Type == typeof(DateTime))
             {
-                var k = Key(catB, catA); Reg(k);
+                var k = Key(catB, catA); //Reg(k);
+                if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 Add(await DetectTimeSeriesCategoricalAsync(catB, catA, rowFilter), k);
             }
             else
             {
-                var k = Key(catA, catB); Reg(k);
+                var k = Key(catA, catB); //Reg(k);
+                if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 if (cardMap[catA.ID] <= 20 && cardMap[catB.ID] <= 20) { Add(await DetectMatrixAsync(catA, catB, rowFilter), k); Add(await DetectMatrixMeanAsync(catA, catB, rowFilter), k); }
                 else Add(await DetectBarChartAsync(catA, catB, rowFilter), k);
             }
@@ -736,7 +743,8 @@ public class AutoChartService : IAutoChartService
         foreach (var nf in numeric)
         {
             if (nf == catF) continue;
-            var k = Key(catF, nf); Reg(k);
+            var k = Key(catF, nf); //Reg(k);
+            if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
             if (catF.Type == typeof(DateTime))
             {
                 Add(await DetectTimeSeriesLineAsync(catF, new[] { nf }, rowFilter), k);
@@ -761,7 +769,8 @@ public class AutoChartService : IAutoChartService
             // Emit one grouped bar per extra numeric in the group alongside the first
             for (int ni = 0; ni < ss.Count - 1; ni++)
             {
-                var k = Key(catF, ss[ni], ss[ni + 1]); Reg(k);
+                var k = Key(catF, ss[ni], ss[ni + 1]); //Reg(k);
+                if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 Add(await DetectMixedLineChartAsync(catF, ss[ni], ss[ni + 1], rowFilter), k);
             }
         }
@@ -770,7 +779,8 @@ public class AutoChartService : IAutoChartService
         for (int ni = 0; ni < numeric.Count; ni++)
         for (int nj = ni + 1; nj < numeric.Count; nj++)
         {
-            var k = Key(numeric[ni], numeric[nj]); Reg(k);
+            var k = Key(numeric[ni], numeric[nj]); //Reg(k);
+            if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
             var raw  = await GetRaw();
             var fvA  = raw.Columns.FirstOrDefault(c => c.Field.ID == numeric[ni].ID);
             var fvB  = raw.Columns.FirstOrDefault(c => c.Field.ID == numeric[nj].ID);
@@ -782,14 +792,16 @@ public class AutoChartService : IAutoChartService
         foreach (var nf in numeric)
         {
             if (id == nf) continue;
-            var k = Key(id, nf); Reg(k);
+            var k = Key(id, nf); //Reg(k);
+            if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
             Add(await DetectSideBarAsync(id, nf, rowFilter), k);
         }
 
         // ── single categorical ────────────────────────────────────────────────
         foreach (var cat in categorical)
         {
-            var k = Key(cat); Reg(k);
+            var k = Key(cat); //Reg(k);
+            if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
             if (cat.Type == typeof(DateTime))
                 Add(await DetectDateTimeFrequencyAsync(cat, rowFilter), k);
             else
@@ -801,20 +813,33 @@ public class AutoChartService : IAutoChartService
         }
 
         // ── single identifier ─────────────────────────────────────────────────
-        foreach (var id in identifier) { var k = Key(id); Reg(k); Add(await DetectSideBarAsync(id, rowFilter), k); }
+        foreach (var id in identifier)
+        {
+            var k = Key(id); //Reg(k); 
+            if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
+            Add(await DetectSideBarAsync(id, rowFilter), k);
+        }
 
         // ── single numeric ────────────────────────────────────────────────────
-        foreach (var nf in numeric) { var k = Key(nf); Reg(k); Add(await DetectHistogramAsync(nf, rowFilter), k); }
+        foreach (var nf in numeric)
+        {
+            var k = Key(nf); //Reg(k); 
+            if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
+            Add(await DetectHistogramAsync(nf, rowFilter), k);
+        }
 
         // ── Correlation matrix (3+ numerics — needs raw rows) ─────────────────
         if (numeric.Count >= 3)
         {
-            var k = Key(numeric.ToArray()); Reg(k);
-            Table corrRaw = filters is { Count: > 0 }
-                ? await _repo.GetWithFilterLimited(csvFile, filters, CorrelationSampleSize)
-                : await _repo.GetLimited(csvFile, fieldIndexes, CorrelationSampleSize);
-            var cols = corrRaw.Columns.Where(c => numeric.Any(nf => nf.ID == c.Field.ID)).ToList();
-            if (cols.Count >= 3) Add(DetectCorrelationMatrix(cols), k);
+            var k = Key(numeric.ToArray()); //Reg(k);
+            if (chartIndex.GetValueOrDefault(k, -1) == 0)
+            {
+                Table corrRaw = filters is { Count: > 0 }
+                    ? await _repo.GetWithFilterLimited(csvFile, filters, CorrelationSampleSize)
+                    : await _repo.GetLimited(csvFile, fieldIndexes, CorrelationSampleSize);
+                var cols = corrRaw.Columns.Where(c => numeric.Any(nf => nf.ID == c.Field.ID)).ToList();
+                if (cols.Count >= 3) Add(DetectCorrelationMatrix(cols), k);
+            }
         }
 
         // ── Bubble chart (every triple of numerics — needs raw rows) ──────────
@@ -827,6 +852,7 @@ public class AutoChartService : IAutoChartService
                 var k     = Key(numeric[bi], numeric[bj], numeric[bk]);
                 var scKey = Key(numeric[bi], numeric[bj]);
                 if (!chartIndex.ContainsKey(k)) chartIndex[k] = chartIndex.GetValueOrDefault(scKey, nextIndex++);
+                if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 var raw = await GetRaw();
                 var fvA = raw.Columns.FirstOrDefault(c => c.Field.ID == numeric[bi].ID);
                 var fvB = raw.Columns.FirstOrDefault(c => c.Field.ID == numeric[bj].ID);
