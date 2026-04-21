@@ -34,7 +34,7 @@ public class AuthController : Controller
 
         var signInResult = await _analystService.CheckPasswordSignIn(analyst, apassword);
         Console.WriteLine(analyst.ToString() + signInResult.Succeeded);
-        if (signInResult.Succeeded && analyst.Id != BaseDTO.DefaultAnalystID)
+        if (signInResult.Succeeded)
         {
             Console.WriteLine(analyst.Id);
             
