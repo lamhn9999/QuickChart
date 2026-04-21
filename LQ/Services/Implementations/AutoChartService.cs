@@ -644,9 +644,11 @@ public class AutoChartService : IAutoChartService
         var res = new List<Chart?>();
         var chartIndex = new Dictionary<string, int>();
         int nextIndex  = 0;
-        string Key(params Field[] fs) => string.Join(",", fs.Select(f => f.ID));
+        string Key(params Field[] fs) => string.Join(",", fs.OrderBy(f => f.ID).Select(f => f.ID));
         void Reg(string k) { if (!chartIndex.ContainsKey(k)) chartIndex[k] = nextIndex++; }
-        void Add(Chart? ch, string k) { if (ch != null) { ch.PanelIndex = chartIndex.GetValueOrDefault(k, -1); res.Add(ch); } }
+        void Add(Chart? ch, string k) { if (ch != null && chartIndex.GetValueOrDefault(k, -1) == 0) { ch.PanelIndex = chartIndex.GetValueOrDefault(k, -1); res.Add(ch); } }
+
+        Reg(Key(fields.ToArray()));
 
         // ── 3-field: cat × cat × numeric ─────────────────────────────────────
         for (int ci = 0; ci < categorical.Count; ci++)
