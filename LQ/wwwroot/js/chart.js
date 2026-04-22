@@ -982,6 +982,60 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, groupId = null,
     const gridItemContent = document.createElement("div");
     gridItemContent.className = "grid-item-content";
     gridItemContent.appendChild(panelDivCopy);
+
+    // ── Resize handle (bottom-right corner, diagonal) ─────────────────────
+    const resizeHandle = document.createElement("div");
+    resizeHandle.className = "resize-handle";
+    gridItemContent.appendChild(resizeHandle);
+
+    let _resizing = false;
+    let _resizeStartX = 0;
+    let _resizeStartY = 0;
+    let _resizeStartW = 0;
+    let _resizeStartH = 0;
+    let _resizeRafId = null;
+    let _resizeDebounceId = null;
+
+    resizeHandle.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        _resizing = true;
+        _resizeStartX = e.clientX;
+        _resizeStartY = e.clientY;
+        _resizeStartW = gridItem.getBoundingClientRect().width;
+        _resizeStartH = gridItemContent.getBoundingClientRect().height;
+        resizeHandle.setPointerCapture(e.pointerId);
+        document.body.style.userSelect = 'none';
+        gridItemContent.classList.add('is-resizing');
+    });
+
+    resizeHandle.addEventListener('pointermove', (e) => {
+        if (!_resizing) return;
+        if (_resizeRafId) cancelAnimationFrame(_resizeRafId);
+        _resizeRafId = requestAnimationFrame(() => {
+            const newW = Math.max(200, _resizeStartW + (e.clientX - _resizeStartX));
+            const newH = Math.max(220, _resizeStartH + (e.clientY - _resizeStartY));
+            gridItem.style.width = `${newW}px`;
+            gridItemContent.style.height = `${newH}px`;
+            wrappers.forEach(w => {
+                const canvas = w.querySelector('canvas');
+                if (canvas) { const ch = Chart.getChart(canvas); if (ch) ch.resize(); }
+            });
+        });
+    });
+
+    resizeHandle.addEventListener('pointerup', () => {
+        if (!_resizing) return;
+        _resizing = false;
+        document.body.style.userSelect = '';
+        gridItemContent.classList.remove('is-resizing');
+        if (_resizeRafId) cancelAnimationFrame(_resizeRafId);
+        clearTimeout(_resizeDebounceId);
+        _resizeDebounceId = setTimeout(() => {
+            if (muuriGrid) muuriGrid.refreshItems().layout();
+        }, 150);
+    });
+
     gridItem.appendChild(gridItemContent);
 
     // ── Store group metadata on DOM for drop-onto-card ────────────────────
@@ -1357,6 +1411,15 @@ export async function createChartGroup(fieldIndexes) {
         _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances });
 
         muuriGrid.layout();
+        // Chart.js renders canvases asynchronously after DOM insertion.
+        // Two deferred passes re-measure and re-position items once heights settle.
+        requestAnimationFrame(() => {
+            if (!muuriGrid) return;
+            muuriGrid.refreshItems().layout(true);
+            requestAnimationFrame(() => {
+                if (muuriGrid) muuriGrid.refreshItems().layout(true);
+            });
+        });
         _logGroups('after create');
         return groupId;
     } catch (error) {
@@ -1472,6 +1535,13 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
         }
 
         muuriGrid.layout();
+        requestAnimationFrame(() => {
+            if (!muuriGrid) return;
+            muuriGrid.refreshItems().layout(true);
+            requestAnimationFrame(() => {
+                if (muuriGrid) muuriGrid.refreshItems().layout(true);
+            });
+        });
         _logGroups('after replace');
         return groupId;
     } catch (error) {

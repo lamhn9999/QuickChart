@@ -124,18 +124,55 @@ document.addEventListener("DOMContentLoaded", () => {
     const plotPanel = document.getElementById('plotPanel');
 
     // ── Responsive column switching ───────────────────────────────────────
+    // The observer ONLY flips --grid-cols when the 1↔2 threshold is crossed.
+    // It never calls layout() — that avoids the feedback loop where Muuri
+    // setting #chartGrid.style.height fires the observer again.
     if (chartGrid) {
+        let _prevCols = '2';
         const colObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
-                const w = entry.contentRect.width;
-                chartGrid.style.setProperty('--grid-cols', w < 500 ? 1 : 2);
-                if (muuriGrid) {
-                    muuriGrid.refreshItems().layout();
-                    chartInstances.forEach(c => c.resize());
-                }
+                const newCols = entry.contentRect.width < 500 ? '1' : '2';
+                if (newCols === _prevCols) return;
+                _prevCols = newCols;
+                chartGrid.style.setProperty('--grid-cols', newCols);
+                if (muuriGrid) muuriGrid.refreshItems().layout(true);
             }
         });
         colObserver.observe(chartGrid);
+    }
+
+    // ── Layout settle helper ──────────────────────────────────────────────
+    // Three instant layout passes: the first re-measures, the two deferred
+    // ones let Chart.js canvas heights settle before committing positions.
+    function _muuriSettle() {
+        if (!muuriGrid) return;
+        muuriGrid.refreshItems().layout(true);
+        requestAnimationFrame(() => {
+            if (!muuriGrid) return;
+            muuriGrid.refreshItems().layout(true);
+            requestAnimationFrame(() => {
+                if (muuriGrid) muuriGrid.refreshItems().layout(true);
+            });
+        });
+    }
+
+    // ── Re-layout after collapse/expand animation ─────────────────────────
+    // The toggle button applies a 500 ms CSS transition to #tablePanel width.
+    // Re-layout once that width animation has finished.
+    const tPanel = document.getElementById('tablePanel');
+    if (tPanel) {
+        tPanel.addEventListener('transitionend', (e) => {
+            if (e.propertyName === 'width') _muuriSettle();
+        });
+    }
+
+    // ── Re-layout on window resize ────────────────────────────────────────
+    {
+        let _winDebounce = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(_winDebounce);
+            _winDebounce = setTimeout(_muuriSettle, 100);
+        });
     }
 
     // ── Column cell highlight on header click ─────────────────────────────
