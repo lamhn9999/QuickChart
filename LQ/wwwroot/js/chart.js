@@ -95,6 +95,34 @@ let _zoomedCssText  = '';
 let _navChartInst = null;   // Chart.js instance for the mini overview
 let _navDragState  = null;  // active drag: { type, startX, startLeft, startWidth }
 
+// ── Chart-type conversion ─────────────────────────────────────────────────────
+
+// SVG mini-icons (16×16 viewBox, currentColor). One per line for legibility.
+// prettier-ignore
+const _ICONS = {
+    pie:      `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M8 8L8 1.5A6.5 6.5 0 0 1 11.8 13.3Z" opacity=".9"/><path d="M8 8L11.8 13.3A6.5 6.5 0 0 1 1.5 8Z" opacity=".6"/><path d="M8 8L1.5 8A6.5 6.5 0 0 1 8 1.5Z" opacity=".35"/><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width=".8" opacity=".3"/></svg>`,
+    bar:      `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="8"   width="3" height="6"    rx=".6" opacity=".4"/><rect x="6.5" y="4.5" width="3" height="9.5"  rx=".6" opacity=".65"/><rect x="11.5" y="1.5" width="3" height="12.5" rx=".6" opacity=".9"/></svg>`,
+    line:     `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 12.5C3.5 10 4 8.5 5.5 8C7.5 6.5 8.5 5.8 10 5.5C11.5 5.2 12.5 3.5 14 2.5L14 14L1.5 14Z" fill="currentColor" opacity=".12"/><path d="M1.5 12.5C3.5 10 4 8.5 5.5 8C7.5 6.5 8.5 5.8 10 5.5C11.5 5.2 12.5 3.5 14 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="1.5" cy="12.5" r="1.3" fill="currentColor"/><circle cx="5.5" cy="8" r="1.3" fill="currentColor"/><circle cx="10" cy="5.5" r="1.3" fill="currentColor"/><circle cx="14" cy="2.5" r="1.3" fill="currentColor"/></svg>`,
+    histogram:`<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x=".75"  y="11" width="2.5" height="3"  rx=".3" opacity=".4"/><rect x="3.75" y="7"  width="2.5" height="7"  rx=".3" opacity=".65"/><rect x="6.75" y="3"  width="2.5" height="11" rx=".3" opacity=".9"/><rect x="9.75" y="7"  width="2.5" height="7"  rx=".3" opacity=".65"/><rect x="12.75" y="11" width="2.5" height="3" rx=".3" opacity=".4"/></svg>`,
+    scatter:  `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="2"    cy="12.5" r="1.4" opacity=".5"/><circle cx="4.5"  cy="9"    r="1.4" opacity=".75"/><circle cx="6.5"  cy="11"   r="1.4" opacity=".55"/><circle cx="9"    cy="6.5"  r="1.4" opacity=".85"/><circle cx="11.5" cy="8"    r="1.4" opacity=".65"/><circle cx="13.5" cy="4"    r="1.4" opacity=".9"/></svg>`,
+    polar:    `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width=".8" opacity=".2"/><path d="M8 8L8 1.5A6.5 6.5 0 0 1 14.2 6Z" opacity=".95"/><path d="M8 8L14.2 6A6.5 6.5 0 0 1 11.8 13.3Z" opacity=".28"/><path d="M8 8L11.8 13.3A6.5 6.5 0 0 1 4.2 13.3Z" opacity=".72"/><path d="M8 8L4.2 13.3A6.5 6.5 0 0 1 1.8 6Z" opacity=".18"/><path d="M8 8L1.8 6A6.5 6.5 0 0 1 8 1.5Z" opacity=".52"/></svg>`,
+    sidebar:  `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="1.5" width=".8" height="13" rx=".4" opacity=".22"/><rect x="3" y="2.5"  width="11.5" height="3" rx=".6" opacity=".9"/><rect x="3" y="6.5"  width="8.5"  height="3" rx=".6" opacity=".6"/><rect x="3" y="10.5" width="5.5"  height="3" rx=".6" opacity=".38"/></svg>`,
+    mixed:    `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="10"  width="3" height="4"   rx=".4" opacity=".38"/><rect x="6.5" y="8.5" width="3" height="5.5" rx=".4" opacity=".38"/><rect x="11.5" y="7"  width="3" height="7"   rx=".4" opacity=".38"/><rect x="1.5" y="7"   width="3" height="3"   rx=".4" opacity=".82"/><rect x="6.5" y="5"   width="3" height="3.5" rx=".4" opacity=".82"/><rect x="11.5" y="3"  width="3" height="4"   rx=".4" opacity=".82"/><polyline points="3,7 8,5 13,3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    matrix:   `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="1.5" width="3.5" height="3.5" rx=".4" opacity=".9"/><rect x="6.2" y="1.5" width="3.5" height="3.5" rx=".4" opacity=".45"/><rect x="11"  y="1.5" width="3.5" height="3.5" rx=".4" opacity=".12"/><rect x="1.5" y="6.2" width="3.5" height="3.5" rx=".4" opacity=".5"/><rect x="6.2" y="6.2" width="3.5" height="3.5" rx=".4" opacity=".82"/><rect x="11"  y="6.2" width="3.5" height="3.5" rx=".4" opacity=".35"/><rect x="1.5" y="11"  width="3.5" height="3.5" rx=".4" opacity=".18"/><rect x="6.2" y="11"  width="3.5" height="3.5" rx=".4" opacity=".6"/><rect x="11"  y="11"  width="3.5" height="3.5" rx=".4" opacity=".95"/></svg>`,
+    mixedbar: `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="8"   width="3" height="6"   rx=".5" opacity=".65"/><rect x="6.5" y="5"   width="3" height="9"   rx=".5" opacity=".65"/><rect x="11.5" y="7"  width="3" height="7"   rx=".5" opacity=".65"/><circle cx="3" cy="4" r="1.2" opacity=".9"/><circle cx="8" cy="2" r="1.2" opacity=".9"/><circle cx="13" cy="5.5" r="1.2" opacity=".9"/><polyline points="3,4 8,2 13,5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    bubble:   `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="3.5"  cy="12"   r="1.8" opacity=".55"/><circle cx="8.5"  cy="6.5"  r="3.5" opacity=".7"/><circle cx="13.5" cy="11"   r="2.5" opacity=".4"/></svg>`,
+};
+
+// Row 0: Pie · Bar · Line · Histogram   (matches enum 0–3)
+// Row 1: Scatter · Polar · Side Bar · Mixed  (enum 4–7)
+// Row 2: Matrix · Mixed Bar · Bubble    (enum 8–10)
+const CHART_META = [
+    { label: 'Pie',       svg: _ICONS.pie      }, { label: 'Bar',       svg: _ICONS.bar      }, { label: 'Line',      svg: _ICONS.line     }, { label: 'Histogram', svg: _ICONS.histogram },
+    { label: 'Scatter',   svg: _ICONS.scatter  }, { label: 'Polar',     svg: _ICONS.polar    }, { label: 'Side Bar',  svg: _ICONS.sidebar  }, { label: 'Mixed',     svg: _ICONS.mixed    },
+    { label: 'Matrix',    svg: _ICONS.matrix   }, { label: 'Mixed Bar', svg: _ICONS.mixedbar }, { label: 'Bubble',    svg: _ICONS.bubble   },
+];
+
+
 // ── Matrix helpers ────────────────────────────────────────────────────────────
 
 function buildHeatmapData(xLabels, ySeries) {
@@ -463,7 +491,7 @@ export function initSparklines() {
 
 // ── autoChart (legacy: uses global listIndexes, clears everything) ────────────
 
-export async function autoChart() {
+async function autoChart() {
     const selPlot   = document.getElementById("selPlot");
     const noPlot    = document.getElementById("noPlot");
     const loader    = document.getElementById("loader");
@@ -877,67 +905,126 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, groupId = null,
     bgbtnWrapper.appendChild(bgbtn);
     bgbtnWrapper.appendChild(colormap);
 
-    // ── "Turn into" button (only when panel has multiple chart variants) ──
-    if (panelSamples.length > 1) {
-        const btnWrapper = document.createElement("div");
-        btnWrapper.className = "relative flex flex-col items-end";
+    // ── "Turn into" — stacked chart deck button ──────────────────────────
+    {
+        // Signature color per ChartType enum index (0–10)
+        const TYPE_COLORS = [
+            '#E9967A','#60A5FA','#34D399','#FBBF24','#A78BFA',
+            '#FB7185','#2DD4BF','#FB923C','#818CF8','#86EFAC','#F472B6',
+        ];
 
-        const btn = document.createElement("button");
-        btn.className = "cursor-pointer h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-zinc-200 bg-white text-[11px] font-medium text-zinc-500 hover:text-[#E9967A] hover:border-[#E9967A]/30 hover:bg-[#E9967A]/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none";
-        btn.innerHTML = `
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4-4 4M7 21l-4-4 4-4"/><path d="M21 7H3M3 17h18"/></svg>
-            Turn into
-            <svg class="w-3 h-3 transition-transform duration-200 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-            </svg>`;
+        // Three card indices shown in the deck: back → front
+        const DECK         = [10, 1, 0];
+        const idleXforms   = ['rotate(-9deg) translate(-6px,2px)', 'rotate(-3deg) translate(-2px,1px)', 'rotate(2deg) translate(0,0)'];
+        const openXforms   = ['rotate(-15deg) translate(-11px,3px)', 'rotate(-3deg) translate(-2px,0)', 'rotate(10deg) translate(9px,-1px)'];
 
-        const menu = document.createElement("div");
-        menu.className = "hidden absolute top-full right-0 mt-1.5 min-w-[140px] w-max max-w-[220px] bg-white border border-zinc-200 rounded-xl shadow-xl shadow-black/8 py-1.5 z-30 backdrop-blur-sm";
+        const turnWrapper = document.createElement('div');
+        turnWrapper.style.cssText = 'position:relative;display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0';
 
-        panelSamples.forEach((targetSample, tIdx) => {
-            const item = document.createElement("button");
-            item.className = `w-full text-left px-3 py-1.5 text-xs transition-colors truncate ${tIdx === 0 ? 'text-[#E9967A] font-semibold bg-zinc-50' : 'text-zinc-500 hover:bg-zinc-100 hover:text-[#18181B]'}`;
-            item.innerText = targetSample.title || `Chart ${tIdx + 1}`;
-            item.onclick = (e) => {
-                e.stopPropagation();
+        // ── Deck button ───────────────────────────────────────────────────
+        const turnBtn = document.createElement('button');
+        turnBtn.style.cssText = 'position:relative;height:28px;padding:0 10px 0 6px;display:flex;align-items:center;gap:7px;border-radius:6px;border:1px solid #e4e4e7;background:#fff;font-size:11px;font-weight:500;color:#71717a;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:border-color 150ms,color 150ms,box-shadow 150ms;white-space:nowrap;flex-shrink:0;outline:none';
 
-                // Show the target wrapper, hide all others
-                wrappers.forEach((w, i) => {
-                    w.style.display = i === tIdx ? 'flex' : 'none';
-                });
+        const stackEl = document.createElement('div');
+        stackEl.style.cssText = 'position:relative;width:28px;height:22px;flex-shrink:0';
 
-                // Sync active-item styles in the dropdown
-                menu.querySelectorAll('button').forEach((b, i) => {
-                    b.className = `w-full text-left px-3 py-1.5 text-xs transition-colors truncate ${i === tIdx ? 'text-[#E9967A] font-semibold bg-zinc-50' : 'text-zinc-500 hover:bg-zinc-100 hover:text-[#18181B]'}`;
-                });
-
-                menu.classList.add("hidden");
-                { const svgs = btn.querySelectorAll('svg'); svgs[svgs.length - 1].classList.remove('rotate-180'); }
-
-                // Resize the newly visible chart so it fills the panel correctly
-                const chart = Chart.getChart(wrappers[tIdx].querySelector('canvas'));
-                if (chart) setTimeout(() => chart.resize(), 0);
-            };
-            menu.appendChild(item);
+        const stackCards = DECK.map((typeIdx, i) => {
+            const card = document.createElement('div');
+            card.style.cssText = `position:absolute;left:2px;top:1px;width:20px;height:20px;border-radius:5px;background:${TYPE_COLORS[typeIdx]};display:flex;align-items:center;justify-content:center;transform:${idleXforms[i]};z-index:${i+1};box-shadow:0 1px 4px rgba(0,0,0,.22);transition:transform 220ms cubic-bezier(.34,1.56,.64,1);color:rgba(255,255,255,.9);flex-shrink:0`;
+            card.innerHTML = `<span style="width:12px;height:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${CHART_META[typeIdx].svg}</span>`;
+            stackEl.appendChild(card);
+            return card;
         });
 
-        menu.classList.add('plot-menu');
-        btn.classList.add('plot-btn');
+        const deckLabel = document.createElement('span');
+        deckLabel.textContent = 'Turn into';
+        turnBtn.appendChild(stackEl);
+        turnBtn.appendChild(deckLabel);
 
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            const isHidden = menu.classList.contains("hidden");
-            document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
-            document.querySelectorAll('.plot-btn svg:last-of-type, .plot-bgbtn svg:last-of-type').forEach(s => s.classList.remove('rotate-180'));
-            if (isHidden) {
-                menu.classList.remove("hidden");
-                { const svgs = btn.querySelectorAll('svg'); svgs[svgs.length - 1].classList.add('rotate-180'); }
-            }
+        const setDeckState = (open) => {
+            stackCards.forEach((c, i) => { c.style.transform = open ? openXforms[i] : idleXforms[i]; });
+            turnBtn.style.borderColor = open ? 'rgba(233,150,122,.45)' : '#e4e4e7';
+            turnBtn.style.color       = open ? '#E9967A' : '#71717a';
+            turnBtn.style.boxShadow   = open ? '0 0 0 3px rgba(233,150,122,.12),0 1px 2px rgba(0,0,0,.05)' : '0 1px 2px rgba(0,0,0,.05)';
         };
 
-        btnWrapper.appendChild(btn);
-        btnWrapper.appendChild(menu);
-        container.appendChild(btnWrapper);
+        turnBtn.addEventListener('mouseenter', () => { if (turnPanel.classList.contains('hidden')) setDeckState(true); });
+        turnBtn.addEventListener('mouseleave', () => { if (turnPanel.classList.contains('hidden')) setDeckState(false); });
+        document.addEventListener('click', () => { setDeckState(false); });
+
+        // ── Panel ─────────────────────────────────────────────────────────
+        const turnPanel = document.createElement('div');
+        turnPanel.className = 'hidden plot-menu';
+        turnPanel.style.cssText = 'position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid #e4e4e7;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.11),0 2px 8px rgba(0,0,0,.06);padding:10px;z-index:30';
+
+        const rebuildGrid = () => {
+            const activeIdx    = wrappers.findIndex(w => w.style.display !== 'none');
+            const effectiveIdx = activeIdx === -1 ? 0 : activeIdx;
+            const activeType   = panelSamples[effectiveIdx]?.chartType;
+            turnPanel.innerHTML = '';
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:5px';
+
+            CHART_META.forEach((meta, typeIdx) => {
+                const matchIdx  = panelSamples.findIndex(s => s.chartType === typeIdx);
+                const available = matchIdx !== -1;
+                const isActive  = typeIdx === activeType;
+                const col       = TYPE_COLORS[typeIdx];
+
+                const cell = document.createElement('button');
+                cell.disabled     = !available;
+                cell.title        = available ? meta.label : `${meta.label} — not available`;
+                cell.style.cssText = `display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:52px;height:56px;border-radius:10px;border:1.5px solid ${isActive ? col : 'transparent'};background:${isActive ? col+'1a' : 'transparent'};cursor:${available ? 'pointer' : 'not-allowed'};opacity:${available ? 1 : 0.25};transition:background 120ms;padding:0;outline:none;flex-shrink:0`;
+
+                const chip = document.createElement('div');
+                chip.style.cssText = `width:28px;height:28px;border-radius:7px;background:${col}${isActive ? '38' : '22'};display:flex;align-items:center;justify-content:center;color:${col};transition:background 120ms;flex-shrink:0`;
+                chip.innerHTML = `<span style="width:15px;height:15px;display:flex;align-items:center;justify-content:center">${meta.svg}</span>`;
+
+                const lbl = document.createElement('span');
+                lbl.textContent   = meta.label;
+                lbl.style.cssText = `font-size:7.5px;line-height:1;font-weight:${isActive ? 700 : 500};color:${isActive ? col : '#71717a'};letter-spacing:.025em;text-align:center`;
+
+                cell.appendChild(chip);
+                cell.appendChild(lbl);
+
+                if (available) {
+                    if (!isActive) {
+                        cell.addEventListener('mouseenter', () => {
+                            cell.style.background = col + '0f';
+                            chip.style.background = col + '38';
+                        });
+                        cell.addEventListener('mouseleave', () => {
+                            cell.style.background = 'transparent';
+                            chip.style.background = col + '22';
+                        });
+                    }
+                    cell.addEventListener('click', () => {
+                        wrappers.forEach((w, i) => { w.style.display = i === matchIdx ? 'flex' : 'none'; });
+                        const c = Chart.getChart(wrappers[matchIdx].querySelector('canvas'));
+                        if (c) setTimeout(() => c.resize(), 0);
+                        turnPanel.classList.add('hidden');
+                        setDeckState(false);
+                    });
+                }
+                grid.appendChild(cell);
+            });
+            turnPanel.appendChild(grid);
+        };
+
+        turnBtn.classList.add('plot-btn');
+        turnBtn.onclick = (e) => {
+            e.stopPropagation();
+            const isHidden = turnPanel.classList.contains('hidden');
+            document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
+            document.querySelectorAll('.plot-btn svg:last-of-type, .plot-bgbtn svg:last-of-type').forEach(s => s.classList.remove('rotate-180'));
+            if (isHidden) { rebuildGrid(); turnPanel.classList.remove('hidden'); setDeckState(true); }
+            else          { setDeckState(false); }
+        };
+
+        turnWrapper.appendChild(turnBtn);
+        turnWrapper.appendChild(turnPanel);
+        container.appendChild(turnWrapper);
     }
 
     // ── Zoom button ───────────────────────────────────────────────────────
