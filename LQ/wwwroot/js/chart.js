@@ -86,10 +86,11 @@ function _applyChartTheme(chart, theme) {
 }
 
 // ── Zoom state ────────────────────────────────────────────────────────────────
-let _zoomedWrapper  = null;
-let _zoomedParent   = null;
-let _zoomedSibling  = null;
-let _zoomedCssText  = '';
+let _zoomedWrapper    = null;
+let _zoomedParent     = null;
+let _zoomedSibling    = null;
+let _zoomedCssText    = '';
+let _zoomPanelCleanup = null;
 
 // ── Navigator state ───────────────────────────────────────────────────────────
 let _navChartInst = null;   // Chart.js instance for the mini overview
@@ -755,6 +756,559 @@ function _navDestroy(mainChart) {
     }
 }
 
+// ── Zoom option panel ─────────────────────────────────────────────────────────
+// Figma-like light sidebar: Series (color+rename+eye) · Sort pills · Tooltip preview · Merge · Plugins
+
+function initZoomPanel(chart, containerEl) {
+    if (!containerEl) return () => {};
+
+    // Snapshot original data (needed for sort reset and merge undo)
+    const _orig = {
+        labels:   [...(chart.data.labels ?? [])],
+        datasets: chart.data.datasets.map(ds => ({ ...ds, data: [...(ds.data ?? [])] })),
+    };
+
+    containerEl.innerHTML = '';
+    containerEl.className = 'relative flex flex-col overflow-hidden';
+    containerEl.style.cssText = '';
+
+    // ── Style helper ──────────────────────────────────────────────────────
+    const css = (el, s) => { el.style.cssText = s; return el; };
+
+    // ── Outer wrap (light panel) ──────────────────────────────────────────
+    const wrap = document.createElement('div');
+    css(wrap, 'width:264px;min-width:264px;height:100%;display:flex;flex-direction:column;background:#FAFAFA;border-left:1px solid #e4e4e7;position:relative;transition:width 0.2s,min-width 0.2s;overflow:hidden');
+
+    // ── Collapse toggle tab ───────────────────────────────────────────────
+    let _collapsed = false;
+    const toggleBtn = document.createElement('button');
+    css(toggleBtn, 'position:absolute;left:-12px;top:50%;transform:translateY(-50%);z-index:10;width:12px;height:44px;background:#FAFAFA;border:1px solid #e4e4e7;border-right:none;border-radius:6px 0 0 6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#a1a1aa;transition:color 0.15s,background 0.15s;padding:0');
+    toggleBtn.innerHTML = `<svg width="8" height="8" id="_pChev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="transition:transform 0.2s;flex-shrink:0"><polyline points="15 18 9 12 15 6"/></svg>`;
+    toggleBtn.addEventListener('mouseenter', () => { toggleBtn.style.background='#f0f0f0'; toggleBtn.style.color='#52525b'; });
+    toggleBtn.addEventListener('mouseleave', () => { toggleBtn.style.background='#FAFAFA'; toggleBtn.style.color='#a1a1aa'; });
+    const _chevEl = toggleBtn.querySelector('#_pChev');
+    toggleBtn.addEventListener('click', () => {
+        _collapsed = !_collapsed;
+        wrap.style.width    = _collapsed ? '0'     : '264px';
+        wrap.style.minWidth = _collapsed ? '0'     : '264px';
+        _chevEl.style.transform = _collapsed ? 'rotate(180deg)' : '';
+        setTimeout(() => { try { chart.resize(); } catch {} }, 220);
+    });
+
+    // ── Panel header ──────────────────────────────────────────────────────
+    const header = document.createElement('div');
+    css(header, 'padding:12px 14px 11px;border-bottom:1px solid #e4e4e7;display:flex;align-items:center;gap:7px;flex-shrink:0;background:#fff');
+    header.innerHTML = `
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#E9967A" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#a1a1aa">Chart Options</span>`;
+
+    // ── Scrollable inner ──────────────────────────────────────────────────
+    const inner = document.createElement('div');
+    css(inner, 'flex:1;overflow-y:auto;padding:8px 10px 24px;display:flex;flex-direction:column;gap:4px;scrollbar-width:thin;scrollbar-color:rgba(0,0,0,0.1) transparent');
+
+    wrap.append(toggleBtn, header, inner);
+    containerEl.appendChild(wrap);
+
+    // ── Section label ─────────────────────────────────────────────────────
+    function sectionLabel(text) {
+        const d = document.createElement('div');
+        css(d, 'font-size:8.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#a1a1aa;padding:12px 4px 5px;margin-top:2px');
+        d.textContent = text;
+        return d;
+    }
+
+    // ── Accordion helper ──────────────────────────────────────────────────
+    function accordion(title, buildFn, startOpen = false) {
+        const aWrap = document.createElement('div');
+        css(aWrap, 'border:1px solid #e4e4e7;border-radius:8px;overflow:hidden;background:#fff');
+        let _open = startOpen;
+
+        const sumBtn = document.createElement('button');
+        css(sumBtn, `width:100%;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;background:${_open ? '#f4f4f5' : '#fff'};border:none;cursor:pointer;color:${_open ? '#18181b' : '#71717a'};font-size:10.5px;font-weight:500;text-align:left;font-family:inherit;transition:background 0.1s,color 0.1s`);
+        const chevron = document.createElement('span');
+        css(chevron, `display:inline-flex;flex-shrink:0;transition:transform 0.15s;color:#d4d4d8;transform:${startOpen ? 'rotate(180deg)' : ''}`);
+        chevron.innerHTML = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>`;
+        sumBtn.append(document.createTextNode(title), chevron);
+        sumBtn.addEventListener('mouseenter', () => { sumBtn.style.background = '#f4f4f5'; sumBtn.style.color = '#18181b'; });
+        sumBtn.addEventListener('mouseleave', () => { sumBtn.style.background = _open ? '#f4f4f5' : '#fff'; sumBtn.style.color = _open ? '#18181b' : '#71717a'; });
+
+        const body = document.createElement('div');
+        css(body, `padding:8px 10px 10px;border-top:1px solid #f4f4f5;display:${startOpen ? 'flex' : 'none'};flex-direction:column;gap:6px`);
+        buildFn(body);
+
+        sumBtn.addEventListener('click', () => {
+            _open = !_open;
+            body.style.display = _open ? 'flex' : 'none';
+            chevron.style.transform = _open ? 'rotate(180deg)' : '';
+            sumBtn.style.color = _open ? '#18181b' : '#71717a';
+            sumBtn.style.background = _open ? '#f4f4f5' : '#fff';
+        });
+        aWrap.append(sumBtn, body);
+        return aWrap;
+    }
+
+    // ── Light input helper ────────────────────────────────────────────────
+    function mkInput(placeholder, onChange) {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.placeholder = placeholder;
+        css(inp, 'flex:1;min-width:0;background:#fff;border:1px solid #e4e4e7;border-radius:5px;padding:4px 7px;font-size:10px;color:#3f3f46;outline:none;transition:border-color 0.1s;font-family:inherit');
+        inp.addEventListener('focus', () => inp.style.borderColor = 'rgba(233,150,122,0.6)');
+        inp.addEventListener('blur',  () => inp.style.borderColor = '#e4e4e7');
+        inp.addEventListener('input', onChange);
+        return inp;
+    }
+
+    // ── Light select helper ───────────────────────────────────────────────
+    function mkSelect() {
+        const s = document.createElement('select');
+        css(s, 'flex:1;min-width:0;background:#fff;border:1px solid #e4e4e7;border-radius:5px;padding:4px 6px;font-size:10px;color:#3f3f46;outline:none;cursor:pointer;transition:border-color 0.1s;font-family:inherit');
+        s.addEventListener('focus', () => s.style.borderColor = 'rgba(233,150,122,0.5)');
+        s.addEventListener('blur',  () => s.style.borderColor = '#e4e4e7');
+        return s;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // §1  SERIES — always visible (merged Legend + Colors + Dataset toggles)
+    // Each row: [grip] [color-chip] [name — dbl-click to rename] [eye]
+    // ═══════════════════════════════════════════════════════════════════════
+    inner.appendChild(sectionLabel('Series'));
+
+    // ── Color helpers ──────────────────────────────────────────────────────
+    function _parseColorToHex(raw) {
+        const color = Array.isArray(raw) ? raw[0] : raw;
+        if (typeof color !== 'string') return null;
+        if (/^#[0-9A-Fa-f]{6}$/i.test(color)) return color;
+        if (/^#[0-9A-Fa-f]{3}$/i.test(color))
+            return '#' + [color[1]+color[1], color[2]+color[2], color[3]+color[3]].join('');
+        const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (m) return '#' + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('');
+        return null;
+    }
+
+    function _dsColorHex(ds, chartIdx) {
+        let hex = _parseColorToHex(ds.borderColor) ?? _parseColorToHex(ds.backgroundColor);
+        if (hex) return hex;
+        if (chartIdx >= 0) {
+            try {
+                const style = chart.getDatasetMeta(chartIdx).controller?.getStyle?.();
+                hex = _parseColorToHex(style?.borderColor) ?? _parseColorToHex(style?.backgroundColor);
+                if (hex) return hex;
+            } catch {}
+        }
+        return '#E9967A';
+    }
+
+    // ── Series state: source of truth for order + visibility ──────────────
+    // Stored on the chart instance so it survives zoom-out / zoom-in cycles.
+    if (!chart._lqSeriesState) {
+        chart._lqSeriesState = chart.data.datasets.map(ds => ({ dataset: ds, visible: true }));
+    }
+    const _seriesState = chart._lqSeriesState;
+    // Re-sync in case zoom reset chart.data.datasets to only visible ones.
+    chart.data.datasets = _seriesState.filter(s => s.visible).map(s => s.dataset);
+
+    let _dragSrcIdx = null;
+
+    function _syncDatasetsToChart() {
+        chart.data.datasets = _seriesState.filter(s => s.visible).map(s => s.dataset);
+        chart.update('none');
+    }
+
+    const EYE_OPEN   = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    const EYE_CLOSED = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+    const GRIP_ICON  = `<svg width="8" height="12" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/></svg>`;
+
+    const seriesContainer = document.createElement('div');
+    css(seriesContainer, 'display:flex;flex-direction:column;gap:1px');
+
+    function buildSeriesRows() {
+        seriesContainer.innerHTML = '';
+        let visibleCount = 0;
+        _seriesState.forEach((state, stateIdx) => {
+            const ds     = state.dataset;
+            const isVis  = state.visible;
+            const chartIdx = isVis ? visibleCount++ : -1;
+            const colorHex = _dsColorHex(ds, chartIdx);
+
+            // ── Row ────────────────────────────────────────────────────────
+            const row = document.createElement('div');
+            row.draggable = true;
+            row.classList.add('series-row');
+            css(row, `display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:7px;transition:background 0.1s;cursor:default;opacity:${isVis ? 1 : 0.4};box-sizing:border-box`);
+            row.addEventListener('mouseenter', () => { if (_dragSrcIdx === null) row.style.background = 'rgba(0,0,0,0.04)'; });
+            row.addEventListener('mouseleave', () => row.style.background = 'transparent');
+
+            // ── Drag events ────────────────────────────────────────────────
+            row.addEventListener('dragstart', e => {
+                _dragSrcIdx = stateIdx;
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => { row.style.opacity = '0.3'; }, 0);
+            });
+            row.addEventListener('dragend', () => {
+                // Only rebuild if drop didn't already handle it (drag cancelled / dropped outside)
+                if (_dragSrcIdx !== null) {
+                    _dragSrcIdx = null;
+                    buildSeriesRows();
+                }
+            });
+            row.addEventListener('dragover', e => {
+                if (_dragSrcIdx === null || _dragSrcIdx === stateIdx) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                seriesContainer.querySelectorAll('.series-row').forEach(el => {
+                    el.style.borderTop = '';
+                    el.style.borderBottom = '';
+                    el.style.paddingTop = '4px';
+                    el.style.paddingBottom = '4px';
+                });
+                if (stateIdx < _dragSrcIdx) {
+                    row.style.borderTop = '2px solid rgba(233,150,122,0.75)';
+                    row.style.paddingTop = '2px';
+                } else {
+                    row.style.borderBottom = '2px solid rgba(233,150,122,0.75)';
+                    row.style.paddingBottom = '2px';
+                }
+            });
+            row.addEventListener('dragleave', () => {
+                row.style.borderTop = '';
+                row.style.borderBottom = '';
+                row.style.paddingTop = '4px';
+                row.style.paddingBottom = '4px';
+            });
+            row.addEventListener('drop', e => {
+                e.preventDefault();
+                if (_dragSrcIdx === null || _dragSrcIdx === stateIdx) return;
+                const src = _dragSrcIdx;
+                const [moved] = _seriesState.splice(src, 1);
+                const insertAt = src < stateIdx ? stateIdx - 1 : stateIdx;
+                _seriesState.splice(insertAt, 0, moved);
+                _dragSrcIdx = null;
+                _syncDatasetsToChart();
+                buildSeriesRows();
+            });
+
+            // ── Grip handle ────────────────────────────────────────────────
+            const grip = document.createElement('span');
+            css(grip, 'display:flex;flex-shrink:0;color:#d4d4d8;cursor:grab;user-select:none;padding:2px 0');
+            grip.innerHTML = GRIP_ICON;
+            grip.addEventListener('mouseenter', () => grip.style.color = '#a1a1aa');
+            grip.addEventListener('mouseleave', () => grip.style.color = '#d4d4d8');
+
+            // ── Color chip (click → hidden picker) ─────────────────────────
+            const chip = document.createElement('div');
+            css(chip, `width:13px;height:13px;border-radius:3px;background:${colorHex};flex-shrink:0;cursor:pointer;border:1.5px solid rgba(0,0,0,0.15);position:relative;transition:transform 0.1s,box-shadow 0.1s`);
+            const hPick = document.createElement('input');
+            hPick.type = 'color';
+            hPick.value = colorHex;
+            css(hPick, 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;left:0;top:0');
+            chip.appendChild(hPick);
+            chip.addEventListener('mouseenter', () => { chip.style.transform = 'scale(1.2)'; chip.style.boxShadow = '0 0 0 2.5px rgba(233,150,122,0.45)'; });
+            chip.addEventListener('mouseleave', () => { chip.style.transform = ''; chip.style.boxShadow = ''; });
+            chip.addEventListener('click', e => { e.stopPropagation(); hPick.click(); });
+            let _colorTimer = null;
+            hPick.addEventListener('input', () => {
+                const hex = hPick.value;
+                chip.style.background   = hex;        // instant chip feedback
+                ds.borderColor          = hex;
+                ds.backgroundColor      = hex + '55';
+                ds.pointBorderColor     = hex;
+                ds.pointBackgroundColor = hex + '55';
+
+                // Patch cached element options so chart.draw() uses them immediately.
+                const liveIdx = chart.data.datasets.indexOf(ds);
+                if (liveIdx >= 0) {
+                    try {
+                        chart.getDatasetMeta(liveIdx).data?.forEach(el => {
+                            if (el.options) {
+                                el.options.borderColor     = hex;
+                                el.options.backgroundColor = hex + '55';
+                            }
+                        });
+                    } catch {}
+                }
+
+                clearTimeout(_colorTimer);
+                _colorTimer = setTimeout(() => chart.update('none'), 80);
+            });
+
+            // ── Name span (dbl-click → rename) ─────────────────────────────
+            const nameSpan = document.createElement('span');
+            css(nameSpan, 'flex:1;min-width:0;font-size:11px;color:#27272a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:3px;padding:0 2px;user-select:none');
+            nameSpan.textContent = ds.label ?? `Dataset ${stateIdx}`;
+            nameSpan.title = 'Double-click to rename';
+            nameSpan.addEventListener('dblclick', e => {
+                e.stopPropagation();
+                row.draggable = false;
+                const inp = document.createElement('input');
+                inp.type  = 'text';
+                inp.value = nameSpan.textContent;
+                css(inp, 'flex:1;min-width:0;background:rgba(233,150,122,0.08);border:1px solid rgba(233,150,122,0.45);border-radius:4px;padding:2px 5px;font-size:11px;color:#18181b;outline:none;font-family:inherit');
+                row.replaceChild(inp, nameSpan);
+                inp.focus(); inp.select();
+                const commit = () => {
+                    const v = inp.value.trim() || nameSpan.textContent;
+                    nameSpan.textContent = v;
+                    ds.label = v;
+                    chart.update('none');
+                    row.replaceChild(nameSpan, inp);
+                    row.draggable = true;
+                };
+                inp.addEventListener('blur', commit);
+                inp.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                    if (e.key === 'Escape') { row.replaceChild(nameSpan, inp); row.draggable = true; }
+                });
+            });
+
+            // ── Eye toggle — fully removes/restores dataset from chart ──────
+            const eyeBtn = document.createElement('button');
+            css(eyeBtn, `width:20px;height:20px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:${isVis ? '#a1a1aa' : '#d4d4d8'};flex-shrink:0;border-radius:4px;padding:0;transition:color 0.1s,background 0.1s`);
+            eyeBtn.innerHTML = isVis ? EYE_OPEN : EYE_CLOSED;
+            eyeBtn.title = isVis ? 'Hide' : 'Show';
+            eyeBtn.addEventListener('mouseenter', () => { eyeBtn.style.color = isVis ? '#18181b' : 'rgba(233,150,122,0.8)'; eyeBtn.style.background = 'rgba(0,0,0,0.06)'; });
+            eyeBtn.addEventListener('mouseleave', () => { eyeBtn.style.color = isVis ? '#a1a1aa' : '#d4d4d8'; eyeBtn.style.background = 'none'; });
+            eyeBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                state.visible = !state.visible;
+                _syncDatasetsToChart();
+                buildSeriesRows();
+            });
+
+            row.append(grip, chip, nameSpan, eyeBtn);
+            seriesContainer.appendChild(row);
+        });
+    }
+    buildSeriesRows();
+    inner.appendChild(seriesContainer);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // §2  SORT — segmented pill buttons instead of a native select
+    // ═══════════════════════════════════════════════════════════════════════
+    inner.appendChild(sectionLabel('Display'));
+    inner.appendChild(accordion('Sort', body => {
+        const pillWrap = document.createElement('div');
+        css(pillWrap, 'display:flex;gap:3px;background:rgba(0,0,0,0.05);border-radius:7px;padding:3px');
+
+        const SORTS = [['original','Original'],['asc','↑ Asc'],['desc','↓ Desc']];
+        let _activeSort = 'original';
+
+        const pills = SORTS.map(([val, lbl]) => {
+            const btn = document.createElement('button');
+            btn.textContent = lbl;
+            css(btn, `flex:1;padding:4px 2px;border:none;border-radius:5px;font-size:9.5px;font-weight:${val === _activeSort ? '600' : '500'};cursor:pointer;transition:background 0.12s,color 0.12s;background:${val === _activeSort ? '#E9967A' : 'transparent'};color:${val === _activeSort ? '#fff' : '#71717a'};font-family:inherit`);
+            btn.addEventListener('click', () => {
+                _activeSort = val;
+                pills.forEach((p, pi) => {
+                    const active = SORTS[pi][0] === _activeSort;
+                    p.style.background = active ? '#E9967A' : 'transparent';
+                    p.style.color      = active ? '#fff'    : '#71717a';
+                    p.style.fontWeight = active ? '600'     : '500';
+                });
+                if (!chart.data.labels?.length) return;
+                const n = chart.data.labels.length;
+                const idx = Array.from({length: n}, (_, i) => i);
+                if (val === 'original') {
+                    chart.data.labels = [..._orig.labels];
+                    chart.data.datasets.forEach(ds => {
+                        const od = _orig.datasets.find(d => d.label === ds.label);
+                        if (od) ds.data = [...od.data];
+                    });
+                } else {
+                    idx.sort((a, b) => {
+                        const va = parseFloat(chart.data.datasets[0]?.data?.[a]) || 0;
+                        const vb = parseFloat(chart.data.datasets[0]?.data?.[b]) || 0;
+                        return val === 'asc' ? va - vb : vb - va;
+                    });
+                    chart.data.labels = idx.map(i => chart.data.labels[i]);
+                    chart.data.datasets.forEach(ds => { ds.data = idx.map(i => ds.data[i]); });
+                }
+                chart.update('none');
+            });
+            pillWrap.appendChild(btn);
+            return btn;
+        });
+        body.appendChild(pillWrap);
+    }));
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // §3  TOOLTIP FORMAT — 2×2 compact grid + live preview
+    // ═══════════════════════════════════════════════════════════════════════
+    inner.appendChild(accordion('Tooltip Format', body => {
+        let _tTP = '', _tTS = '', _tLP = '', _tLS = '';
+
+        // Live preview box
+        const preview = document.createElement('div');
+        css(preview, 'background:rgba(0,0,0,0.03);border:1px solid #e4e4e7;border-radius:6px;padding:7px 10px;font-size:10px;line-height:1.65;margin-bottom:2px');
+        const updatePreview = () => {
+            preview.innerHTML = `<div style="color:#52525b;font-weight:600;font-size:9.5px">${_tTP || ''}January${_tTS || ''}</div><div style="color:#E9967A;font-size:9px">● ${_tLP || ''}42${_tLS || ''}</div>`;
+        };
+        updatePreview();
+        body.appendChild(preview);
+
+        function applyTooltip() {
+            chart.options.plugins.tooltip = chart.options.plugins.tooltip ?? {};
+            chart.options.plugins.tooltip.callbacks = chart.options.plugins.tooltip.callbacks ?? {};
+            chart.options.plugins.tooltip.callbacks.title = items => `${_tTP}${items[0]?.label ?? ''}${_tTS}`;
+            chart.options.plugins.tooltip.callbacks.label = item  => ` ${_tLP}${item.formattedValue ?? ''}${_tLS}`;
+            chart.update('none');
+            updatePreview();
+        }
+
+        const grid = document.createElement('div');
+        css(grid, 'display:grid;grid-template-columns:1fr 1fr;gap:5px');
+
+        function mkLabeledInput(lbl, ph, cb) {
+            const w = document.createElement('div');
+            css(w, 'display:flex;flex-direction:column;gap:3px');
+            const l = document.createElement('span');
+            css(l, 'font-size:8.5px;color:#a1a1aa;letter-spacing:0.04em');
+            l.textContent = lbl;
+            w.append(l, mkInput(ph, cb));
+            return w;
+        }
+        grid.append(
+            mkLabeledInput('Title prefix', 'e.g. Week ',  e => { _tTP = e.target.value; applyTooltip(); }),
+            mkLabeledInput('Title suffix', 'e.g.  Q1',   e => { _tTS = e.target.value; applyTooltip(); }),
+            mkLabeledInput('Value prefix', 'e.g. $',     e => { _tLP = e.target.value; applyTooltip(); }),
+            mkLabeledInput('Value suffix', 'e.g. %',     e => { _tLS = e.target.value; applyTooltip(); }),
+        );
+        body.appendChild(grid);
+    }));
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // §4  MERGE DATASETS
+    // ═══════════════════════════════════════════════════════════════════════
+    inner.appendChild(accordion('Merge Datasets', body => {
+        function rebuildOpts(sel) {
+            sel.innerHTML = '';
+            chart.data.datasets.forEach((ds, i) => {
+                const o = document.createElement('option');
+                o.value = i; o.textContent = ds.label ?? `Dataset ${i}`;
+                sel.appendChild(o);
+            });
+        }
+
+        const selA = mkSelect(); const selB = mkSelect();
+        rebuildOpts(selA); rebuildOpts(selB);
+        if (selB.options.length > 1) selB.selectedIndex = 1;
+
+        const selGrid = document.createElement('div');
+        css(selGrid, 'display:grid;grid-template-columns:1fr 1fr;gap:6px');
+
+        function mkLblSel(lbl, sel) {
+            const w = document.createElement('div');
+            css(w, 'display:flex;flex-direction:column;gap:3px');
+            const l = document.createElement('span');
+            css(l, 'font-size:8.5px;color:#a1a1aa;letter-spacing:0.04em');
+            l.textContent = lbl; w.append(l, sel); return w;
+        }
+        selGrid.append(mkLblSel('Dataset A', selA), mkLblSel('Dataset B', selB));
+        body.appendChild(selGrid);
+
+        // Op pills
+        let _op = 'sum';
+        const OPS = [['sum','Sum'],['avg','Avg'],['diff','Diff']];
+        const opWrap = document.createElement('div');
+        css(opWrap, 'display:flex;gap:3px');
+        const opBtns = OPS.map(([val, lbl]) => {
+            const b = document.createElement('button');
+            b.textContent = lbl;
+            css(b, `flex:1;padding:5px 0;border:1px solid ${val === _op ? 'rgba(233,150,122,0.4)' : '#e4e4e7'};border-radius:5px;font-size:9.5px;background:${val === _op ? 'rgba(233,150,122,0.1)' : '#fff'};color:${val === _op ? '#E9967A' : '#71717a'};cursor:pointer;transition:background 0.1s,color 0.1s,border-color 0.1s;font-family:inherit`);
+            b.addEventListener('click', () => {
+                _op = val;
+                opBtns.forEach((ob, oi) => {
+                    const a = OPS[oi][0] === _op;
+                    ob.style.background   = a ? 'rgba(233,150,122,0.1)' : '#fff';
+                    ob.style.color        = a ? '#E9967A' : '#71717a';
+                    ob.style.borderColor  = a ? 'rgba(233,150,122,0.4)' : '#e4e4e7';
+                });
+            });
+            opWrap.appendChild(b); return b;
+        });
+        body.appendChild(opWrap);
+
+        const opLbl = document.createElement('span');
+        css(opLbl, 'font-size:8.5px;color:#a1a1aa;letter-spacing:0.04em;margin-top:-2px');
+        opLbl.textContent = 'Operation';
+        body.insertBefore(opLbl, opWrap);
+
+        const mergeBtn = document.createElement('button');
+        css(mergeBtn, 'width:100%;padding:7px;border:none;border-radius:6px;background:#E9967A;color:#fff;font-size:10px;font-weight:600;cursor:pointer;letter-spacing:0.02em;transition:background 0.1s;font-family:inherit;margin-top:2px');
+        mergeBtn.textContent = 'Apply Merge';
+        mergeBtn.addEventListener('mouseenter', () => mergeBtn.style.background = '#e08060');
+        mergeBtn.addEventListener('mouseleave', () => mergeBtn.style.background = '#E9967A');
+        mergeBtn.addEventListener('click', () => {
+            const ai = parseInt(selA.value), bi = parseInt(selB.value);
+            const dsA = chart.data.datasets[ai], dsB = chart.data.datasets[bi];
+            if (!dsA || !dsB) return;
+            const newData = dsA.data.map((va, i) => {
+                const a = parseFloat(va) || 0, b = parseFloat(dsB.data[i]) || 0;
+                return _op === 'sum' ? a + b : _op === 'avg' ? (a + b) / 2 : a - b;
+            });
+            const mergedDs = {
+                label: `${{ sum:'Sum', avg:'Avg', diff:'Diff' }[_op]}(${dsA.label ?? ai}, ${dsB.label ?? bi})`,
+                data: newData, borderColor:'#818cf8', backgroundColor:'#818cf855', borderWidth:2, tension:0.3,
+            };
+            _seriesState.push({ dataset: mergedDs, visible: true });
+            _syncDatasetsToChart();
+            rebuildOpts(selA); rebuildOpts(selB);
+            buildSeriesRows();
+        });
+        body.appendChild(mergeBtn);
+    }));
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // §5  PLUGINS — toggle switches instead of checkboxes
+    // ═══════════════════════════════════════════════════════════════════════
+    const plugins = Chart.registry?.plugins?.items ?? [];
+    if (plugins.length) {
+        inner.appendChild(accordion('Plugins', body => {
+            plugins.forEach(plugin => {
+                const id      = plugin.id ?? '(unnamed)';
+                const version = plugin.version ?? '';
+                const plugOpts = chart.options?.plugins?.[id];
+                let _on = plugOpts !== false && plugOpts?.display !== false;
+
+                const lbl = document.createElement('label');
+                css(lbl, 'display:flex;align-items:center;gap:9px;cursor:pointer;padding:3px 0');
+
+                // Toggle switch
+                const sw = document.createElement('div');
+                css(sw, `width:28px;height:16px;border-radius:8px;background:${_on ? '#E9967A' : '#e4e4e7'};position:relative;flex-shrink:0;transition:background 0.2s;cursor:pointer`);
+                const knob = document.createElement('div');
+                css(knob, `width:12px;height:12px;border-radius:50%;background:#fff;position:absolute;top:2px;left:${_on ? '14px' : '2px'};transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)`);
+                sw.appendChild(knob);
+
+                const nameSpan = document.createElement('span');
+                css(nameSpan, 'font-size:10px;color:#71717a;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap');
+                nameSpan.textContent = version ? `${id} v${version}` : id;
+
+                sw.addEventListener('click', () => {
+                    _on = !_on;
+                    sw.style.background = _on ? '#E9967A' : '#e4e4e7';
+                    knob.style.left = _on ? '14px' : '2px';
+                    chart.options.plugins = chart.options.plugins ?? {};
+                    if (!_on) chart.options.plugins[id] = false;
+                    else delete chart.options.plugins[id];
+                    chart.update('none');
+                });
+                lbl.append(sw, nameSpan);
+                body.appendChild(lbl);
+            });
+        }));
+    }
+
+    return () => {
+        containerEl.innerHTML = '';
+        containerEl.style.cssText = '';
+        containerEl.className = '';
+    };
+}
+
 // ── Zoom overlay ──────────────────────────────────────────────────────────────
 
 export function openZoom(wrapper) {
@@ -784,12 +1338,16 @@ export function openZoom(wrapper) {
             chart.resize();
             _applyChartTheme(chart, 'light');  // zoom overlay is light bg
             _navInit(chart);   // show the navigator now that the chart is live
+            _zoomPanelCleanup = initZoomPanel(chart, document.getElementById('zoomOptionPane'));
         }
     });
 }
 
 export function closeZoom() {
     if (!_zoomedWrapper) return;
+
+    // Tear down option panel
+    if (_zoomPanelCleanup) { _zoomPanelCleanup(); _zoomPanelCleanup = null; }
 
     // Capture the chart reference before we move the wrapper back
     const chartBeforeMove = Chart.getChart(_zoomedWrapper.querySelector('canvas'));
