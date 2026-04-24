@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using LQ.Models.DTOs;
 using LQ.Services.Interfaces;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace LQ.Controllers;
 
@@ -87,17 +88,24 @@ public class WorkspaceController : Controller
     public async Task<IActionResult> AutoChart([FromBody] List<int> fieldindexes)
     {
         if (CurrentCSVFileDTO is null || CurrentTableDTO is null) return NotFound();
-        var currentFile = await _csvService.GetFile(CurrentCSVFileDTO.currentFileID);
-        _stopwatch.Start();
-        var returnCharts = CurrentFilters is null
+        // var currentFile = await _csvService.GetFile(CurrentCSVFileDTO.currentFileID);
+        try {
+            _stopwatch.Start();
+            var returnCharts = CurrentFilters is null
             ? await _autoChartService.DetectChartAsync(CurrentCSVFileDTO.currentFileID, fieldindexes)
             : await _autoChartService.DetectChartWithFiltersAsync(CurrentCSVFileDTO.currentFileID, fieldindexes, CurrentFilters);
-        _stopwatch.Stop();
-        TimeSpan ts = _stopwatch.Elapsed;
-        string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
-            ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
-        _logger.LogInformation($"RunTime {elapsedTime}\n{JsonSerializer.Serialize(fieldindexes)}");
-        return Json(returnCharts);
+            _stopwatch.Stop();
+            TimeSpan ts = _stopwatch.Elapsed;
+            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+                ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
+            _logger.LogInformation($"RunTime {elapsedTime}\n{JsonSerializer.Serialize(fieldindexes)}");
+            return Json(returnCharts);
+        }
+        catch(Exception ex)
+        {
+            _logger.LogInformation(ex.Message, ex.StackTrace);
+            return StatusCode(StatusCodes.Status500InternalServerError, "Our server is having a hard time dealing with your request!");
+        }
     }
 
     [HttpPost("filter")]

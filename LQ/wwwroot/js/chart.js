@@ -3,19 +3,10 @@ import { listIndexes, appState } from './workspace.js';
 // ── Chart globals ─────────────────────────────────────────────────────────────
 export let chartInstances = [];
 export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
-export let muuriGrid = null;
 
 // ── Chart group tracking ──────────────────────────────────────────────────────
 let _groupCounter = 0;
-const _groupData   = new Map(); // groupId → { gridItems: Element[], instances: Chart[] }
-
-function _logGroups(label = '') {
-    const entries = [..._groupData.entries()].map(([id, d]) => ({
-        groupId: id,
-        fields: JSON.parse(d.gridItems[0]?.dataset.fieldIndexes || '[]'),
-    }));
-    console.log(`[chart groups${label ? ' · ' + label : ''}]`, entries);
-}
+const _groupData   = new Map(); // groupId → { gridItems: Element[], instances: Chart[], section: Element }
 
 // ── Global chart defaults ─────────────────────────────────────────────────────
 Chart.defaults.plugins.tooltip.cornerRadius = 4;
@@ -39,20 +30,6 @@ const stackedAxis = {
     stacked: true
 };
 
-// ── Muuri init helper ─────────────────────────────────────────────────────────
-function _ensureMuuriGrid() {
-    if (muuriGrid) return;
-    const chartGrid = document.getElementById('chartGrid');
-    muuriGrid = new Muuri(chartGrid, {
-        items:       '.grid-item',
-        layoutDuration: 300,
-        layoutEasing:   'ease',
-        dragEnabled:    true,
-        dragHandle:     '.drag-handle',
-        dragStartPredicate: { distance: 5, delay: 0 },
-    });
-    muuriGrid.on('layoutEnd', () => { chartInstances.forEach(c => c.resize()); });
-}
 
 /**
  * Switch a chart's text / grid colours to match a container background.
@@ -490,76 +467,8 @@ export function initSparklines() {
     });
 }
 
-// ── autoChart (legacy: uses global listIndexes, clears everything) ────────────
-
-async function autoChart() {
-    const selPlot   = document.getElementById("selPlot");
-    const noPlot    = document.getElementById("noPlot");
-    const loader    = document.getElementById("loader");
-    const chartGrid = document.getElementById("chartGrid");
-
-    // ── Clear previous state ──────────────────────────────────────────────
-    chartInstances.forEach(c => c.destroy());
-    chartInstances.length = 0;
-    _groupData.clear();
-
-    if (muuriGrid) {
-        muuriGrid.destroy();
-        muuriGrid = null;
-    }
-    chartGrid.innerHTML = '';
-
-    if (listIndexes.size === 0) {
-        loader.hidden = true;
-        selPlot.hidden = false;
-        noPlot.hidden = true;
-        return;
-    }
-    selPlot.hidden = true;
-    noPlot.hidden  = true;
-    loader.hidden  = false;
-
-    appState.controller = new AbortController();
-    try {
-        const response = await fetch("/workspace", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify([...listIndexes].map(Number)),
-            signal: appState.controller.signal
-        });
-        const result = await response.json();
-
-        loader.hidden = true;
-
-        if (result.length === 0) {
-            selPlot.hidden = true;
-            noPlot.hidden  = false;
-            return;
-        }
-
-        _ensureMuuriGrid();
-
-        const groupedResults = result.reduce((acc, sample) => {
-            if (!acc[sample.panelIndex]) acc[sample.panelIndex] = [];
-            acc[sample.panelIndex].push(sample);
-            return acc;
-        }, {});
-
-        Object.keys(groupedResults).sort((a, b) => a - b).forEach(pIdx => {
-            _buildPanel(groupedResults[pIdx], pIdx);
-        });
-
-        muuriGrid.layout();
-    }
-    catch (error) {
-        if (error.name !== 'AbortError') {
-            console.error("[autoChart] Fetch error:", error);
-        }
-    }
-}
 
 // ── Navigator ─────────────────────────────────────────────────────────────────
-
 /** Normalise a dataset's data array so the navigator always gets plain numbers. */
 function _navNormalise(data) {
     return data.map(d =>
@@ -1374,7 +1283,6 @@ export function closeZoom() {
             chart.resize();
             _applyChartTheme(chart, 'light');  // card is light bg
         }
-        if (muuriGrid) muuriGrid.refreshItems().layout();
     });
 }
 
@@ -1383,9 +1291,9 @@ function _onEscClose(e) {
 }
 
 // ── appendChart ───────────────────────────────────────────────────────────────
-// Builds ONE panel-level header toolbar, wraps in Muuri grid item, registers.
+// Builds ONE panel-level header toolbar, wraps in grid item, registers.
 // groupId / fieldIndexes: when provided, stored on the DOM for drop-onto-card.
-function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, groupId = null, fieldIndexes = null) {
+function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, groupId = null, fieldIndexes = null) {
     // ── 1. Build ONE panel-level header (always visible, owns drag-handle) ─
     const header = document.createElement("div");
     header.className = "drag-handle flex justify-between items-center px-3 py-1.5 border-b border-zinc-100 bg-white/90 backdrop-blur-sm relative z-50 select-none cursor-grab active:cursor-grabbing rounded-t-2xl";
@@ -1639,7 +1547,6 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, groupId = null,
     let _resizeStartW = 0;
     let _resizeStartH = 0;
     let _resizeRafId = null;
-    let _resizeDebounceId = null;
 
     resizeHandle.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -1675,10 +1582,6 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, groupId = null,
         document.body.style.userSelect = '';
         gridItemContent.classList.remove('is-resizing');
         if (_resizeRafId) cancelAnimationFrame(_resizeRafId);
-        clearTimeout(_resizeDebounceId);
-        _resizeDebounceId = setTimeout(() => {
-            if (muuriGrid) muuriGrid.refreshItems().layout();
-        }, 150);
     });
 
     gridItem.appendChild(gridItemContent);
@@ -1715,16 +1618,14 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, groupId = null,
         });
     }
 
-    // ── 3. Register with Muuri ────────────────────────────────────────────
-    document.getElementById("chartGrid").appendChild(gridItem);
-    muuriGrid.add(gridItem, { layout: false });
+    gridContainer.appendChild(gridItem);
     return gridItem;
 }
 
 // ── _buildPanel ───────────────────────────────────────────────────────────────
 // Builds one panel (a set of chart variants for a single panelIndex),
-// creates Chart.js instances, and registers with muuriGrid via appendChart.
-function _buildPanel(panelSamples, pIdx, groupId = null, fieldIndexes = null) {
+// creates Chart.js instances, and appends them to the provided gridContainer.
+function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldIndexes = null) {
     const panelDiv = document.createElement("div");
     panelDiv.classList.add("flex", "flex-col", "h-full");
     panelDiv.id = "panel" + pIdx;
@@ -1996,23 +1897,21 @@ function _buildPanel(panelSamples, pIdx, groupId = null, fieldIndexes = null) {
         chartInstances.push(chartInstance);
     });
 
-    appendChart(panelSamples, pIdx, wrappers, panelDiv, groupId, fieldIndexes);
+    appendChart(panelSamples, pIdx, wrappers, panelDiv, gridContainer, groupId, fieldIndexes);
 }
 
 // ── createChartGroup ──────────────────────────────────────────────────────────
 // Creates an independent chart group from a set of field indexes.
 // Returns the groupId, or null on failure.
 export async function createChartGroup(fieldIndexes) {
-    const groupId    = ++_groupCounter;
-    const instBefore = chartInstances.length;
+    const groupId = ++_groupCounter;
 
-    const selPlot   = document.getElementById("selPlot");
-    const noPlot    = document.getElementById("noPlot");
-    const loader    = document.getElementById("loader");
-
-    selPlot.hidden = true;
-    noPlot.hidden  = true;
-    loader.hidden  = false;
+    const selPlot = document.getElementById("selPlot");
+    const noPlot  = document.getElementById("noPlot");
+    const loader  = document.getElementById("loader");
+    if (selPlot) selPlot.hidden = true;
+    if (noPlot)  noPlot.hidden  = true;
+    if (loader)  loader.hidden  = false;
 
     appState.controller = new AbortController();
     try {
@@ -2024,55 +1923,63 @@ export async function createChartGroup(fieldIndexes) {
         });
         const result = await response.json();
 
-        loader.hidden = true;
+        if (loader) loader.hidden = true;
 
         if (result.length === 0) {
             if (_groupData.size === 0) {
-                selPlot.hidden = true;
-                noPlot.hidden  = false;
+                if (selPlot) selPlot.hidden = true;
+                if (noPlot)  noPlot.hidden  = false;
             }
             return null;
         }
 
-        _ensureMuuriGrid();
+        const section   = document.createElement('div');
+        section.className = 'doc-chart-section';
+        const innerGrid = document.createElement('div');
+        innerGrid.className = 'chartGrid';
+        section.appendChild(innerGrid);
 
+        const domsBefore = chartInstances.length;
         const grouped = result.reduce((acc, s) => {
             (acc[s.panelIndex] = acc[s.panelIndex] || []).push(s);
             return acc;
         }, {});
-
-        // Track Muuri item count before adding new items
-        const muuriItemsBefore = muuriGrid.getItems().length;
-
         Object.keys(grouped).sort((a, b) => +a - +b).forEach(pIdx => {
-            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, groupId, fieldIndexes);
+            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, innerGrid, groupId, fieldIndexes);
         });
 
-        // Capture new instances and grid items
-        const newInstances = chartInstances.slice(instBefore);
-        const allMuuriItems = muuriGrid.getItems();
-        const newGridItems  = allMuuriItems.slice(muuriItemsBefore).map(i => i.getElement());
+        const newInstances = chartInstances.slice(domsBefore);
+        const newGridItems = Array.from(innerGrid.children);
+        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances, section });
 
-        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances });
+        const canvas = document.getElementById('doc-canvas');
+        const cursor = document.getElementById('docDropCursor');
+        if (cursor && cursor.parentNode === canvas) {
+            canvas.insertBefore(section, cursor);
+            cursor.style.display = 'none';
+        } else {
+            canvas.appendChild(section);
+        }
 
-        muuriGrid.layout();
-        // Chart.js renders canvases asynchronously after DOM insertion.
-        // Two deferred passes re-measure and re-position items once heights settle.
-        requestAnimationFrame(() => {
-            if (!muuriGrid) return;
-            muuriGrid.refreshItems().layout(true);
-            requestAnimationFrame(() => {
-                if (muuriGrid) muuriGrid.refreshItems().layout(true);
-            });
-        });
-        _logGroups('after create');
+        const after = section.nextElementSibling;
+        if (!after || after.classList.contains('doc-drop-cursor')) {
+            const t = document.createElement('div');
+            t.className = 'doc-text';
+            t.contentEditable = 'true';
+            t.setAttribute('data-placeholder', 'Continue writing…');
+            t.spellcheck = false;
+            section.after(t);
+            setTimeout(() => t.focus(), 300);
+        }
+
+        requestAnimationFrame(() => newInstances.forEach(c => c.resize()));
         return groupId;
     } catch (error) {
-        loader.hidden = true;
+        if (loader) loader.hidden = true;
         if (error.name !== 'AbortError') console.error("[createChartGroup] Error:", error);
         if (_groupData.size === 0) {
-            selPlot.hidden = true;
-            noPlot.hidden  = false;
+            if (selPlot) selPlot.hidden = true;
+            if (noPlot)  noPlot.hidden  = false;
         }
         return null;
     }
@@ -2089,20 +1996,14 @@ export function removeChartGroup(groupId) {
         if (i !== -1) chartInstances.splice(i, 1);
     });
 
-    if (muuriGrid) {
-        const muuriItems = data.gridItems
-            .map(el => muuriGrid.getItems(el)[0])
-            .filter(Boolean);
-        if (muuriItems.length) muuriGrid.remove(muuriItems, { removeElements: true });
+    data.gridItems.forEach(el => el.remove());
+    _groupData.delete(groupId);
+
+    if (data.section && data.section.querySelectorAll('.grid-item').length === 0) {
+        data.section.remove();
     }
 
-    _groupData.delete(groupId);
-    _logGroups('after remove');
-
     if (_groupData.size === 0) {
-        if (muuriGrid) { muuriGrid.destroy(); muuriGrid = null; }
-        const chartGrid = document.getElementById("chartGrid");
-        if (chartGrid) chartGrid.innerHTML = '';
         const selPlot = document.getElementById("selPlot");
         const noPlot  = document.getElementById("noPlot");
         if (selPlot) selPlot.hidden = false;
@@ -2116,18 +2017,15 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
     const oldData = _groupData.get(oldGroupId);
     if (!oldData) return createChartGroup(newFieldIndexes);
 
-    // Capture the position of the first old item before removing anything
-    const insertIndex = muuriGrid.getItems().findIndex(
-        item => oldData.gridItems.includes(item.getElement())
-    );
+    const oldSection = oldData.section;
+    const innerGrid  = oldSection.querySelector('.chartGrid');
 
-    const groupId    = ++_groupCounter;
-    const instBefore = chartInstances.length;
+    const groupId = ++_groupCounter;
 
     const loader  = document.getElementById("loader");
     const selPlot = document.getElementById("selPlot");
     const noPlot  = document.getElementById("noPlot");
-    loader.hidden = false;
+    if (loader) loader.hidden = false;
 
     appState.controller = new AbortController();
     try {
@@ -2138,61 +2036,43 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
             signal: appState.controller.signal,
         });
         const result = await response.json();
-        loader.hidden = true;
+        if (loader) loader.hidden = true;
 
         if (result.length === 0) return null;
 
-        // Remove old group without triggering a layout yet
+        // Destroy old chart instances and remove old DOM items
         oldData.instances.forEach(c => {
             c.destroy();
             const i = chartInstances.indexOf(c);
             if (i !== -1) chartInstances.splice(i, 1);
         });
-        const oldMuuriItems = oldData.gridItems
-            .map(el => muuriGrid.getItems(el)[0])
-            .filter(Boolean);
-        if (oldMuuriItems.length)
-            muuriGrid.remove(oldMuuriItems, { removeElements: true, layout: false });
+        oldData.gridItems.forEach(el => el.remove());
         _groupData.delete(oldGroupId);
 
-        // Build new panels (appended at the end of chartGrid)
-        const muuriItemsBefore = muuriGrid.getItems().length;
+        // Clear the section's grid and rebuild in-place
+        innerGrid.innerHTML = '';
+        const domsBefore = chartInstances.length;
         const grouped = result.reduce((acc, s) => {
             (acc[s.panelIndex] = acc[s.panelIndex] || []).push(s);
             return acc;
         }, {});
         Object.keys(grouped).sort((a, b) => +a - +b).forEach(pIdx => {
-            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, groupId, newFieldIndexes);
+            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, innerGrid, groupId, newFieldIndexes);
         });
 
-        const newInstances  = chartInstances.slice(instBefore);
-        const newGridItems  = muuriGrid.getItems().slice(muuriItemsBefore).map(i => i.getElement());
-        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances });
+        const newInstances = chartInstances.slice(domsBefore);
+        const newGridItems = Array.from(innerGrid.children);
+        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances, section: oldSection });
 
-        // Move new items to where the old card was
-        if (insertIndex >= 0) {
-            const newMuuriItems = newGridItems
-                .map(el => muuriGrid.getItems(el)[0])
-                .filter(Boolean);
-            newMuuriItems.forEach((item, i) => {
-                muuriGrid.move(item, insertIndex + i, { layout: false });
-            });
-        }
-
-        muuriGrid.layout();
-        requestAnimationFrame(() => {
-            if (!muuriGrid) return;
-            muuriGrid.refreshItems().layout(true);
-            requestAnimationFrame(() => {
-                if (muuriGrid) muuriGrid.refreshItems().layout(true);
-            });
-        });
-        _logGroups('after replace');
+        requestAnimationFrame(() => newInstances.forEach(c => c.resize()));
         return groupId;
     } catch (error) {
-        loader.hidden = true;
+        if (loader) loader.hidden = true;
         if (error.name !== 'AbortError') console.error("[replaceChartGroup] Error:", error);
-        if (_groupData.size === 0) { selPlot.hidden = false; noPlot.hidden = true; }
+        if (_groupData.size === 0) {
+            if (selPlot) selPlot.hidden = false;
+            if (noPlot)  noPlot.hidden  = true;
+        }
         return null;
     }
 }
