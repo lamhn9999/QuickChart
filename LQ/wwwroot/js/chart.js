@@ -1653,6 +1653,15 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
         const isLine            = chartArray[sample.chartType] === 'line';
         const isHorizontalBar   = sample.chartType === 6;
 
+        if (isPie) {
+            wrapper.removeChild(ctx);
+            wrapper.classList.add('items-center', 'justify-center');
+            const pieBox = document.createElement("div");
+            pieBox.style.cssText = 'width:100%;max-width:370px;position:relative;flex-shrink:0';
+            pieBox.appendChild(ctx);
+            wrapper.appendChild(pieBox);
+        }
+
         const isBoxPlot = !isMatrix && !isBubble
             && sample.y.length >= 5
             && sample.y[2]?.label === 'Median';
@@ -1741,6 +1750,7 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
                 responsive: true,
                 plugins: {
                     legend: {
+                        ...(isPie && { position: 'right' }),
                         labels: { color: LIGHT_TEXT, padding: 12, borderRadius: 4 }
                     },
                     title: {
