@@ -78,9 +78,7 @@ public class WorkspaceController : Controller
         }));
         HttpContext.Session.Remove("ListValueFilterDTO");
         ViewBag.Username = CurrentAnalystDTO?.Name;
-        return CurrentAnalystDTO is null
-            ? View("Workspace", tableDisplay)
-            : View("WorkspaceSpecific", tableDisplay);
+        return View("Workspace", tableDisplay);
     }
 
     [HttpPost]

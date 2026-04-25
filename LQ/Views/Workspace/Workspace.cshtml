@@ -82,7 +82,7 @@
         /* Chart section */
         .doc-chart-section { margin: 2.5rem 0; }
 
-        /* Drop cursor — orange insertion line that snaps between blocks during drag */
+        /* Drop cursor — blue insertion line that snaps between blocks during drag */
         .doc-drop-cursor {
             height: 2px;
             margin: 2px 0;
@@ -103,8 +103,244 @@
 
         /* Full-width charts (one per row) */
         .doc-chart-section .chartGrid { --grid-cols: 1 !important; }
+
+        /* ── Editor UX: animations ────────────────────────────────────────── */
+        @@keyframes blockIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Block type variants ─────────────────────────────────────────── */
+        .doc-text[data-block-type="h1"] {
+            font-family: 'Syne', sans-serif;
+            font-size: 2em; font-weight: 800; line-height: 1.18;
+            color: #18181B; padding: 0.55em 0 0.1em; letter-spacing: -0.01em;
+        }
+        .doc-text[data-block-type="h2"] {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.45em; font-weight: 700; line-height: 1.28;
+            color: #18181B; padding: 0.45em 0 0.08em; letter-spacing: -0.005em;
+        }
+        .doc-text[data-block-type="h3"] {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.15em; font-weight: 600; line-height: 1.35;
+            color: #27272A; padding: 0.35em 0 0.06em;
+        }
+        .doc-text[data-block-type="callout"] {
+            background: #FFF9F7;
+            border-left: 3px solid #E9967A;
+            padding: 0.75em 1em 0.75em 0.85em;
+            border-radius: 0 6px 6px 0;
+            color: #27272A;
+            margin: 0.25em 0;
+        }
+        .doc-text[data-block-type="code"] {
+            background: #F4F4F5;
+            border-radius: 6px;
+            padding: 0.75em 1em;
+            font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+            font-size: 0.85em;
+            color: #374151;
+            white-space: pre-wrap;
+            margin: 0.25em 0;
+        }
+
+        /* ── Block selection ─────────────────────────────────────────────── */
+        .block-selected {
+            background: rgba(35,131,226,0.07) !important;
+            border-radius: 4px;
+            outline: 1.5px solid rgba(35,131,226,0.3);
+            outline-offset: 1px;
+        }
+
+        /* ── Page title ──────────────────────────────────────────────────── */
+        #doc-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #18181B;
+            outline: none;
+            border: none;
+            width: 100%;
+            padding: 0.15em 0 0.5em;
+            margin-bottom: 0.25rem;
+            line-height: 1.12;
+            letter-spacing: -0.02em;
+            caret-color: #18181B;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border-bottom: 1.5px solid #F0F0F2;
+        }
+        #doc-title:empty::before {
+            content: 'Untitled';
+            color: #D4D4D8;
+            pointer-events: none;
+        }
+
+        /* ── Block drag placeholder ──────────────────────────────────────── */
+        .doc-drag-ph {
+            height: 3px;
+            background: #2383E2;
+            border-radius: 2px;
+            margin: 3px 0;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .doc-drag-ph::before {
+            content: '';
+            position: absolute;
+            left: -5px; top: -4px;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #2383E2;
+        }
+
+        /* ── Divider block ───────────────────────────────────────────────── */
+        .doc-divider { padding: 10px 0; }
+        .doc-divider hr { border: none; border-top: 2px solid #E4E4E7; margin: 0; }
+
+        /* ── Block handle ────────────────────────────────────────────────── */
+        #doc-handle {
+            position: fixed;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 22px; height: 22px;
+            border-radius: 4px;
+            cursor: grab;
+            color: #C4C4CC;
+            opacity: 0;
+            transition: opacity 140ms ease, color 100ms ease, background 100ms ease;
+            z-index: 200;
+            user-select: none;
+            pointer-events: auto;
+        }
+        #doc-handle.visible { display: flex; }
+        #doc-handle.show    { opacity: 1; }
+        #doc-handle:hover   { background: #F0F0F2; color: #71717A; cursor: grab; }
+        #doc-handle:active  { cursor: grabbing; }
+
+        /* ── Block handle context menu ───────────────────────────────────── */
+        #doc-handle-menu, #doc-turn-menu {
+            position: fixed;
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 9px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06);
+            padding: 5px;
+            z-index: 250;
+            display: none;
+            min-width: 168px;
+        }
+        #doc-handle-menu.open, #doc-turn-menu.open { display: block; }
+        .hm-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px; font-weight: 400;
+            color: #374151;
+            transition: background 70ms ease;
+            font-family: 'DM Sans', sans-serif;
+        }
+        .hm-item:hover { background: #F4F4F5; }
+        .hm-item svg { flex-shrink: 0; color: #9CA3AF; }
+        .hm-danger { color: #EF4444; }
+        .hm-danger:hover { background: #FEF2F2; }
+        .hm-danger svg { color: #F87171; }
+        .hm-sep { height: 1px; background: #F0F0F2; margin: 4px 0; }
+        .hm-turn { justify-content: flex-start; }
+        .hm-chevron { margin-left: auto; opacity: 0.5; }
+        .hm-turn-icon {
+            width: 22px; height: 22px;
+            background: #F4F4F5; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 700;
+            color: #374151; font-family: 'Syne', sans-serif;
+            flex-shrink: 0;
+        }
+
+        /* ── Slash command menu ──────────────────────────────────────────── */
+        #doc-slash-menu {
+            position: fixed;
+            background: #fff;
+            border: 1px solid rgba(0,0,0,0.07);
+            border-radius: 11px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06);
+            padding: 6px;
+            z-index: 999;
+            width: 272px;
+            max-height: 320px;
+            overflow-y: auto;
+            display: none;
+            font-family: 'DM Sans', sans-serif;
+        }
+        #doc-slash-menu.open { display: block; }
+        #doc-slash-menu::-webkit-scrollbar { width: 4px; }
+        #doc-slash-menu::-webkit-scrollbar-track { background: transparent; }
+        #doc-slash-menu::-webkit-scrollbar-thumb { background: #E4E4E7; border-radius: 4px; }
+        .slash-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 7px 8px;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: background 60ms ease;
+        }
+        .slash-item:hover, .slash-item.active { background: #F4F4F5; }
+        .slash-icon {
+            width: 32px; height: 32px; flex-shrink: 0;
+            background: #fff;
+            border: 1px solid #E4E4E7;
+            border-radius: 7px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 800;
+            color: #18181B;
+            font-family: 'Syne', sans-serif;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .slash-text { flex: 1; min-width: 0; }
+        .slash-label { font-size: 13px; font-weight: 500; color: #18181B; }
+        .slash-desc  { font-size: 11px; color: #A1A1AA; margin-top: 1px; }
+        .slash-empty { padding: 16px 10px; font-size: 12px; color: #A1A1AA; text-align: center; }
+
+        /* ── Inline formatting toolbar ───────────────────────────────────── */
+        #doc-inline-toolbar {
+            position: fixed;
+            background: #1A1A1E;
+            border-radius: 9px;
+            padding: 4px 5px;
+            display: none;
+            align-items: center;
+            gap: 1px;
+            z-index: 600;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.28), 0 1px 4px rgba(0,0,0,0.15);
+            font-family: 'DM Sans', sans-serif;
+        }
+        #doc-inline-toolbar.open { display: flex; }
+        .tb-btn {
+            padding: 4px 9px;
+            border-radius: 6px;
+            font-size: 13px; font-weight: 500;
+            color: rgba(255,255,255,0.75);
+            cursor: pointer;
+            transition: background 70ms ease, color 70ms ease;
+            border: none; background: none;
+            font-family: 'DM Sans', sans-serif;
+            line-height: 1;
+        }
+        .tb-btn:hover   { background: rgba(255,255,255,0.12); color: #fff; }
+        .tb-italic      { font-style: italic; }
+        .tb-mono        { font-family: monospace; font-size: 14px; letter-spacing: -0.04em; }
+        .tb-comment     { color: rgba(233,150,122,0.85); }
+        .tb-comment:hover { background: rgba(233,150,122,0.15); color: #E9967A; }
+        .tb-sep {
+            width: 1px; height: 16px;
+            background: rgba(255,255,255,0.14);
+            margin: 0 3px; flex-shrink: 0;
+        }
     </style>
     <script type="module" src="~/js/main.js"></script>
+    <script type="module" src="~/js/editor.js"></script>
 </head>
 <body class="bg-[#FAFAFA] text-[#18181B]">
 <div class="flex flex-col h-screen max-h-screen">
@@ -114,17 +350,39 @@
             <span class="text-[0.95rem] font-bold tracking-tight text-[#18181B]">ACPTDA<span class="text-[#E9967A]">.</span></span>
         </a>
         <div class="flex items-center gap-4">
-            <span class="text-[0.82rem] font-medium text-zinc-400 pr-4 border-r border-zinc-200 flex items-center gap-1.5">
-                <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#E9967A]/70"></span>
-                Guest session
-            </span>
-            <a href="/" class="hover:cursor-pointer flex items-center gap-1.5 text-[0.82rem] font-medium text-zinc-400 hover:text-[#18181B] bg-transparent border-none transition-colors px-2 py-1.5 rounded-lg hover:bg-zinc-50 no-underline">
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M19 12H5"/>
-                    <polyline points="12 19 5 12 12 5"/>
-                </svg>
-                Back to Home
-            </a>
+            @if (ViewBag.Username != null)
+            {
+                <span class="text-[0.82rem] font-medium text-zinc-400 pr-4 border-r border-zinc-200">
+                    Hello, <span class="text-[#E9967A] font-semibold">@ViewBag.Username</span>
+                </span>
+                <button id="signoutbutton"
+                        class="hover:cursor-pointer flex items-center gap-1.5 text-[0.82rem] font-medium text-zinc-400 hover:text-[#18181B] bg-transparent border-none transition-colors px-2 py-1.5 rounded-lg hover:bg-zinc-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5"/>
+                        <polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                    Back to Home
+                </button>
+                <script>
+                    document.getElementById("signoutbutton").addEventListener("click", () => {
+                        window.location.href = "@Url.Action("Show","Home")";
+                    });
+                </script>
+            }
+            else
+            {
+                <span class="text-[0.82rem] font-medium text-zinc-400 pr-4 border-r border-zinc-200 flex items-center gap-1.5">
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#E9967A]/70"></span>
+                    Guest session
+                </span>
+                <a href="/" class="hover:cursor-pointer flex items-center gap-1.5 text-[0.82rem] font-medium text-zinc-400 hover:text-[#18181B] bg-transparent border-none transition-colors px-2 py-1.5 rounded-lg hover:bg-zinc-50 no-underline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5"/>
+                        <polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                    Back to Home
+                </a>
+            }
         </div>
     </nav>
 
@@ -341,7 +599,7 @@
         ></div>
         <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto relative z-10" id="plotPanel">
             <div id="doc-canvas">
-                <div class="doc-text" contenteditable="true" data-placeholder="Start writing…" spellcheck="false"></div>
+                <div class="doc-text" contenteditable="true" data-block-type="paragraph" data-placeholder="Start writing, or press '/' for commands…" spellcheck="false"></div>
                 <div class="doc-drop-cursor" id="docDropCursor" style="display:none"></div>
             </div>
         </div>
@@ -355,7 +613,6 @@
     let scrollLeft, scrollTop;
 
     box.addEventListener("mousedown", (e) => {
-        // Don't intercept mousedown on draggable header cells
         if (e.target.closest('th[data-index]')) return;
         isDragging = true;
         box.classList.add("grabbing");
