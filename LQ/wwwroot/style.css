@@ -763,7 +763,8 @@ th {
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.04),
         0 4px 20px rgba(0, 0, 0, 0.06);
-    height: 360px;
+    height: auto;
+    min-height: 200px;
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -774,7 +775,7 @@ th {
     right: 0;
     width: 24px;
     height: 24px;
-    cursor: nwse-resize;
+    cursor: ew-resize;
     z-index: 20;
 }
 /* Three dots arranged in a diagonal L — classic resize grip */

@@ -1543,9 +1543,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
 
     let _resizing = false;
     let _resizeStartX = 0;
-    let _resizeStartY = 0;
     let _resizeStartW = 0;
-    let _resizeStartH = 0;
     let _resizeRafId = null;
 
     resizeHandle.addEventListener('pointerdown', (e) => {
@@ -1553,9 +1551,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
         e.stopPropagation();
         _resizing = true;
         _resizeStartX = e.clientX;
-        _resizeStartY = e.clientY;
         _resizeStartW = gridItem.getBoundingClientRect().width;
-        _resizeStartH = gridItemContent.getBoundingClientRect().height;
         resizeHandle.setPointerCapture(e.pointerId);
         document.body.style.userSelect = 'none';
         gridItemContent.classList.add('is-resizing');
@@ -1566,9 +1562,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
         if (_resizeRafId) cancelAnimationFrame(_resizeRafId);
         _resizeRafId = requestAnimationFrame(() => {
             const newW = Math.max(200, _resizeStartW + (e.clientX - _resizeStartX));
-            const newH = Math.max(220, _resizeStartH + (e.clientY - _resizeStartY));
             gridItem.style.width = `${newW}px`;
-            gridItemContent.style.height = `${newH}px`;
             wrappers.forEach(w => {
                 const canvas = w.querySelector('canvas');
                 if (canvas) { const ch = Chart.getChart(canvas); if (ch) ch.resize(); }
@@ -1627,14 +1621,14 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
 // creates Chart.js instances, and appends them to the provided gridContainer.
 function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldIndexes = null) {
     const panelDiv = document.createElement("div");
-    panelDiv.classList.add("flex", "flex-col", "h-full");
+    panelDiv.classList.add("flex", "flex-col");
     panelDiv.id = "panel" + pIdx;
 
     const wrappers = [];
 
     panelSamples.forEach((sample, sIdx) => {
         const wrapper = document.createElement("div");
-        wrapper.className = "flex flex-col flex-1 relative";
+        wrapper.className = "flex flex-col relative";
         if (sIdx > 0) wrapper.style.display = 'none';
 
         wrapper.dataset.chartTitle = sample.title || `Chart ${sIdx + 1}`;
@@ -1748,6 +1742,8 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
             options: {
                 animations: false,
                 responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: isMatrix ? 1 : (isPie || isBubble) ? 1.5 : isHorizontalBar ? 1.2 : 1.8,
                 plugins: {
                     legend: {
                         ...(isPie && { position: 'right' }),
