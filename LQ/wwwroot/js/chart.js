@@ -30,6 +30,7 @@ const stackedAxis = {
     stacked: true
 };
 
+var gridStack;
 
 /**
  * Switch a chart's text / grid colours to match a container background.
@@ -666,7 +667,6 @@ function _navDestroy(mainChart) {
 }
 
 // ── Zoom option panel ─────────────────────────────────────────────────────────
-// Figma-like light sidebar: Series (color+rename+eye) · Sort pills · Tooltip preview · Merge · Plugins
 
 function initZoomPanel(chart, containerEl) {
     if (!containerEl) return () => {};
@@ -1290,6 +1290,20 @@ function _onEscClose(e) {
     if (e.key === 'Escape') closeZoom();
 }
 
+// ── initChartWidth ────────────────────────────────────────────────────────────
+// Initialises the chart card to fit the doc-canvas content area.
+// Sets the width on gridContainer (the grid-stack-item GridStack actually resizes)
+// and makes gridItemContent fill it with width:100% so GridStack resize keeps working.
+function initChartWidth(gridContainer, gridItemContent) {
+    const docCanvas = document.getElementById('doc-canvas');
+    if (!docCanvas) return;
+    const style = getComputedStyle(docCanvas);
+    const paddingH = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+    gridContainer.style.width = `${docCanvas.clientWidth - paddingH}px`;
+    gridContainer.setAttribute('gs-w', '12'); // full column span — GridStack respects it on init
+    gridItemContent.style.width = '100%';
+}
+
 // ── appendChart ───────────────────────────────────────────────────────────────
 // Builds ONE panel-level header toolbar, wraps in grid item, registers.
 // groupId / fieldIndexes: when provided, stored on the DOM for drop-onto-card.
@@ -1528,62 +1542,26 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
     // Prepend the single header to the panel div (before all chart wrappers)
     panelDivCopy.prepend(header);
 
-    // ── 2. Wrap in Muuri grid item shell ──────────────────────────────────
-    const gridItem = document.createElement("div");
-    gridItem.className = "grid-item";
-
     const gridItemContent = document.createElement("div");
-    gridItemContent.className = "grid-item-content";
+    gridItemContent.className = "grid-item-content grid-stack-item-content";
     gridItemContent.appendChild(panelDivCopy);
 
-    // ── Resize handle (bottom-right corner, diagonal) ─────────────────────
-    const resizeHandle = document.createElement("div");
-    resizeHandle.className = "resize-handle";
-    gridItemContent.appendChild(resizeHandle);
-
-    let _resizing = false;
-    let _resizeStartX = 0;
-    let _resizeStartW = 0;
-    let _resizeRafId = null;
-
-    resizeHandle.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        _resizing = true;
-        _resizeStartX = e.clientX;
-        _resizeStartW = gridItem.getBoundingClientRect().width;
-        resizeHandle.setPointerCapture(e.pointerId);
-        document.body.style.userSelect = 'none';
-        gridItemContent.classList.add('is-resizing');
-    });
-
-    resizeHandle.addEventListener('pointermove', (e) => {
-        if (!_resizing) return;
-        if (_resizeRafId) cancelAnimationFrame(_resizeRafId);
-        _resizeRafId = requestAnimationFrame(() => {
-            const newW = Math.max(200, _resizeStartW + (e.clientX - _resizeStartX));
-            gridItem.style.width = `${newW}px`;
-            wrappers.forEach(w => {
-                const canvas = w.querySelector('canvas');
-                if (canvas) { const ch = Chart.getChart(canvas); if (ch) ch.resize(); }
-            });
+    // ── Route GridStack resize to Chart.js ────────────────────────────────
+    // Observe gridContainer (the grid-stack-item) rather than gridItemContent:
+    // gridItemContent can't report growth because the canvas inside it blocks
+    // it from widening — the parent (gridContainer) is what GridStack actually resizes.
+    const _ro = new ResizeObserver(() => {
+        gridItemContent.querySelectorAll('canvas').forEach(canvas => {
+            const ch = Chart.getChart(canvas);
+            if (ch) ch.resize();
         });
     });
-
-    resizeHandle.addEventListener('pointerup', () => {
-        if (!_resizing) return;
-        _resizing = false;
-        document.body.style.userSelect = '';
-        gridItemContent.classList.remove('is-resizing');
-        if (_resizeRafId) cancelAnimationFrame(_resizeRafId);
-    });
-
-    gridItem.appendChild(gridItemContent);
+    _ro.observe(gridContainer);
 
     // ── Store group metadata on DOM for drop-onto-card ────────────────────
     if (groupId !== null) {
-        gridItem.dataset.groupId      = String(groupId);
-        gridItem.dataset.fieldIndexes = JSON.stringify(fieldIndexes ? [...fieldIndexes] : []);
+        gridItemContent.dataset.groupId      = String(groupId);
+        gridItemContent.dataset.fieldIndexes = JSON.stringify(fieldIndexes ? [...fieldIndexes] : []);
     }
 
     // ── Drop zone: another header dragged onto this card ──────────────────
@@ -1604,7 +1582,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
             gridItemContent.classList.remove('chart-drop-target');
             try {
                 const dragged  = JSON.parse(e.dataTransfer.getData('application/json'));
-                const existing = JSON.parse(gridItem.dataset.fieldIndexes || '[]');
+                const existing = JSON.parse(gridItemContent.dataset.fieldIndexes || '[]');
                 const combined = [...new Set([...existing, ...dragged])];
                 if (typeof window._chartDropOnCard === 'function')
                     window._chartDropOnCard(combined, groupId);
@@ -1612,8 +1590,9 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
         });
     }
 
-    gridContainer.appendChild(gridItem);
-    return gridItem;
+    initChartWidth(gridContainer, gridItemContent);
+    gridContainer.appendChild(gridItemContent);
+    return gridItemContent;
 }
 
 // ── _buildPanel ───────────────────────────────────────────────────────────────
@@ -1939,27 +1918,40 @@ export async function createChartGroup(fieldIndexes) {
             return null;
         }
 
-        const section   = document.createElement('div');
-        section.className = 'doc-chart-section';
+        const section = document.createElement('div');
+        section.classList.add('doc-chart-section', 'grid-stack');
+        section.draggable = true;
+
         const innerGrid = document.createElement('div');
-        innerGrid.className = 'chartGrid';
+        innerGrid.classList.add('grid-stack-item', 'chartGrid');
         section.appendChild(innerGrid);
 
         const domsBefore = chartInstances.length;
+
         const grouped = result.reduce((acc, s) => {
             (acc[s.panelIndex] = acc[s.panelIndex] || []).push(s);
             return acc;
         }, {});
-        Object.keys(grouped).sort((a, b) => +a - +b).forEach(pIdx => {
-            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, innerGrid, groupId, fieldIndexes);
-        });
+
+        Object.keys(grouped)
+            .sort((a, b) => +a - +b)
+            .forEach(pIdx => {
+                _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, innerGrid, groupId, fieldIndexes);
+            });
 
         const newInstances = chartInstances.slice(domsBefore);
         const newGridItems = Array.from(innerGrid.children);
-        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances, section });
+
+        _groupData.set(groupId, {
+            gridItems: newGridItems,
+            instances: newInstances,
+            section,
+            grid: null
+        });
 
         const canvas = document.getElementById('doc-canvas');
         const cursor = document.getElementById('docDropCursor');
+
         if (cursor && cursor.parentNode === canvas) {
             canvas.insertBefore(section, cursor);
             cursor.style.display = 'none';
@@ -1975,10 +1967,49 @@ export async function createChartGroup(fieldIndexes) {
             t.setAttribute('data-placeholder', 'Continue writing…');
             t.spellcheck = false;
             section.after(t);
-            setTimeout(() => t.focus(), 300);
+            setTimeout(() => t.focus(), 0);
         }
 
-        requestAnimationFrame(() => newInstances.forEach(c => c.resize()));
+        requestAnimationFrame(() => {
+            const grid = GridStack.init(
+                {
+                    column: 12,
+                    animate: true
+                },
+                section
+            );
+            _groupData.get(groupId).grid = grid;
+
+            requestAnimationFrame(() => {
+                newInstances.forEach(c => c.resize());
+
+                requestAnimationFrame(() => {
+                    const cellHeight = grid.getCellHeight(true);
+
+                    grid.engine.nodes.forEach(node => {
+                        const panel = node.el.querySelector('.flex.flex-col');
+                        const pixelHeight = panel?.getBoundingClientRect().height;
+                        const rows = Math.max(1, Math.ceil(pixelHeight / cellHeight)) + 1;
+                        grid.update(node.el, { h: rows });
+                    });
+
+                    grid.compact();
+
+                    requestAnimationFrame(() => {
+                        grid.engine.nodes.forEach(node => {
+                            const panel = node.el.querySelector('.grid-item-content > .flex.flex-col');
+                            if (!panel) return;
+                            panel.style.height = '100%';
+                            const wrapper = panel.querySelector('[data-chart-title]');
+                            if (wrapper) {
+                                wrapper.style.marginTop = 'auto';
+                                wrapper.style.marginBottom = 'auto';
+                            }
+                        });
+                    });
+                });
+            });
+        });
         return groupId;
     } catch (error) {
         if (loader) loader.hidden = true;
@@ -2017,6 +2048,8 @@ export function removeChartGroup(groupId) {
     }
 }
 
+// export async function mergeChartsIntoGridstack()
+
 // ── replaceChartGroup ─────────────────────────────────────────────────────────
 // Replaces an existing chart group in-place with a new one built from newFieldIndexes.
 export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
@@ -2046,7 +2079,10 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
 
         if (result.length === 0) return null;
 
-        // Destroy old chart instances and remove old DOM items
+        // Destroy GridStack first while its DOM nodes are still attached
+        oldData.grid?.destroy(false);
+
+        // Destroy old Chart.js instances and remove old DOM items
         oldData.instances.forEach(c => {
             c.destroy();
             const i = chartInstances.indexOf(c);
@@ -2065,12 +2101,51 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
         Object.keys(grouped).sort((a, b) => +a - +b).forEach(pIdx => {
             _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, innerGrid, groupId, newFieldIndexes);
         });
-
+        
         const newInstances = chartInstances.slice(domsBefore);
         const newGridItems = Array.from(innerGrid.children);
-        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances, section: oldSection });
+        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances, section: oldSection, grid: null });
 
-        requestAnimationFrame(() => newInstances.forEach(c => c.resize()));
+        requestAnimationFrame(() => {
+            const grid = GridStack.init(
+                {
+                    column: 12,
+                    animate: true
+                },
+                oldSection
+            );
+            _groupData.get(groupId).grid = grid;
+
+            requestAnimationFrame(() => {
+                newInstances.forEach(c => c.resize());
+
+                requestAnimationFrame(() => {
+                    const cellHeight = grid.getCellHeight(true);
+
+                    grid.engine.nodes.forEach(node => {
+                        const panel = node.el.querySelector('.flex.flex-col');
+                        const pixelHeight = panel?.getBoundingClientRect().height;
+                        const rows = Math.max(1, Math.ceil(pixelHeight / cellHeight)) + 1;
+                        grid.update(node.el, { h: rows });
+                    });
+
+                    grid.compact();
+
+                    requestAnimationFrame(() => {
+                        grid.engine.nodes.forEach(node => {
+                            const panel = node.el.querySelector('.grid-item-content > .flex.flex-col');
+                            if (!panel) return;
+                            panel.style.height = '100%';
+                            const wrapper = panel.querySelector('[data-chart-title]');
+                            if (wrapper) {
+                                wrapper.style.marginTop = 'auto';
+                                wrapper.style.marginBottom = 'auto';
+                            }
+                        });
+                    });
+                });
+            });
+        });
         return groupId;
     } catch (error) {
         if (loader) loader.hidden = true;
