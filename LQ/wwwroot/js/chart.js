@@ -1482,7 +1482,13 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
                     cell.addEventListener('click', () => {
                         wrappers.forEach((w, i) => { w.style.display = i === matchIdx ? 'flex' : 'none'; });
                         const c = Chart.getChart(wrappers[matchIdx].querySelector('canvas'));
-                        if (c) setTimeout(() => c.resize(), 0);
+                        const doFit = () => {
+                            const gId = parseInt(gridItemContent.dataset.groupId);
+                            const grid = _groupData.get(gId)?.grid;
+                            _fitGridItem(gridContainer, grid, wrappers[matchIdx]);
+                        };
+                        if (c) requestAnimationFrame(() => { c.resize(); requestAnimationFrame(doFit); });
+                        else   requestAnimationFrame(doFit);
                         turnPanel.classList.add('hidden');
                         setDeckState(false);
                     });
@@ -1885,6 +1891,27 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
     appendChart(panelSamples, pIdx, wrappers, panelDiv, gridContainer, groupId, fieldIndexes);
 }
 
+// ── _fitGridItem ──────────────────────────────────────────────────────────────
+// Re-measures a grid item's panel height and resizes the GridStack row span to
+// fit, then stretches the panel to fill the card and centres the chart wrapper.
+function _fitGridItem(gridItem, grid, activeWrapper) {
+    const panel = gridItem.querySelector('.grid-item-content > .flex.flex-col');
+    if (!panel || !grid) return;
+
+    panel.style.height = '';
+    if (activeWrapper) { activeWrapper.style.marginTop = ''; activeWrapper.style.marginBottom = ''; }
+
+    const cellHeight = grid.getCellHeight(true);
+    const rows = Math.max(1, Math.ceil(panel.getBoundingClientRect().height / cellHeight)) + 1;
+    grid.update(gridItem, { h: rows });
+    grid.compact();
+
+    requestAnimationFrame(() => {
+        panel.style.height = '100%';
+        if (activeWrapper) { activeWrapper.style.marginTop = 'auto'; activeWrapper.style.marginBottom = 'auto'; }
+    });
+}
+
 // ── createChartGroup ──────────────────────────────────────────────────────────
 // Creates an independent chart group from a set of field indexes.
 // Returns the groupId, or null on failure.
@@ -2000,11 +2027,8 @@ export async function createChartGroup(fieldIndexes) {
                             const panel = node.el.querySelector('.grid-item-content > .flex.flex-col');
                             if (!panel) return;
                             panel.style.height = '100%';
-                            const wrapper = panel.querySelector('[data-chart-title]');
-                            if (wrapper) {
-                                wrapper.style.marginTop = 'auto';
-                                wrapper.style.marginBottom = 'auto';
-                            }
+                            const wrapper = node.el.querySelector('[data-chart-title]');
+                            if (wrapper) { wrapper.style.marginTop = 'auto'; wrapper.style.marginBottom = 'auto'; }
                         });
                     });
                 });
@@ -2136,11 +2160,8 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
                             const panel = node.el.querySelector('.grid-item-content > .flex.flex-col');
                             if (!panel) return;
                             panel.style.height = '100%';
-                            const wrapper = panel.querySelector('[data-chart-title]');
-                            if (wrapper) {
-                                wrapper.style.marginTop = 'auto';
-                                wrapper.style.marginBottom = 'auto';
-                            }
+                            const wrapper = node.el.querySelector('[data-chart-title]');
+                            if (wrapper) { wrapper.style.marginTop = 'auto'; wrapper.style.marginBottom = 'auto'; }
                         });
                     });
                 });
