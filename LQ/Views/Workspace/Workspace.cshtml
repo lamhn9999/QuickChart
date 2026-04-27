@@ -140,46 +140,136 @@
             overflow: visible;
         }
 
-        /* ── Text card ───────────────────────────────────────────────────── */
-        .text-card { overflow: visible; }
-        .text-card-handle {
+        /* ── Text card (free-form canvas text block) ─────────────────────── */
+        .text-card {
+            background: transparent !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+        }
+        .text-card:hover { box-shadow: none !important; }
+        .text-card.is-dragging { opacity: 0.82; box-shadow: none !important; }
+
+        /* Hover zone: extends left to cover handle, no dead zones */
+        .tc-hover-zone {
+            position: relative;
+            padding-left: 28px;
+            margin-left: -28px;
+        }
+
+        /* Six-dot handle — left of text, aligned with first line */
+        .tc-handle {
+            position: absolute;
+            left: 2px;
+            top: 3px;
+            width: 22px;
             height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
             cursor: grab;
-            background: transparent;
-            border-radius: 4px 4px 0 0;
-            border-bottom: 1px solid rgba(0,0,0,0.05);
-            display: flex; align-items: center; justify-content: flex-end;
-            padding: 0 6px;
-            position: relative; z-index: 95;
-            transition: background 0.15s;
-            user-select: none;
-        }
-        .canvas-card.text-card:hover .text-card-handle {
-            background: rgba(233,150,122,0.12);
-        }
-        .text-card-delete {
-            width: 18px; height: 18px; border-radius: 4px; border: none;
-            background: transparent; color: rgba(0,0,0,0.25);
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; font-size: 15px; line-height: 1; padding: 0;
-            transition: background 100ms, color 100ms;
+            color: transparent;
             opacity: 0;
+            transition: opacity 140ms ease, background 100ms ease, color 100ms ease;
+            user-select: none;
+            z-index: 2;
         }
-        .canvas-card.text-card:hover .text-card-delete {
+        .tc-handle:active { cursor: grabbing; }
+        .tc-hover-zone:hover .tc-handle,
+        .text-card.is-focused .tc-handle {
             opacity: 1;
+            color: #C4C4CC;
         }
-        .text-card-delete:hover {
-            background: rgba(239,68,68,0.1); color: #EF4444;
+        .tc-handle:hover {
+            background: rgba(0,0,0,0.06) !important;
+            color: #71717A !important;
         }
-        .text-card-body {
-            padding: 8px 12px; min-height: 32px; outline: none;
-            caret-color: #18181B; white-space: pre-wrap; word-break: break-word;
+
+        /* Editable content area */
+        .tc-content {
+            min-height: 24px;
+            outline: none;
+            caret-color: #18181B;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            line-height: 1.65;
+            color: #27272A;
+            padding: 2px 4px;
         }
-        .text-card-body:empty::before {
+        .tc-content:empty::before {
             content: attr(data-placeholder);
             color: #D4D4D8;
             pointer-events: none;
         }
+
+        /* Focused state: subtle left accent line */
+        .text-card.is-focused .tc-hover-zone::before {
+            content: '';
+            position: absolute;
+            left: 26px;
+            top: 0;
+            bottom: 0;
+            width: 1.5px;
+            background: rgba(233,150,122,0.45);
+            border-radius: 1px;
+            pointer-events: none;
+        }
+
+        /* East resize strip */
+        .tc-resize-e {
+            position: absolute;
+            right: -5px;
+            top: 0;
+            bottom: 0;
+            width: 10px;
+            cursor: e-resize;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tc-resize-e::after {
+            content: '';
+            display: block;
+            width: 2px;
+            height: 20px;
+            border-radius: 1px;
+            background: rgba(0,0,0,0.15);
+            opacity: 0;
+            transition: opacity 140ms;
+        }
+        .text-card:hover .tc-resize-e::after,
+        .text-card.is-resizing .tc-resize-e::after {
+            opacity: 1;
+        }
+
+        /* Delete button — top-right corner on hover */
+        .tc-delete {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.08);
+            background: #fff;
+            color: rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+            transition: background 100ms, color 100ms, opacity 100ms;
+            opacity: 0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            z-index: 5;
+        }
+        .text-card:hover .tc-delete { opacity: 1; }
+        .tc-delete:hover { background: #FEF2F2 !important; color: #EF4444 !important; border-color: rgba(239,68,68,0.2) !important; }
 
         /* ── Drop zone active state ──────────────────────────────────────── */
         #plotPanel.drop-active #canvas-stage {
@@ -226,23 +316,27 @@
             to   { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── Block type variants ─────────────────────────────────────────── */
-        .doc-text[data-block-type="h1"] {
+        /* ── Block type variants (doc-text + tc-content) ────────────────── */
+        .doc-text[data-block-type="h1"],
+        .tc-content[data-block-type="h1"] {
             font-family: 'Syne', sans-serif;
             font-size: 2em; font-weight: 800; line-height: 1.18;
             color: #18181B; padding: 0.55em 0 0.1em; letter-spacing: -0.01em;
         }
-        .doc-text[data-block-type="h2"] {
+        .doc-text[data-block-type="h2"],
+        .tc-content[data-block-type="h2"] {
             font-family: 'Syne', sans-serif;
             font-size: 1.45em; font-weight: 700; line-height: 1.28;
             color: #18181B; padding: 0.45em 0 0.08em; letter-spacing: -0.005em;
         }
-        .doc-text[data-block-type="h3"] {
+        .doc-text[data-block-type="h3"],
+        .tc-content[data-block-type="h3"] {
             font-family: 'Syne', sans-serif;
             font-size: 1.15em; font-weight: 600; line-height: 1.35;
             color: #27272A; padding: 0.35em 0 0.06em;
         }
-        .doc-text[data-block-type="callout"] {
+        .doc-text[data-block-type="callout"],
+        .tc-content[data-block-type="callout"] {
             background: #FFF9F7;
             border-left: 3px solid #E9967A;
             padding: 0.75em 1em 0.75em 0.85em;
@@ -250,7 +344,8 @@
             color: #27272A;
             margin: 0.25em 0;
         }
-        .doc-text[data-block-type="code"] {
+        .doc-text[data-block-type="code"],
+        .tc-content[data-block-type="code"] {
             background: #F4F4F5;
             border-radius: 6px;
             padding: 0.75em 1em;

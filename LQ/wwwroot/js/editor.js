@@ -415,18 +415,30 @@
       const block = handle.currentBlock;
       if (!block) return;
 
+      const isTcCard = block.classList.contains('text-card');
+
       if (action === 'delete') {
         closeContextMenu();
         block.remove();
       } else if (action === 'duplicate') {
         closeContextMenu();
-        const clone = block.cloneNode(true);
-        clone._editorSetup = false;
-        animateIn(clone);
-        insertAfterEl(clone, block);
-        if (clone.contentEditable === 'true') {
-          setupBlockListeners(clone);
-          focusBlockEnd(clone);
+        if (isTcCard) {
+          // Duplicate the text card at a 20px offset using the exposed factory
+          const newCard = window._tcCreate?.({ x: block.offsetLeft + 20, y: block.offsetTop + 20 });
+          if (newCard) {
+            const src = block.querySelector('.tc-content');
+            const dst = newCard.querySelector('.tc-content');
+            if (src && dst) dst.innerHTML = src.innerHTML;
+          }
+        } else {
+          const clone = block.cloneNode(true);
+          clone._editorSetup = false;
+          animateIn(clone);
+          insertAfterEl(clone, block);
+          if (clone.contentEditable === 'true') {
+            setupBlockListeners(clone);
+            focusBlockEnd(clone);
+          }
         }
       } else if (action === 'turnInto') {
         const cmRect = cm.getBoundingClientRect();
@@ -444,7 +456,17 @@
       const block = handle.currentBlock;
       closeTurnMenu();
       closeContextMenu();
-      if (block) morphBlock(block, item.dataset.type);
+      if (!block) return;
+
+      if (block.classList.contains('text-card')) {
+        const content = block.querySelector('.tc-content');
+        if (content) {
+          content.dataset.blockType = item.dataset.type;
+          content.dataset.placeholder = PLACEHOLDER_MAP[item.dataset.type] || PLACEHOLDER_MAP.paragraph;
+        }
+      } else {
+        morphBlock(block, item.dataset.type);
+      }
     });
 
     // ── Close on outside click ──
@@ -452,6 +474,21 @@
       if (!cm.contains(e.target) && !el.contains(e.target) && !tm.contains(e.target)) {
         closeContextMenu();
       }
+    });
+
+    // ── TC handle tap → open context menu for free-form text cards ──
+    canvas.addEventListener('tc-handle-tap', e => {
+      const tcH = e.target.closest('.tc-handle');
+      if (!tcH) return;
+      const card = tcH.closest('.text-card');
+      if (!card) return;
+      e.stopPropagation();
+      closeContextMenu();
+      handle.currentBlock = card;
+      const rect = tcH.getBoundingClientRect();
+      cm.style.top  = `${rect.bottom + 4}px`;
+      cm.style.left = `${rect.left}px`;
+      cm.classList.add('open');
     });
 
     // ── Drag reorder ──
@@ -624,7 +661,7 @@
         return;
       }
 
-      const anchor = sel.anchorNode?.parentElement?.closest('.doc-text');
+      const anchor = sel.anchorNode?.parentElement?.closest('.doc-text, .tc-content');
       if (!anchor) { tb.classList.remove('open'); return; }
 
       const range = sel.getRangeAt(0);
@@ -849,20 +886,7 @@
   // ── Click-anywhere-to-edit ─────────────────────────────────────────────────
 
   canvas.addEventListener('click', e => {
-    if (e.target === canvas) {
-      clearSelection();
-      const blocks = getAllBlocks();
-      const last = blocks.filter(b => b.contentEditable === 'true').pop();
-      if (last) {
-        focusBlockEnd(last);
-      } else {
-        const p = makeBlock('paragraph');
-        const cur = document.getElementById('docDropCursor');
-        if (cur) canvas.insertBefore(p, cur);
-        else canvas.appendChild(p);
-        focusBlockStart(p);
-      }
-    }
+    if (e.target === canvas) clearSelection();
   });
 
   // Clear selection when refocusing a block

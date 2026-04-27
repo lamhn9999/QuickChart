@@ -171,20 +171,34 @@ function _snapWithGuides(dragging, rawX, rawY) {
 // ── Card drag ─────────────────────────────────────────────────────────────────
 
 function _makeDraggable(card) {
-    // Wire every .drag-handle inside the card (one per panel)
     card.querySelectorAll('.drag-handle').forEach(handle => {
         if (handle.dataset.dragWired) return;
         handle.dataset.dragWired = '1';
 
-        let pX0, pY0, cX0, cY0;
+        // .tc-handle uses tap-detection: a release without significant movement
+        // fires a 'tc-handle-tap' event instead of dragging. Regular handles drag immediately.
+        const isTcHandle = handle.classList.contains('tc-handle');
+        let pX0, pY0, cX0, cY0, dragging = false;
+
         const onMove = e => {
+            if (isTcHandle && !dragging) {
+                const dx = e.clientX - pX0, dy = e.clientY - pY0;
+                if (dx * dx + dy * dy < 25) return; // 5px threshold before drag starts
+                dragging = true;
+                card.classList.add('is-dragging');
+            }
+            if (isTcHandle && !dragging) return;
             const { x, y } = _snapWithGuides(card, cX0 + e.clientX - pX0, cY0 + e.clientY - pY0);
             card.style.left = `${x}px`;
             card.style.top  = `${y}px`;
             _updateCanvasSize();
         };
         const onUp = () => {
-            card.classList.remove('is-dragging');
+            if (isTcHandle && !dragging) {
+                // Short press without drag → treat as a menu-open tap
+                handle.dispatchEvent(new CustomEvent('tc-handle-tap', { bubbles: true }));
+            }
+            if (dragging || !isTcHandle) card.classList.remove('is-dragging');
             _clearGuides();
             document.removeEventListener('pointermove', onMove);
             document.removeEventListener('pointerup',   onUp);
@@ -194,9 +208,10 @@ function _makeDraggable(card) {
         handle.addEventListener('pointerdown', e => {
             if (e.target.closest('button,input,a,[role="button"]')) return;
             e.preventDefault();
+            dragging = false;
             pX0 = e.clientX; pY0 = e.clientY;
             cX0 = card.offsetLeft; cY0 = card.offsetTop;
-            card.classList.add('is-dragging');
+            if (!isTcHandle) { dragging = true; card.classList.add('is-dragging'); }
             card.style.zIndex = String(++_zOrderCounter);
             document.body.style.userSelect = 'none';
             document.body.style.cursor     = 'grabbing';
@@ -205,7 +220,6 @@ function _makeDraggable(card) {
         });
     });
 
-    // Bring card to front on any click (once)
     if (!card.dataset.draggable) {
         card.dataset.draggable = '1';
         card.addEventListener('pointerdown', () => {
@@ -327,13 +341,12 @@ export function exportCanvas() {
 
     // Text cards
     docCanvas.querySelectorAll(':scope > .text-card').forEach(card => {
-        const body = card.querySelector('.text-card-body');
+        const body = card.querySelector('.tc-content');
         if (!body) return;
-        const blockType = body.dataset.blockType || 'paragraph';
         const textStyle = `position:absolute;left:${card.offsetLeft}px;top:${card.offsetTop}px;` +
             `width:${card.offsetWidth}px;min-height:${card.offsetHeight}px;` +
-            `font-family:system-ui,sans-serif;padding:8px 12px`;
-        cardHTMLs += `<div style="${textStyle}" data-block-type="${blockType}">${body.innerHTML}</div>\n`;
+            `font-family:system-ui,sans-serif;font-size:14px;line-height:1.65;color:#27272A;padding:2px 4px`;
+        cardHTMLs += `<div style="${textStyle}">${body.innerHTML}</div>\n`;
     });
 
     const canvasBg = docCanvas.style.background || '#ffffff';
@@ -399,7 +412,32 @@ export function setCanvasBg(hex) {
 
 // ── Text card ────────────────────────────────────────────────────────────────
 
-export function createTextCard(type = 'paragraph', dropPos = null) {
+function _wireTextCardResize(card, handleE) {
+    let sx, sw;
+    const onMove = e => {
+        card.style.width = `${Math.max(160, sw + (e.clientX - sx))}px`;
+        _updateCanvasSize();
+    };
+    const onUp = () => {
+        card.classList.remove('is-resizing');
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+    };
+    handleE.addEventListener('pointerdown', e => {
+        e.stopPropagation(); e.preventDefault();
+        sx = e.clientX;
+        sw = card.offsetWidth;
+        card.classList.add('is-resizing');
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'e-resize';
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+    });
+}
+
+export function createTextCard(dropPos = null) {
     const canvas = _docCanvas();
     if (!canvas) return null;
 
@@ -410,55 +448,52 @@ export function createTextCard(type = 'paragraph', dropPos = null) {
         x: Math.max(20, (canvas.offsetWidth  / 2) - 160),
         y: Math.max(20, (canvas.offsetHeight / 2) - 30),
     };
-    card.style.cssText =
-        `position:absolute;left:${pos.x}px;top:${pos.y}px;` +
-        `width:320px;min-height:48px;z-index:${++_zOrderCounter}`;
+    card.style.cssText = `position:absolute;left:${pos.x}px;top:${pos.y}px;width:320px;z-index:${++_zOrderCounter}`;
 
-    const handle = document.createElement('div');
-    handle.className = 'drag-handle text-card-handle';
+    // Hover zone — extends left to cover the handle area, eliminating dead zones
+    const hoverZone = document.createElement('div');
+    hoverZone.className = 'tc-hover-zone';
 
-    const grip = document.createElement('div');
-    grip.className = 'text-card-grip';
-    grip.innerHTML = `<svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/></svg>`;
+    // Six-dot drag handle on the left
+    const tcHandle = document.createElement('div');
+    tcHandle.className = 'tc-handle drag-handle';
+    tcHandle.setAttribute('title', 'Drag to move');
+    tcHandle.innerHTML = `<svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/></svg>`;
 
-    const label = document.createElement('span');
-    label.className = 'text-card-label';
-    label.textContent = 'Text';
+    // Editable content area
+    const content = document.createElement('div');
+    content.className = 'tc-content';
+    content.dataset.placeholder = 'Type something…';
+    content.contentEditable = 'true';
+    content.spellcheck = false;
+    content.addEventListener('focus',  () => card.classList.add('is-focused'));
+    content.addEventListener('blur',   () => card.classList.remove('is-focused'));
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'text-card-delete';
-    deleteBtn.title = 'Delete';
-    deleteBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="1" x2="10" y2="10"/><line x1="10" y1="1" x2="1" y2="10"/></svg>`;
-    deleteBtn.addEventListener('pointerdown', e => e.stopPropagation());
-    deleteBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        card.remove();
-        _updateCanvasSize();
-    });
+    hoverZone.appendChild(tcHandle);
+    hoverZone.appendChild(content);
 
-    handle.appendChild(grip);
-    handle.appendChild(label);
-    handle.appendChild(deleteBtn);
+    // Delete button — appears on hover at top-right
+    const delBtn = document.createElement('button');
+    delBtn.className = 'tc-delete';
+    delBtn.title = 'Delete';
+    delBtn.innerHTML = `<svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>`;
+    delBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    delBtn.addEventListener('click', e => { e.stopPropagation(); card.remove(); _updateCanvasSize(); });
 
-    const body = document.createElement('div');
-    body.className = 'doc-text text-card-body';
-    body.dataset.blockType = type;
-    body.dataset.placeholder = type === 'paragraph' ? 'Type something…'
-                             : type === 'h1'        ? 'Heading 1'
-                             : type === 'h2'        ? 'Heading 2'
-                             : 'Heading 3';
-    body.contentEditable = 'true';
-    body.spellcheck = false;
+    // East resize strip — horizontal only, height stays auto
+    const resizeE = document.createElement('div');
+    resizeE.className = 'tc-resize-e';
 
-    card.appendChild(handle);
-    card.appendChild(body);
+    card.appendChild(hoverZone);
+    card.appendChild(delBtn);
+    card.appendChild(resizeE);
     canvas.appendChild(card);
 
     _makeDraggable(card);
-    _makeResizable(card, [], { minW: 80, minH: 36 });
+    _wireTextCardResize(card, resizeE);
     _updateCanvasSize();
 
-    requestAnimationFrame(() => body.focus());
+    requestAnimationFrame(() => content.focus());
     return card;
 }
 

@@ -105,7 +105,7 @@ window._chartDropOnCard = async function(combinedIndexes, targetGroupId = null) 
 
 Object.assign(window, {
     backHome, fieldClicked, closeZoom, exportCanvas,
-    addTextCard: () => createTextCard(), setCanvasSize, setCanvasBg,
+    addTextCard: () => createTextCard(), _tcCreate: createTextCard, setCanvasSize, setCanvasBg,
     headerDragStart, headerDragEnd,
     gearBtnClicked, toggleFieldTypeMenu, changeFieldType,
     filterClicked, filterPopupClicked, filterInputKey,
