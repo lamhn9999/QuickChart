@@ -379,7 +379,8 @@
     // ── Handle: show on canvas hover ──
     canvas.addEventListener('mousemove', e => {
       const block = e.target.closest('.doc-text, .doc-chart-section, .doc-divider');
-      if (!block || block.id === 'docDropCursor' || block.id === 'doc-title') {
+      if (!block || block.id === 'docDropCursor' || block.id === 'doc-title'
+          || block.closest('.text-card')) {
         scheduleHide();
         return;
       }

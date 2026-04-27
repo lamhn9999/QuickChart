@@ -13,8 +13,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
     <script src="/node_modules/chart.js/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0"></script>
-    <script src="/node_modules/gridstack/dist/gridstack-all.js"></script>
-    <link href="/node_modules/gridstack/dist/gridstack.min.css" rel="stylesheet"/>
 
 
     <style>
@@ -43,70 +41,184 @@
         th[data-index].header-dragging { opacity: 0.4; transition: opacity 0.12s ease; }
 
         /* ── Drop zone: empty panel ──────────────────────────────────────── */
-        #plotPanel { background: #EFEFEF; }
-
-        /* ── Drop zone: chart card ───────────────────────────────────────── */
-        .grid-item-content.chart-drop-target {
-            outline: 2px solid rgba(35,131,226,0.7);
-            outline-offset: -2px;
-            background: rgba(35,131,226,0.04);
-        }
-        .grid-item-content { transition: outline 0.12s ease, background 0.12s ease; }
-
-        /* ── Document Canvas ─────────────────────────────────────────────── */
-        #doc-canvas {
+        #plotPanel {
+            background: #EFEFEF;
             display: flex;
             flex-direction: column;
-            background: #fff;
-            box-shadow:
-                0 0 0 1px rgba(0,0,0,0.04),
-                0 2px 8px rgba(0,0,0,0.04),
-                0 12px 40px rgba(0,0,0,0.07);
-            border-radius: 4px;
-            margin: 1.5rem auto;
-            padding: 3rem 4rem 8rem;
-            max-width: 860px;
-            width: calc(100% - 3rem);
-            box-sizing: border-box;
+            overflow: hidden;
         }
 
-        /* Text blocks — feel like a word processor */
-        .doc-text {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 15px; line-height: 1.82; color: #18181B;
-            caret-color: #18181B; outline: none;
-            min-height: 1.82em; white-space: pre-wrap; word-break: break-word;
-            padding: 3px 0;
-        }
-        .doc-text:empty::before {
-            content: attr(data-placeholder);
-            color: #C0C0CC; pointer-events: none; display: block;
+        /* ── Canvas stage ────────────────────────────────────────────────── */
+        #canvas-stage {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 48px 48px 100px;
+            min-height: 0;
         }
 
-        /* Chart section */
-        .doc-chart-section { margin: 2.5rem 0; }
-
-        /* Drop cursor — blue insertion line that snaps between blocks during drag */
-        .doc-drop-cursor {
-            height: 2px;
-            margin: 2px 0;
-            background: #2383E2;
-            border-radius: 2px;
-            pointer-events: none;
-            position: relative;
+        /* ── Bottom toolbar ──────────────────────────────────────────────── */
+        #canvas-bottom-bar {
+            background: #EFEFEF;
+            padding: 10px 0 14px;
+            display: flex;
+            justify-content: center;
             flex-shrink: 0;
         }
-        .doc-drop-cursor::before {
-            content: '';
-            position: absolute;
-            left: -5px; top: -4px;
-            width: 10px; height: 10px;
-            border-radius: 50%;
-            background: #2383E2;
+        #canvas-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 4px;
+            background: #2a2a2a;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+        }
+        .tool-btn {
+            width: 36px; height: 36px; border-radius: 8px; border: none;
+            background: transparent; color: rgba(255,255,255,0.65);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: background 120ms, color 120ms;
+        }
+        .tool-btn:hover  { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); }
+        .tool-btn.active { background: #E9967A; color: white; }
+        .tool-sep        { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 4px; }
+
+        /* ── Right properties panel ──────────────────────────────────────── */
+        #right-panel {
+            width: 200px; flex-shrink: 0; background: #fff;
+            border-left: 1px solid #e4e4e7; overflow-y: auto;
+            font-family: 'DM Sans', sans-serif;
+        }
+        .rp-header {
+            font-size: 11px; font-weight: 600; color: #71717a; padding: 14px 14px 6px;
+            letter-spacing: .05em; text-transform: uppercase;
+        }
+        .rp-section  { padding: 0 14px 14px; }
+        .rp-label    { font-size: 11px; color: #a1a1aa; margin-bottom: 6px; }
+        .rp-btn-row  { display: flex; gap: 6px; }
+        .rp-size-btn {
+            flex: 1; height: 28px; border-radius: 6px; border: 1.5px solid #e4e4e7;
+            background: white; font-size: 11px; font-weight: 500; color: #52525b;
+            cursor: pointer; transition: border-color 120ms, color 120ms, background 120ms;
+        }
+        .rp-size-btn.active {
+            border-color: #2383E2; color: #2383E2; background: rgba(35,131,226,0.06);
+        }
+        .rp-color-row { display: flex; align-items: center; gap: 8px; }
+        .rp-swatch {
+            width: 24px; height: 24px; border-radius: 4px; border: 1px solid #e4e4e7;
+            background: #fff; cursor: pointer; flex-shrink: 0;
+        }
+        .rp-hex-input {
+            flex: 1; height: 28px; border: 1px solid #e4e4e7; border-radius: 6px;
+            padding: 0 8px; font-size: 11px; color: #374151; outline: none;
+            font-family: 'SFMono-Regular', monospace;
+        }
+        .rp-hex-input:focus { border-color: #2383E2; }
+
+        /* ── Drop target: column header onto existing card ───────────────── */
+        .canvas-card-panels > .flex.flex-col.chart-drop-target {
+            outline: 2px solid rgba(35,131,226,0.7);
+            outline-offset: -2px;
+            background: rgba(35,131,226,0.03);
         }
 
-        /* Full-width charts (one per row) */
-        .doc-chart-section .chartGrid { --grid-cols: 1 !important; }
+        /* ── Free-form canvas ────────────────────────────────────────────── */
+        #doc-canvas {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+            min-width: 1280px;
+            min-height: 720px;
+            background: #ffffff;
+            border-radius: 4px;
+            flex-shrink: 0;
+            box-shadow: 0 8px 48px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.25);
+            overflow: visible;
+        }
+
+        /* ── Text card ───────────────────────────────────────────────────── */
+        .text-card { overflow: visible; }
+        .text-card-handle {
+            height: 22px;
+            cursor: grab;
+            background: transparent;
+            border-radius: 4px 4px 0 0;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            display: flex; align-items: center; justify-content: flex-end;
+            padding: 0 6px;
+            position: relative; z-index: 95;
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .canvas-card.text-card:hover .text-card-handle {
+            background: rgba(233,150,122,0.12);
+        }
+        .text-card-delete {
+            width: 18px; height: 18px; border-radius: 4px; border: none;
+            background: transparent; color: rgba(0,0,0,0.25);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 15px; line-height: 1; padding: 0;
+            transition: background 100ms, color 100ms;
+            opacity: 0;
+        }
+        .canvas-card.text-card:hover .text-card-delete {
+            opacity: 1;
+        }
+        .text-card-delete:hover {
+            background: rgba(239,68,68,0.1); color: #EF4444;
+        }
+        .text-card-body {
+            padding: 8px 12px; min-height: 32px; outline: none;
+            caret-color: #18181B; white-space: pre-wrap; word-break: break-word;
+        }
+        .text-card-body:empty::before {
+            content: attr(data-placeholder);
+            color: #D4D4D8;
+            pointer-events: none;
+        }
+
+        /* ── Drop zone active state ──────────────────────────────────────── */
+        #plotPanel.drop-active #canvas-stage {
+            outline: 2px dashed rgba(233,150,122,0.5);
+            outline-offset: -4px;
+        }
+
+        /* ── Canvas cards ────────────────────────────────────────────────── */
+        .canvas-card {
+            position: absolute;
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
+            min-width: 280px;
+            min-height: 160px;
+            overflow: visible;
+            box-sizing: border-box;
+            transition: box-shadow .15s ease;
+        }
+        .canvas-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.11); }
+        .canvas-card.is-dragging {
+            box-shadow: 0 20px 60px rgba(0,0,0,.18), 0 4px 16px rgba(0,0,0,.1);
+            opacity: .95;
+        }
+
+        /* Panels flex-row inside a card */
+        .canvas-card-panels {
+            display: flex;
+            flex-direction: row;
+            height: 100%;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+        .canvas-card-panels > .flex.flex-col {
+            flex: 1;
+            min-width: 0;
+            border-right: 1px solid rgba(0,0,0,.05);
+        }
+        .canvas-card-panels > .flex.flex-col:last-child { border-right: none; }
 
         /* ── Editor UX: animations ────────────────────────────────────────── */
         @@keyframes blockIn {
@@ -601,12 +713,56 @@
             id="drag"
             class="hidden md:block mx-1 w-1 rounded-full cursor-col-resize bg-zinc-200 transition-opacity duration-500 group-[.is-collapsed]:opacity-0 group-[.is-collapsed]:pointer-events-none"
         ></div>
-        <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full overflow-auto relative z-10" id="plotPanel">
-            <div id="doc-canvas">
-                <div class="doc-text" contenteditable="true" data-block-type="paragraph" data-placeholder="Start writing, or press '/' for commands…" spellcheck="false"></div>
-                <div class="doc-drop-cursor" id="docDropCursor" style="display:none"></div>
+        <!-- ── Canvas stage ──────────────────────────────────────────── -->
+        <div class="flex flex-col flex-1 w-full md:min-w-1/5 min-h-0 md:max-h-full relative z-10" id="plotPanel">
+            <div id="canvas-stage">
+                <div id="doc-canvas"></div>
+            </div>
+            <div id="canvas-bottom-bar">
+                <div id="canvas-toolbar">
+                    <button class="tool-btn active" id="tool-cursor" title="Select">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 3l14 9-7 1-3 7z"/>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" id="tool-text" onclick="addTextCard()" title="Add text">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="4 7 4 4 20 4 20 7"/>
+                            <line x1="9" y1="20" x2="15" y2="20"/>
+                            <line x1="12" y1="4" x2="12" y2="20"/>
+                        </svg>
+                    </button>
+                    <div class="tool-sep"></div>
+                    <button class="tool-btn" onclick="exportCanvas()" title="Export HTML">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
+
+        <!-- ── Right properties panel ────────────────────────────────── -->
+        <div id="right-panel">
+            <div class="rp-header">Canvas</div>
+            <div class="rp-section">
+                <div class="rp-label">Size</div>
+                <div class="rp-btn-row">
+                    <button class="rp-size-btn active" id="btn-size-wide" onclick="setCanvasSize('wide')">16:9</button>
+                    <button class="rp-size-btn" id="btn-size-a4" onclick="setCanvasSize('a4')">A4</button>
+                </div>
+            </div>
+            <div class="rp-section">
+                <div class="rp-label">Background</div>
+                <div class="rp-color-row">
+                    <div class="rp-swatch" id="canvas-bg-swatch"></div>
+                    <input id="canvas-bg-input" type="text" class="rp-hex-input" value="#ffffff" oninput="setCanvasBg(this.value)">
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 <script>
@@ -647,50 +803,19 @@
 </script>
 
 <script>
-// ── Document: drag-cursor chart insertion ─────────────────────────────────────
+// ── Canvas: prevent default drag-over behavior, show drop affordance ──────────
 (function () {
-    const canvas = document.getElementById('doc-canvas');
-    const panel  = document.getElementById('plotPanel');
-    const cursor = document.getElementById('docDropCursor');
-    if (!canvas || !panel || !cursor) return;
-
-    function _blocks() {
-        return Array.from(canvas.children).filter(el => el !== cursor);
-    }
-
-    function _placeCursor(mouseY) {
-        const blocks = _blocks();
-        let insertBefore = null;
-        for (let i = 0; i < blocks.length; i++) {
-            const r = blocks[i].getBoundingClientRect();
-            if (mouseY < r.top + r.height / 2) { insertBefore = blocks[i]; break; }
-        }
-        if (insertBefore) canvas.insertBefore(cursor, insertBefore);
-        else              canvas.appendChild(cursor);
-        cursor.style.display = '';
-    }
-
-    canvas.addEventListener('dragover', function (e) {
+    const panel = document.getElementById('plotPanel');
+    if (!panel) return;
+    // Suppress drop-onto-card propagation reaching the panel drop handler
+    panel.addEventListener('dragover', function (e) {
         if (!e.dataTransfer.types.includes('application/json')) return;
-        e.preventDefault();
-        if (e.target.closest('.grid-item-content')) {
-            cursor.style.display = 'none';
-        } else {
-            _placeCursor(e.clientY);
+        // Suppress only when hovering a card panel (handled by chart.js)
+        if (e.target.closest('.canvas-card-panels')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'none';
         }
-    });
-
-    canvas.addEventListener('dragleave', function (e) {
-        if (!canvas.contains(e.relatedTarget)) cursor.style.display = 'none';
-    });
-
-    panel.addEventListener('drop', function (e) {
-        if (e.target.closest && e.target.closest('.grid-item-content')) {
-            cursor.style.display = 'none';
-            return;
-        }
-        cursor.style.display = 'none';
-    }, true); // capture phase — before main.js createChartGroup
+    }, true); // capture phase
 })();
 </script>
 

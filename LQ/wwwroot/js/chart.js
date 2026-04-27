@@ -6,9 +6,7 @@ export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 
 
 // ── Chart group tracking ──────────────────────────────────────────────────────
 let _groupCounter = 0;
-const _groupData   = new Map(); // groupId → { gridItems: Element[], instances: Chart[], section: Element }
-let _draggingGridItem  = null;
-let _dragTargetSection = null; // { section, groupId } of the section currently hovered during a drag
+const _groupData  = new Map(); // groupId → { card, instances, ro }
 
 // ── Global chart defaults ─────────────────────────────────────────────────────
 Chart.defaults.plugins.tooltip.cornerRadius = 4;
@@ -31,8 +29,6 @@ const stackedAxis = {
     ...axisStyle,
     stacked: true
 };
-
-var gridStack;
 
 /**
  * Switch a chart's text / grid colours to match a container background.
@@ -75,6 +71,396 @@ let _zoomPanelCleanup = null;
 // ── Navigator state ───────────────────────────────────────────────────────────
 let _navChartInst = null;   // Chart.js instance for the mini overview
 let _navDragState  = null;  // active drag: { type, startX, startLeft, startWidth }
+
+// ── Free-form canvas engine ───────────────────────────────────────────────────
+// Each chart group is an absolutely-positioned .canvas-card inside #doc-canvas.
+// Supports pointer-based drag (with alignment snap guides) and 8-handle resize.
+
+const SNAP_THRESHOLD = 6;
+let   _zOrderCounter = 10;
+
+function _docCanvas() { return document.getElementById('doc-canvas'); }
+
+function _getNextCardPosition() {
+    const canvas = _docCanvas();
+    if (!canvas) return { x: 20, y: 20 };
+    const n = canvas.querySelectorAll(':scope > .canvas-card').length;
+    const step = n % 10;
+    return { x: 20 + step * 28, y: 20 + step * 28 };
+}
+
+function _updateCanvasSize() {
+    const canvas = _docCanvas();
+    if (!canvas) return;
+    let maxH = 600, maxW = 800;
+    canvas.querySelectorAll(':scope > .canvas-card').forEach(c => {
+        maxH = Math.max(maxH, c.offsetTop  + c.offsetHeight);
+        maxW = Math.max(maxW, c.offsetLeft + c.offsetWidth);
+    });
+    canvas.style.minHeight = `${maxH + 80}px`;
+    canvas.style.minWidth  = `${maxW + 80}px`;
+}
+
+// ── Alignment guide overlay ───────────────────────────────────────────────────
+
+function _guidesOverlay() {
+    const canvas = _docCanvas();
+    if (!canvas) return null;
+    let el = document.getElementById('_canvas-guides');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = '_canvas-guides';
+        el.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:8000;overflow:hidden';
+        canvas.prepend(el);
+    }
+    return el;
+}
+
+function _clearGuides() {
+    const el = document.getElementById('_canvas-guides');
+    if (el) el.innerHTML = '';
+}
+
+function _snapWithGuides(dragging, rawX, rawY) {
+    const canvas = _docCanvas();
+    if (!canvas) return { x: rawX, y: rawY };
+    const others = Array.from(canvas.querySelectorAll(':scope > .canvas-card')).filter(c => c !== dragging);
+    const cW = dragging.offsetWidth, cH = dragging.offsetHeight;
+    let x = rawX, y = rawY;
+    const vSet = new Set(), hSet = new Set();
+
+    others.forEach(o => {
+        const ox = o.offsetLeft, oy = o.offsetTop, ow = o.offsetWidth, oh = o.offsetHeight;
+        [
+            [x,        ox       ],
+            [x + cW,   ox + ow  ],
+            [x + cW/2, ox + ow/2],
+            [x,        ox + ow  ],
+            [x + cW,   ox       ],
+        ].forEach(([dv, ov]) => {
+            if (Math.abs(dv - ov) < SNAP_THRESHOLD) { x += ov - dv; vSet.add(ov); }
+        });
+        [
+            [y,        oy       ],
+            [y + cH,   oy + oh  ],
+            [y + cH/2, oy + oh/2],
+            [y,        oy + oh  ],
+            [y + cH,   oy       ],
+        ].forEach(([dv, ov]) => {
+            if (Math.abs(dv - ov) < SNAP_THRESHOLD) { y += ov - dv; hSet.add(ov); }
+        });
+    });
+
+    const overlay = _guidesOverlay();
+    if (overlay) {
+        overlay.innerHTML = '';
+        vSet.forEach(gx => {
+            const ln = document.createElement('div');
+            ln.style.cssText = `position:absolute;left:${gx}px;top:0;bottom:0;width:1px;background:rgba(59,130,246,.7)`;
+            overlay.appendChild(ln);
+        });
+        hSet.forEach(gy => {
+            const ln = document.createElement('div');
+            ln.style.cssText = `position:absolute;top:${gy}px;left:0;right:0;height:1px;background:rgba(59,130,246,.7)`;
+            overlay.appendChild(ln);
+        });
+    }
+    return { x: Math.max(0, x), y: Math.max(0, y) };
+}
+
+// ── Card drag ─────────────────────────────────────────────────────────────────
+
+function _makeDraggable(card) {
+    // Wire every .drag-handle inside the card (one per panel)
+    card.querySelectorAll('.drag-handle').forEach(handle => {
+        if (handle.dataset.dragWired) return;
+        handle.dataset.dragWired = '1';
+
+        let pX0, pY0, cX0, cY0;
+        const onMove = e => {
+            const { x, y } = _snapWithGuides(card, cX0 + e.clientX - pX0, cY0 + e.clientY - pY0);
+            card.style.left = `${x}px`;
+            card.style.top  = `${y}px`;
+            _updateCanvasSize();
+        };
+        const onUp = () => {
+            card.classList.remove('is-dragging');
+            _clearGuides();
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup',   onUp);
+            document.body.style.userSelect = '';
+            document.body.style.cursor     = '';
+        };
+        handle.addEventListener('pointerdown', e => {
+            if (e.target.closest('button,input,a,[role="button"]')) return;
+            e.preventDefault();
+            pX0 = e.clientX; pY0 = e.clientY;
+            cX0 = card.offsetLeft; cY0 = card.offsetTop;
+            card.classList.add('is-dragging');
+            card.style.zIndex = String(++_zOrderCounter);
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor     = 'grabbing';
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup',   onUp);
+        });
+    });
+
+    // Bring card to front on any click (once)
+    if (!card.dataset.draggable) {
+        card.dataset.draggable = '1';
+        card.addEventListener('pointerdown', () => {
+            card.style.zIndex = String(++_zOrderCounter);
+        }, true);
+    }
+}
+
+// ── Card resize (8 handles) ───────────────────────────────────────────────────
+
+function _makeResizable(card, instancesRef, opts = {}) {
+    const minW = opts.minW ?? 280;
+    const minH = opts.minH ?? 160;
+    const DIRS = [
+        ['nw', 'top:-5px;left:-5px;width:10px;height:10px;cursor:nw-resize;border-radius:50%'],
+        ['n',  'top:-4px;left:14px;right:14px;height:8px;cursor:n-resize'],
+        ['ne', 'top:-5px;right:-5px;width:10px;height:10px;cursor:ne-resize;border-radius:50%'],
+        ['e',  'top:14px;right:-4px;bottom:14px;width:8px;cursor:e-resize'],
+        ['se', 'bottom:-5px;right:-5px;width:10px;height:10px;cursor:se-resize;border-radius:50%'],
+        ['s',  'bottom:-4px;left:14px;right:14px;height:8px;cursor:s-resize'],
+        ['sw', 'bottom:-5px;left:-5px;width:10px;height:10px;cursor:sw-resize;border-radius:50%'],
+        ['w',  'top:14px;left:-4px;bottom:14px;width:8px;cursor:w-resize'],
+    ];
+    DIRS.forEach(([dir, css]) => {
+        const h = document.createElement('div');
+        h.dataset.resizeDir = dir;
+        h.style.cssText = `position:absolute;${css};z-index:90;`;
+        card.appendChild(h);
+
+        let sx, sy, sw, sh, sl, st;
+        const onMove = e => {
+            const dx = e.clientX - sx, dy = e.clientY - sy;
+            let W = sw, H = sh, L = sl, T = st;
+            if (dir.includes('e')) W = Math.max(minW, sw + dx);
+            if (dir.includes('s')) H = Math.max(minH, sh + dy);
+            if (dir.includes('w')) { W = Math.max(minW, sw - dx); L = sl + (sw - W); }
+            if (dir.includes('n')) { H = Math.max(minH, sh - dy); T = st + (sh - H); }
+            card.style.width  = `${W}px`;
+            card.style.height = `${H}px`;
+            card.style.left   = `${L}px`;
+            card.style.top    = `${T}px`;
+            instancesRef.forEach(c => c.resize());
+            _updateCanvasSize();
+        };
+        const onUp = () => {
+            card.classList.remove('is-resizing');
+            document.body.style.userSelect = '';
+            document.body.style.cursor     = '';
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup',   onUp);
+        };
+        h.addEventListener('pointerdown', e => {
+            e.stopPropagation(); e.preventDefault();
+            sx = e.clientX; sy = e.clientY;
+            sw = card.offsetWidth; sh = card.offsetHeight;
+            sl = card.offsetLeft;  st = card.offsetTop;
+            card.classList.add('is-resizing');
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor     = window.getComputedStyle(h).cursor;
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup',   onUp);
+        });
+    });
+}
+
+// ── HTML export ───────────────────────────────────────────────────────────────
+
+export function exportCanvas() {
+    const docCanvas = _docCanvas();
+    if (!docCanvas) return;
+    const cards = Array.from(docCanvas.querySelectorAll(':scope > .canvas-card'));
+    if (cards.length === 0) { alert('No charts to export.'); return; }
+
+    let maxR = 80, maxB = 80;
+    cards.forEach(c => {
+        maxR = Math.max(maxR, c.offsetLeft + c.offsetWidth  + 40);
+        maxB = Math.max(maxB, c.offsetTop  + c.offsetHeight + 40);
+    });
+
+    const scriptLines = [];
+    let   chartIdx = 0;
+    let   cardHTMLs = '';
+
+    cards.forEach(card => {
+        const bg = card.querySelector('canvas')?.style.backgroundColor || '#ffffff';
+        const cardStyle = `position:absolute;left:${card.offsetLeft}px;top:${card.offsetTop}px;` +
+            `width:${card.offsetWidth}px;background:${bg};border-radius:14px;` +
+            `box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);overflow:hidden`;
+
+        let panelsHTML = '';
+        card.querySelectorAll('.canvas-card-panels > .flex.flex-col').forEach(panel => {
+            let wrappersHTML = '';
+            panel.querySelectorAll('[data-chart-title]').forEach(wrapper => {
+                if (wrapper.style.display === 'none') return;
+                const cvs = wrapper.querySelector('canvas');
+                if (!cvs) return;
+                const inst = Chart.getChart(cvs);
+                if (!inst) return;
+                const id = `ec${chartIdx++}`;
+                const W  = cvs.offsetWidth  || 340;
+                const H  = cvs.offsetHeight || 220;
+                wrappersHTML += `<canvas id="${id}" width="${W}" height="${H}" style="display:block;width:100%;height:${H}px"></canvas>`;
+                try {
+                    const cfg = JSON.parse(JSON.stringify(inst.config, (_k, v) =>
+                        typeof v === 'function' ? undefined : v));
+                    if (cfg.options) {
+                        cfg.options.animation         = false;
+                        cfg.options.responsive        = false;
+                        cfg.options.maintainAspectRatio = false;
+                    }
+                    scriptLines.push(`(function(){var c=${JSON.stringify(cfg)};new Chart(document.getElementById('${id}'),c);})();`);
+                } catch { /* skip broken chart */ }
+            });
+            if (wrappersHTML) panelsHTML += `<div style="flex:1;min-width:0">${wrappersHTML}</div>`;
+        });
+
+        if (panelsHTML) cardHTMLs += `<div style="${cardStyle}"><div style="display:flex;flex-direction:row;height:100%">${panelsHTML}</div></div>\n`;
+    });
+
+    // Text cards
+    docCanvas.querySelectorAll(':scope > .text-card').forEach(card => {
+        const body = card.querySelector('.text-card-body');
+        if (!body) return;
+        const blockType = body.dataset.blockType || 'paragraph';
+        const textStyle = `position:absolute;left:${card.offsetLeft}px;top:${card.offsetTop}px;` +
+            `width:${card.offsetWidth}px;min-height:${card.offsetHeight}px;` +
+            `font-family:system-ui,sans-serif;padding:8px 12px`;
+        cardHTMLs += `<div style="${textStyle}" data-block-type="${blockType}">${body.innerHTML}</div>\n`;
+    });
+
+    const canvasBg = docCanvas.style.background || '#ffffff';
+    const textBlockCSS = `[data-block-type="h1"]{font-size:2em;font-weight:800;line-height:1.18;color:#18181B}[data-block-type="h2"]{font-size:1.45em;font-weight:700;line-height:1.28;color:#18181B}[data-block-type="h3"]{font-size:1.15em;font-weight:600;line-height:1.35;color:#27272A}`;
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0"><\/script>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{background:#EFEFEF;padding:48px;font-family:system-ui,sans-serif}#_cv{position:relative;width:${maxR}px;min-height:${maxB}px;background:${canvasBg};border-radius:8px;margin:0 auto;box-shadow:0 8px 48px rgba(0,0,0,.5)}${textBlockCSS}</style>
+</head>
+<body>
+  <div id="_cv">
+${cardHTMLs}
+  </div>
+  <script>
+${scriptLines.join('\n')}
+  <\/script>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = 'dashboard.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// ── Canvas size + background ─────────────────────────────────────────────────
+
+const CANVAS_SIZES = {
+    wide: { w: 1280, h: 720  },
+    a4:   { w: 794,  h: 1123 },
+};
+
+export function setCanvasSize(key) {
+    const { w, h } = CANVAS_SIZES[key] ?? CANVAS_SIZES.wide;
+    const canvas = _docCanvas();
+    if (!canvas) return;
+    canvas.style.width     = `${w}px`;
+    canvas.style.height    = `${h}px`;
+    canvas.style.minWidth  = `${w}px`;
+    canvas.style.minHeight = `${h}px`;
+    document.querySelectorAll('.rp-size-btn').forEach(b => {
+        b.classList.toggle('active', b.id === `btn-size-${key}`);
+    });
+}
+
+export function setCanvasBg(hex) {
+    if (!/^#[0-9a-fA-F]{3,6}$/.test(hex)) return;
+    const canvas = _docCanvas();
+    if (!canvas) return;
+    canvas.style.background = hex;
+    const swatch = document.getElementById('canvas-bg-swatch');
+    if (swatch) swatch.style.background = hex;
+}
+
+// ── Text card ────────────────────────────────────────────────────────────────
+
+export function createTextCard(type = 'paragraph', dropPos = null) {
+    const canvas = _docCanvas();
+    if (!canvas) return null;
+
+    const card = document.createElement('div');
+    card.classList.add('canvas-card', 'text-card');
+
+    const pos = dropPos ?? {
+        x: Math.max(20, (canvas.offsetWidth  / 2) - 160),
+        y: Math.max(20, (canvas.offsetHeight / 2) - 30),
+    };
+    card.style.cssText =
+        `position:absolute;left:${pos.x}px;top:${pos.y}px;` +
+        `width:320px;min-height:48px;z-index:${++_zOrderCounter}`;
+
+    const handle = document.createElement('div');
+    handle.className = 'drag-handle text-card-handle';
+
+    const grip = document.createElement('div');
+    grip.className = 'text-card-grip';
+    grip.innerHTML = `<svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/></svg>`;
+
+    const label = document.createElement('span');
+    label.className = 'text-card-label';
+    label.textContent = 'Text';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'text-card-delete';
+    deleteBtn.title = 'Delete';
+    deleteBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="1" x2="10" y2="10"/><line x1="10" y1="1" x2="1" y2="10"/></svg>`;
+    deleteBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    deleteBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        card.remove();
+        _updateCanvasSize();
+    });
+
+    handle.appendChild(grip);
+    handle.appendChild(label);
+    handle.appendChild(deleteBtn);
+
+    const body = document.createElement('div');
+    body.className = 'doc-text text-card-body';
+    body.dataset.blockType = type;
+    body.dataset.placeholder = type === 'paragraph' ? 'Type something…'
+                             : type === 'h1'        ? 'Heading 1'
+                             : type === 'h2'        ? 'Heading 2'
+                             : 'Heading 3';
+    body.contentEditable = 'true';
+    body.spellcheck = false;
+
+    card.appendChild(handle);
+    card.appendChild(body);
+    canvas.appendChild(card);
+
+    _makeDraggable(card);
+    _makeResizable(card, [], { minW: 80, minH: 36 });
+    _updateCanvasSize();
+
+    requestAnimationFrame(() => body.focus());
+    return card;
+}
 
 // ── Chart-type conversion ─────────────────────────────────────────────────────
 
@@ -1292,19 +1678,6 @@ function _onEscClose(e) {
     if (e.key === 'Escape') closeZoom();
 }
 
-// ── initChartWidth ────────────────────────────────────────────────────────────
-// Initialises the chart card to fit the doc-canvas content area.
-// Sets the width on gridContainer (the grid-stack-item GridStack actually resizes)
-// and makes gridItemContent fill it with width:100% so GridStack resize keeps working.
-function initChartWidth(gridContainer, gridItemContent) {
-    const docCanvas = document.getElementById('doc-canvas');
-    if (!docCanvas) return;
-    const style = getComputedStyle(docCanvas);
-    const paddingH = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-    gridContainer.style.width = `${docCanvas.clientWidth - paddingH}px`;
-    gridContainer.setAttribute('gs-w', '12'); // full column span — GridStack respects it on init
-    gridItemContent.style.width = '100%';
-}
 
 // ── appendChart ───────────────────────────────────────────────────────────────
 // Builds ONE panel-level header toolbar, wraps in grid item, registers.
@@ -1484,13 +1857,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
                     cell.addEventListener('click', () => {
                         wrappers.forEach((w, i) => { w.style.display = i === matchIdx ? 'flex' : 'none'; });
                         const c = Chart.getChart(wrappers[matchIdx].querySelector('canvas'));
-                        const doFit = () => {
-                            const gId = parseInt(gridItemContent.dataset.groupId);
-                            const grid = _groupData.get(gId)?.grid;
-                            _fitGridItem(gridContainer, grid, wrappers[matchIdx]);
-                        };
-                        if (c) requestAnimationFrame(() => { c.resize(); requestAnimationFrame(doFit); });
-                        else   requestAnimationFrame(doFit);
+                        if (c) requestAnimationFrame(() => c.resize());
                         turnPanel.classList.add('hidden');
                         setDeckState(false);
                     });
@@ -1550,47 +1917,31 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
     // Prepend the single header to the panel div (before all chart wrappers)
     panelDivCopy.prepend(header);
 
-    const gridItemContent = document.createElement("div");
-    gridItemContent.className = "grid-item-content grid-stack-item-content";
-    gridItemContent.appendChild(panelDivCopy);
-
-    // ── Route GridStack resize to Chart.js ────────────────────────────────
-    // Observe gridContainer (the grid-stack-item) rather than gridItemContent:
-    // gridItemContent can't report growth because the canvas inside it blocks
-    // it from widening — the parent (gridContainer) is what GridStack actually resizes.
-    const _ro = new ResizeObserver(() => {
-        gridItemContent.querySelectorAll('canvas').forEach(canvas => {
-            const ch = Chart.getChart(canvas);
-            if (ch) ch.resize();
-        });
-    });
-    _ro.observe(gridContainer);
-
     // ── Store group metadata on DOM for drop-onto-card ────────────────────
     if (groupId !== null) {
-        gridItemContent.dataset.groupId      = String(groupId);
-        gridItemContent.dataset.fieldIndexes = JSON.stringify(fieldIndexes ? [...fieldIndexes] : []);
+        panelDivCopy.dataset.groupId      = String(groupId);
+        panelDivCopy.dataset.fieldIndexes = JSON.stringify(fieldIndexes ? [...fieldIndexes] : []);
     }
 
-    // ── Drop zone: another header dragged onto this card ──────────────────
+    // ── Drop zone: another column header dragged onto this panel ─────────
     if (groupId !== null) {
-        gridItemContent.addEventListener('dragover', e => {
+        panelDivCopy.addEventListener('dragover', e => {
             if (!e.dataTransfer.types.includes('application/json')) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
-            gridItemContent.classList.add('chart-drop-target');
+            panelDivCopy.classList.add('chart-drop-target');
         });
-        gridItemContent.addEventListener('dragleave', e => {
-            if (!gridItemContent.contains(e.relatedTarget))
-                gridItemContent.classList.remove('chart-drop-target');
+        panelDivCopy.addEventListener('dragleave', e => {
+            if (!panelDivCopy.contains(e.relatedTarget))
+                panelDivCopy.classList.remove('chart-drop-target');
         });
-        gridItemContent.addEventListener('drop', e => {
+        panelDivCopy.addEventListener('drop', e => {
             e.preventDefault();
             e.stopPropagation();
-            gridItemContent.classList.remove('chart-drop-target');
+            panelDivCopy.classList.remove('chart-drop-target');
             try {
                 const dragged  = JSON.parse(e.dataTransfer.getData('application/json'));
-                const existing = JSON.parse(gridItemContent.dataset.fieldIndexes || '[]');
+                const existing = JSON.parse(panelDivCopy.dataset.fieldIndexes || '[]');
                 const combined = [...new Set([...existing, ...dragged])];
                 if (typeof window._chartDropOnCard === 'function')
                     window._chartDropOnCard(combined, groupId);
@@ -1598,9 +1949,8 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
         });
     }
 
-    initChartWidth(gridContainer, gridItemContent);
-    gridContainer.appendChild(gridItemContent);
-    return gridItemContent;
+    gridContainer.appendChild(panelDivCopy);
+    return panelDivCopy;
 }
 
 // ── _buildPanel ───────────────────────────────────────────────────────────────
@@ -1893,114 +2243,11 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
     appendChart(panelSamples, pIdx, wrappers, panelDiv, gridContainer, groupId, fieldIndexes);
 }
 
-// ── _fitGridItem ──────────────────────────────────────────────────────────────
-// Re-measures a grid item's panel height and resizes the GridStack row span to
-// fit, then stretches the panel to fill the card and centres the chart wrapper.
-function _fitGridItem(gridItem, grid, activeWrapper) {
-    const panel = gridItem.querySelector('.grid-item-content > .flex.flex-col');
-    if (!panel || !grid) return;
-
-    panel.style.height = '';
-    if (activeWrapper) { activeWrapper.style.marginTop = ''; activeWrapper.style.marginBottom = ''; }
-
-    const cellHeight = grid.getCellHeight(true);
-    const rows = Math.max(1, Math.ceil(panel.getBoundingClientRect().height / cellHeight)) + 1;
-    grid.update(gridItem, { h: rows });
-    grid.compact();
-
-    requestAnimationFrame(() => {
-        panel.style.height = '100%';
-        if (activeWrapper) { activeWrapper.style.marginTop = 'auto'; activeWrapper.style.marginBottom = 'auto'; }
-    });
-}
-
-// ── _wireGridDragListeners ────────────────────────────────────────────────────
-function _wireGridDragListeners(grid, groupId) {
-    grid.on('dragstart', (event, el) => {
-        _draggingGridItem = el;
-        console.log('[drag] dragging grid item:', el);
-    });
-    grid.on('dragstop', () => {
-        const draggedEl = _draggingGridItem;
-        const target    = _dragTargetSection;
-        _draggingGridItem  = null;
-        _dragTargetSection = null;
-        if (target) setTimeout(() => transitionGridItem(draggedEl, groupId, target.groupId), 0);
-    });
-}
-
-// ── transitionGridItem ────────────────────────────────────────────────────────
-// Moves draggedEl (.chartGrid) from fromGroupId's section into toGroupId's section,
-// equalises widths, reinitialises GridStack, and removes the now-empty source section.
-function transitionGridItem(draggedEl, fromGroupId, toGroupId) {
-    if (!draggedEl || fromGroupId === toGroupId) return;
-    const fromData = _groupData.get(fromGroupId);
-    const toData   = _groupData.get(toGroupId);
-    if (!fromData || !toData) return;
-
-    // a. Destroy both GridStacks (keep DOM nodes)
-    fromData.grid?.destroy(false);
-    toData.grid?.destroy(false);
-
-    // b. Move the dragged .chartGrid into the target section
-    toData.section.appendChild(draggedEl);
-
-    // c. Merge metadata into target group
-    toData.gridItems = [...toData.gridItems, ...fromData.gridItems];
-    toData.instances = [...toData.instances, ...fromData.instances];
-    fromData.gridItems.forEach(el => { el.dataset.groupId = String(toGroupId); });
-    toData.grid = null;
-
-    // d. Clean up source
-    _groupData.delete(fromGroupId);
-    fromData.section.remove();
-
-    // e. Equalise: place items side-by-side at gs-w=6 each
-    const chartGrids = Array.from(toData.section.querySelectorAll('.chartGrid'));
-    chartGrids.forEach((el, i) => {
-        el.setAttribute('gs-w', '6');
-        el.setAttribute('gs-x', String(i * 6));
-        el.setAttribute('gs-y', '0');
-        el.style.width = '';
-    });
-
-    // f. Reinitialise GridStack, wire drag listeners, run the standard resize chain
-    requestAnimationFrame(() => {
-        const grid = GridStack.init({ column: 12, animate: true }, toData.section);
-        toData.grid = grid;
-        _wireGridDragListeners(grid, toGroupId);
-
-        requestAnimationFrame(() => {
-            toData.instances.forEach(c => c.resize());
-
-            requestAnimationFrame(() => {
-                const cellHeight = grid.getCellHeight(true);
-                grid.engine.nodes.forEach(node => {
-                    const panel = node.el.querySelector('.flex.flex-col');
-                    const pixelHeight = panel?.getBoundingClientRect().height;
-                    const rows = Math.max(1, Math.ceil(pixelHeight / cellHeight)) + 1;
-                    grid.update(node.el, { h: rows });
-                });
-                grid.compact();
-
-                requestAnimationFrame(() => {
-                    grid.engine.nodes.forEach(node => {
-                        const panel = node.el.querySelector('.grid-item-content > .flex.flex-col');
-                        if (!panel) return;
-                        panel.style.height = '100%';
-                        const wrapper = node.el.querySelector('[data-chart-title]');
-                        if (wrapper) { wrapper.style.marginTop = 'auto'; wrapper.style.marginBottom = 'auto'; }
-                    });
-                });
-            });
-        });
-    });
-}
 
 // ── createChartGroup ──────────────────────────────────────────────────────────
-// Creates an independent chart group from a set of field indexes.
-// Returns the groupId, or null on failure.
-export async function createChartGroup(fieldIndexes) {
+// Creates a free-form canvas card from a set of field indexes.
+// dropPos: optional { x, y } in canvas-relative pixels where the card should appear.
+export async function createChartGroup(fieldIndexes, dropPos = null) {
     const groupId = ++_groupCounter;
 
     const selPlot = document.getElementById("selPlot");
@@ -2019,7 +2266,6 @@ export async function createChartGroup(fieldIndexes) {
             signal: appState.controller.signal,
         });
         const result = await response.json();
-
         if (loader) loader.hidden = true;
 
         if (result.length === 0) {
@@ -2030,107 +2276,50 @@ export async function createChartGroup(fieldIndexes) {
             return null;
         }
 
-        const section = document.createElement('div');
-        section.classList.add('doc-chart-section', 'grid-stack');
-        section.draggable = true;
+        // ── Build absolutely-positioned card ──────────────────────────────
+        const card = document.createElement('div');
+        card.classList.add('canvas-card');
+        card.dataset.groupId = String(groupId);
 
-        section.addEventListener('mouseenter', () => {
-            if (!_draggingGridItem) return;
-            if (_draggingGridItem.closest('.doc-chart-section') === section) return;
-            _dragTargetSection = { section, groupId };
-            console.log('[drag] grid item dragged over section groupId:', groupId, section);
-        });
-        section.addEventListener('mouseleave', () => {
-            if (_dragTargetSection?.section === section) _dragTargetSection = null;
-        });
+        const pos = dropPos ?? _getNextCardPosition();
+        card.style.cssText =
+            `position:absolute;left:${Math.max(0,pos.x)}px;top:${Math.max(0,pos.y)}px;` +
+            `width:480px;z-index:${++_zOrderCounter}`;
 
-        const innerGrid = document.createElement('div');
-        innerGrid.classList.add('grid-stack-item', 'chartGrid');
-        section.appendChild(innerGrid);
+        // Flex-row container for multiple panels
+        const panelsRow = document.createElement('div');
+        panelsRow.classList.add('canvas-card-panels');
+        card.appendChild(panelsRow);
 
         const domsBefore = chartInstances.length;
-
         const grouped = result.reduce((acc, s) => {
             (acc[s.panelIndex] = acc[s.panelIndex] || []).push(s);
             return acc;
         }, {});
-
         Object.keys(grouped)
             .sort((a, b) => +a - +b)
             .forEach(pIdx => {
-                _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, innerGrid, groupId, fieldIndexes);
+                _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, panelsRow, groupId, fieldIndexes);
             });
 
         const newInstances = chartInstances.slice(domsBefore);
-        const newGridItems = Array.from(innerGrid.children);
+        _groupData.set(groupId, { card, instances: newInstances, ro: null });
 
-        _groupData.set(groupId, {
-            gridItems: newGridItems,
-            instances: newInstances,
-            section,
-            grid: null
-        });
+        _docCanvas().appendChild(card);
 
-        const canvas = document.getElementById('doc-canvas');
-        const cursor = document.getElementById('docDropCursor');
+        // Wire drag, resize, and a single resize-observer for the whole card
+        _makeDraggable(card);
+        _makeResizable(card, newInstances);
 
-        if (cursor && cursor.parentNode === canvas) {
-            canvas.insertBefore(section, cursor);
-            cursor.style.display = 'none';
-        } else {
-            canvas.appendChild(section);
-        }
-
-        const after = section.nextElementSibling;
-        if (!after || after.classList.contains('doc-drop-cursor')) {
-            const t = document.createElement('div');
-            t.className = 'doc-text';
-            t.contentEditable = 'true';
-            t.setAttribute('data-placeholder', 'Continue writing…');
-            t.spellcheck = false;
-            section.after(t);
-            setTimeout(() => t.focus(), 0);
-        }
+        const ro = new ResizeObserver(() => { newInstances.forEach(c => c.resize()); });
+        ro.observe(card);
+        _groupData.get(groupId).ro = ro;
 
         requestAnimationFrame(() => {
-            const grid = GridStack.init(
-                {
-                    column: 12,
-                    animate: true
-                },
-                section
-            );
-            _groupData.get(groupId).grid = grid;
-
-            _wireGridDragListeners(grid, groupId);
-
-            requestAnimationFrame(() => {
-                newInstances.forEach(c => c.resize());
-
-                requestAnimationFrame(() => {
-                    const cellHeight = grid.getCellHeight(true);
-
-                    grid.engine.nodes.forEach(node => {
-                        const panel = node.el.querySelector('.flex.flex-col');
-                        const pixelHeight = panel?.getBoundingClientRect().height;
-                        const rows = Math.max(1, Math.ceil(pixelHeight / cellHeight)) + 1;
-                        grid.update(node.el, { h: rows });
-                    });
-
-                    grid.compact();
-
-                    requestAnimationFrame(() => {
-                        grid.engine.nodes.forEach(node => {
-                            const panel = node.el.querySelector('.grid-item-content > .flex.flex-col');
-                            if (!panel) return;
-                            panel.style.height = '100%';
-                            const wrapper = node.el.querySelector('[data-chart-title]');
-                            if (wrapper) { wrapper.style.marginTop = 'auto'; wrapper.style.marginBottom = 'auto'; }
-                        });
-                    });
-                });
-            });
+            newInstances.forEach(c => c.resize());
+            _updateCanvasSize();
         });
+
         return groupId;
     } catch (error) {
         if (loader) loader.hidden = true;
@@ -2148,18 +2337,14 @@ export function removeChartGroup(groupId) {
     const data = _groupData.get(groupId);
     if (!data) return;
 
+    data.ro?.disconnect();
     data.instances.forEach(c => {
         c.destroy();
         const i = chartInstances.indexOf(c);
         if (i !== -1) chartInstances.splice(i, 1);
     });
-
-    data.gridItems.forEach(el => el.remove());
+    data.card?.remove();
     _groupData.delete(groupId);
-
-    if (data.section && data.section.querySelectorAll('.grid-item').length === 0) {
-        data.section.remove();
-    }
 
     if (_groupData.size === 0) {
         const selPlot = document.getElementById("selPlot");
@@ -2169,18 +2354,14 @@ export function removeChartGroup(groupId) {
     }
 }
 
-// export async function mergeChartsIntoGridstack()
-
 // ── replaceChartGroup ─────────────────────────────────────────────────────────
-// Replaces an existing chart group in-place with a new one built from newFieldIndexes.
+// Replaces the content of an existing card in-place with charts from newFieldIndexes.
+// The card keeps its current position and size.
 export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
     const oldData = _groupData.get(oldGroupId);
     if (!oldData) return createChartGroup(newFieldIndexes);
 
-    const oldSection = oldData.section;
-    const innerGrid  = oldSection.querySelector('.chartGrid');
-
-    const groupId = ++_groupCounter;
+    const card = oldData.card;
 
     const loader  = document.getElementById("loader");
     const selPlot = document.getElementById("selPlot");
@@ -2197,74 +2378,46 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
         });
         const result = await response.json();
         if (loader) loader.hidden = true;
-
         if (result.length === 0) return null;
 
-        // Destroy GridStack first while its DOM nodes are still attached
-        oldData.grid?.destroy(false);
-
-        // Destroy old Chart.js instances and remove old DOM items
+        // Tear down old instances + observer
+        oldData.ro?.disconnect();
         oldData.instances.forEach(c => {
             c.destroy();
             const i = chartInstances.indexOf(c);
             if (i !== -1) chartInstances.splice(i, 1);
         });
-        oldData.gridItems.forEach(el => el.remove());
         _groupData.delete(oldGroupId);
 
-        // Clear the section's grid and rebuild in-place
-        innerGrid.innerHTML = '';
+        // Clear panels + old resize handles, keep card element in place
+        const panelsRow = card.querySelector('.canvas-card-panels');
+        if (panelsRow) panelsRow.innerHTML = '';
+        card.querySelectorAll('[data-resize-dir]').forEach(el => el.remove());
+
+        const groupId = ++_groupCounter;
+        card.dataset.groupId = String(groupId);
+
         const domsBefore = chartInstances.length;
         const grouped = result.reduce((acc, s) => {
             (acc[s.panelIndex] = acc[s.panelIndex] || []).push(s);
             return acc;
         }, {});
         Object.keys(grouped).sort((a, b) => +a - +b).forEach(pIdx => {
-            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, innerGrid, groupId, newFieldIndexes);
+            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, panelsRow, groupId, newFieldIndexes);
         });
-        
+
         const newInstances = chartInstances.slice(domsBefore);
-        const newGridItems = Array.from(innerGrid.children);
-        _groupData.set(groupId, { gridItems: newGridItems, instances: newInstances, section: oldSection, grid: null });
+        _groupData.set(groupId, { card, instances: newInstances, ro: null });
 
-        requestAnimationFrame(() => {
-            const grid = GridStack.init(
-                {
-                    column: 12,
-                    animate: true
-                },
-                oldSection
-            );
-            _groupData.get(groupId).grid = grid;
-            _wireGridDragListeners(grid, groupId);
+        // Re-wire draggable (new drag-handles were created by _buildPanel)
+        _makeDraggable(card);
+        _makeResizable(card, newInstances);
 
-            requestAnimationFrame(() => {
-                newInstances.forEach(c => c.resize());
+        const ro = new ResizeObserver(() => { newInstances.forEach(c => c.resize()); });
+        ro.observe(card);
+        _groupData.get(groupId).ro = ro;
 
-                requestAnimationFrame(() => {
-                    const cellHeight = grid.getCellHeight(true);
-
-                    grid.engine.nodes.forEach(node => {
-                        const panel = node.el.querySelector('.flex.flex-col');
-                        const pixelHeight = panel?.getBoundingClientRect().height;
-                        const rows = Math.max(1, Math.ceil(pixelHeight / cellHeight)) + 1;
-                        grid.update(node.el, { h: rows });
-                    });
-
-                    grid.compact();
-
-                    requestAnimationFrame(() => {
-                        grid.engine.nodes.forEach(node => {
-                            const panel = node.el.querySelector('.grid-item-content > .flex.flex-col');
-                            if (!panel) return;
-                            panel.style.height = '100%';
-                            const wrapper = node.el.querySelector('[data-chart-title]');
-                            if (wrapper) { wrapper.style.marginTop = 'auto'; wrapper.style.marginBottom = 'auto'; }
-                        });
-                    });
-                });
-            });
-        });
+        requestAnimationFrame(() => { newInstances.forEach(c => c.resize()); });
         return groupId;
     } catch (error) {
         if (loader) loader.hidden = true;

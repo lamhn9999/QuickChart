@@ -3,7 +3,7 @@ import {
     pendingIndexes,
     backHome, gearBtnClicked, toggleFieldTypeMenu, changeFieldType,
 } from './workspace.js';
-import { chartInstances, closeZoom, initSparklines, createChartGroup, replaceChartGroup, clearAllChartGroups } from './chart.js';
+import { chartInstances, closeZoom, initSparklines, createChartGroup, replaceChartGroup, clearAllChartGroups, exportCanvas, createTextCard, setCanvasSize, setCanvasBg } from './chart.js';
 import {
     filterClicked, filterPopupClicked, filterInputKey,
     excludeCheckboxClicked, filterIntSpecificKey, filterIntRangeKey,
@@ -104,7 +104,8 @@ window._chartDropOnCard = async function(combinedIndexes, targetGroupId = null) 
 // ── Expose to window for inline HTML handlers ─────────────────────────────────
 
 Object.assign(window, {
-    backHome, fieldClicked, closeZoom,
+    backHome, fieldClicked, closeZoom, exportCanvas,
+    addTextCard: () => createTextCard(), setCanvasSize, setCanvasBg,
     headerDragStart, headerDragEnd,
     gearBtnClicked, toggleFieldTypeMenu, changeFieldType,
     filterClicked, filterPopupClicked, filterInputKey,
@@ -161,7 +162,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 _updateHeaderStates();
                 _updatePendingBadge();
 
-                await createChartGroup(indexes);
+                // Place card at cursor position within #doc-canvas
+                const docCanvas = document.getElementById('doc-canvas');
+                const stage     = document.getElementById('canvas-stage') ?? plotPanel;
+                const rect = docCanvas?.getBoundingClientRect();
+                const scrollTop  = stage.scrollTop;
+                const scrollLeft = stage.scrollLeft;
+                const dropPos = rect
+                    ? { x: e.clientX - rect.left + scrollLeft - 20,
+                        y: e.clientY - rect.top  + scrollTop  - 20 }
+                    : null;
+
+                await createChartGroup(indexes, dropPos);
             } catch {}
         });
     }
