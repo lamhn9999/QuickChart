@@ -7,6 +7,8 @@ export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 
 // ── Chart group tracking ──────────────────────────────────────────────────────
 let _groupCounter = 0;
 const _groupData   = new Map(); // groupId → { gridItems: Element[], instances: Chart[], section: Element }
+let _draggingGridItem  = null;
+let _dragTargetSection = null; // { section, groupId } of the section currently hovered during a drag
 
 // ── Global chart defaults ─────────────────────────────────────────────────────
 Chart.defaults.plugins.tooltip.cornerRadius = 4;
@@ -1912,6 +1914,89 @@ function _fitGridItem(gridItem, grid, activeWrapper) {
     });
 }
 
+// ── _wireGridDragListeners ────────────────────────────────────────────────────
+function _wireGridDragListeners(grid, groupId) {
+    grid.on('dragstart', (event, el) => {
+        _draggingGridItem = el;
+        console.log('[drag] dragging grid item:', el);
+    });
+    grid.on('dragstop', () => {
+        const draggedEl = _draggingGridItem;
+        const target    = _dragTargetSection;
+        _draggingGridItem  = null;
+        _dragTargetSection = null;
+        if (target) setTimeout(() => transitionGridItem(draggedEl, groupId, target.groupId), 0);
+    });
+}
+
+// ── transitionGridItem ────────────────────────────────────────────────────────
+// Moves draggedEl (.chartGrid) from fromGroupId's section into toGroupId's section,
+// equalises widths, reinitialises GridStack, and removes the now-empty source section.
+function transitionGridItem(draggedEl, fromGroupId, toGroupId) {
+    if (!draggedEl || fromGroupId === toGroupId) return;
+    const fromData = _groupData.get(fromGroupId);
+    const toData   = _groupData.get(toGroupId);
+    if (!fromData || !toData) return;
+
+    // a. Destroy both GridStacks (keep DOM nodes)
+    fromData.grid?.destroy(false);
+    toData.grid?.destroy(false);
+
+    // b. Move the dragged .chartGrid into the target section
+    toData.section.appendChild(draggedEl);
+
+    // c. Merge metadata into target group
+    toData.gridItems = [...toData.gridItems, ...fromData.gridItems];
+    toData.instances = [...toData.instances, ...fromData.instances];
+    fromData.gridItems.forEach(el => { el.dataset.groupId = String(toGroupId); });
+    toData.grid = null;
+
+    // d. Clean up source
+    _groupData.delete(fromGroupId);
+    fromData.section.remove();
+
+    // e. Equalise: place items side-by-side at gs-w=6 each
+    const chartGrids = Array.from(toData.section.querySelectorAll('.chartGrid'));
+    chartGrids.forEach((el, i) => {
+        el.setAttribute('gs-w', '6');
+        el.setAttribute('gs-x', String(i * 6));
+        el.setAttribute('gs-y', '0');
+        el.style.width = '';
+    });
+
+    // f. Reinitialise GridStack, wire drag listeners, run the standard resize chain
+    requestAnimationFrame(() => {
+        const grid = GridStack.init({ column: 12, animate: true }, toData.section);
+        toData.grid = grid;
+        _wireGridDragListeners(grid, toGroupId);
+
+        requestAnimationFrame(() => {
+            toData.instances.forEach(c => c.resize());
+
+            requestAnimationFrame(() => {
+                const cellHeight = grid.getCellHeight(true);
+                grid.engine.nodes.forEach(node => {
+                    const panel = node.el.querySelector('.flex.flex-col');
+                    const pixelHeight = panel?.getBoundingClientRect().height;
+                    const rows = Math.max(1, Math.ceil(pixelHeight / cellHeight)) + 1;
+                    grid.update(node.el, { h: rows });
+                });
+                grid.compact();
+
+                requestAnimationFrame(() => {
+                    grid.engine.nodes.forEach(node => {
+                        const panel = node.el.querySelector('.grid-item-content > .flex.flex-col');
+                        if (!panel) return;
+                        panel.style.height = '100%';
+                        const wrapper = node.el.querySelector('[data-chart-title]');
+                        if (wrapper) { wrapper.style.marginTop = 'auto'; wrapper.style.marginBottom = 'auto'; }
+                    });
+                });
+            });
+        });
+    });
+}
+
 // ── createChartGroup ──────────────────────────────────────────────────────────
 // Creates an independent chart group from a set of field indexes.
 // Returns the groupId, or null on failure.
@@ -1948,6 +2033,16 @@ export async function createChartGroup(fieldIndexes) {
         const section = document.createElement('div');
         section.classList.add('doc-chart-section', 'grid-stack');
         section.draggable = true;
+
+        section.addEventListener('mouseenter', () => {
+            if (!_draggingGridItem) return;
+            if (_draggingGridItem.closest('.doc-chart-section') === section) return;
+            _dragTargetSection = { section, groupId };
+            console.log('[drag] grid item dragged over section groupId:', groupId, section);
+        });
+        section.addEventListener('mouseleave', () => {
+            if (_dragTargetSection?.section === section) _dragTargetSection = null;
+        });
 
         const innerGrid = document.createElement('div');
         innerGrid.classList.add('grid-stack-item', 'chartGrid');
@@ -2006,6 +2101,8 @@ export async function createChartGroup(fieldIndexes) {
                 section
             );
             _groupData.get(groupId).grid = grid;
+
+            _wireGridDragListeners(grid, groupId);
 
             requestAnimationFrame(() => {
                 newInstances.forEach(c => c.resize());
@@ -2139,6 +2236,7 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
                 oldSection
             );
             _groupData.get(groupId).grid = grid;
+            _wireGridDragListeners(grid, groupId);
 
             requestAnimationFrame(() => {
                 newInstances.forEach(c => c.resize());
