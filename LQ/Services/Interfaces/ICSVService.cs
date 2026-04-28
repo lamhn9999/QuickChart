@@ -7,10 +7,12 @@ public interface ICSVService
 {
     public Task<bool> Validate(Analyst analyst, string path);
     public Task<bool> Validate(Analyst analyst, IFormFile file);
-    public Task<bool> ProcessUploaded(Analyst analyst, string path);
-    public Task<bool> ProcessUploaded(Analyst analyst, IFormFile file);
-    
-    Task<bool> ProcessUploadedGuest(string guestToken, IFormFile file);
+    public Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, string path);
+    public Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, IFormFile file);
+
+    Task<UploadResultDTO?> ProcessUploadedGuest(string guestToken, IFormFile file);
+    // Returns false if the file doesn't exist or doesn't belong to the caller.
+    Task<bool> ConfirmListFields(int fileId, string? analystId, string? guestToken, List<ConfirmFieldDTO> confirmed);
     Task<CSVFile> GetFileGuest(string guestToken, string fileName);
     Task<List<CSVFile>> GetAllFilesGuest(string guestToken);                               
     Task RemoveFileGuest(string guestToken, string fileName);     

@@ -153,9 +153,9 @@ public class HomeController : Controller
         Analyst? analyst = await _analystService.FindById(analystdto.ID);
         if (analyst is null) return NotFound(new { error = "Analyst not found" });
 
-        return await _csvService.ProcessUploaded(analyst, file)
-            ? Json(new { received = file.FileName })
-            : Json(new { badcsv = file.FileName });
+        var result = await _csvService.ProcessUploaded(analyst, file);
+        if (result is null) return Json(new { badcsv = file.FileName });
+        return Json(new { received = result.FileName, fileId = result.FileId, suspicious = result.SuspiciousLists });
     }
 
     [HttpPost("guest-upload")]
@@ -165,9 +165,18 @@ public class HomeController : Controller
     {
         if (CurrentAnalyst is not null) return BadRequest();
         var token = EnsureGuestToken();
-        return await _csvService.ProcessUploadedGuest(token, file)
-            ? Json(new { received = file.FileName })
-            : Json(new { badcsv = file.FileName });
+        var result = await _csvService.ProcessUploadedGuest(token, file);
+        if (result is null) return Json(new { badcsv = file.FileName });
+        return Json(new { received = result.FileName, fileId = result.FileId, suspicious = result.SuspiciousLists });
+    }
+
+    [HttpPost("confirm-list-fields")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> ConfirmListFields([FromBody] ConfirmListRequestDTO dto)
+    {
+        var ok = await _csvService.ConfirmListFields(
+            dto.FileId, CurrentAnalyst?.ID, GuestToken, dto.Confirmed);
+        return ok ? Ok() : Forbid();
     }
 
     [HttpDelete("guest-remove")]

@@ -12,7 +12,7 @@ namespace LQ.Data.Repositories;
 
 public class TableRepository : TableRepositoryAbstract
 {
-    private readonly LQDbContext _lqDbContext;
+    protected readonly LQDbContext _lqDbContext;
 
     public TableRepository(LQDbContext lqDbContext)
     {
