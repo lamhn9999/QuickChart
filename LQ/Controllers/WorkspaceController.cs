@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using LQ.Data.Repositories;
+using LQ.Models.TableModels;
+using LQ.Services.Implementations;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using LQ.Models.DTOs;
@@ -78,6 +80,25 @@ public class WorkspaceController : Controller
         }));
         HttpContext.Session.Remove("ListValueFilterDTO");
         ViewBag.Username = CurrentAnalystDTO?.Name;
+        bool awaiting = currentFile.Status == UploadStatus.AwaitingListConfirmation;
+        ViewBag.AwaitingListConfirmation = awaiting;
+        ViewBag.FileToken = currentFile.PublicToken;
+        // Re-serialize the stored payload in camelCase so the @Html.Raw bootstrap
+        // produces the same key shape the JS expects (fieldName, samples, etc.).
+        // CaseInsensitive on the deserialize side accepts any pre-existing PascalCase rows.
+        string? suspiciousJson = null;
+        if (awaiting && !string.IsNullOrEmpty(currentFile.ProcessingPayload))
+        {
+            try
+            {
+                var list = JsonSerializer.Deserialize<List<SuspiciousListDTO>>(
+                    currentFile.ProcessingPayload, CSVService.PayloadJson);
+                if (list != null)
+                    suspiciousJson = JsonSerializer.Serialize(list, CSVService.PayloadJson);
+            }
+            catch (JsonException) { /* malformed — leave null, modal won't pop */ }
+        }
+        ViewBag.SuspiciousJson = suspiciousJson;
         return View("Workspace", tableDisplay);
     }
 

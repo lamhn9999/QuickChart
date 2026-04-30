@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using LQ.Data.Database;
 using LQ.Data.Repositories;
 using LQ.Models.TableModels;
@@ -28,9 +30,24 @@ public class CSVService : TableRepository, ICSVService
 {
     public static readonly char[] possibleOpen = new[] { '\"', '[' };
     public static readonly char[] possibleEnd = new[] { '\"', ']' };
-    
-    public CSVService(LQDbContext lqDbContext) : base(lqDbContext)
+
+    // ProcessingPayload is written camelCase so the wire format (System.Text.Json defaults
+    // for ASP.NET Core MVC) and direct @Html.Raw injection in Razor both work uniformly.
+    // CaseInsensitive keeps any pre-existing PascalCase rows readable.
+    public static readonly JsonSerializerOptions PayloadJson = new()
     {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+    };
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<CSVService>? _logger;
+
+    public CSVService(LQDbContext lqDbContext, IServiceScopeFactory scopeFactory, ILogger<CSVService>? logger = null)
+        : base(lqDbContext)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
     }
 
     private static bool Validate(StreamReader reader)
@@ -614,19 +631,37 @@ public class CSVService : TableRepository, ICSVService
         var (newTable, suspicious) = result.Value;
         foreach (FieldValues fv in newTable.Columns) DetectCategory(fv);
         await Insert(newTable);
-        return new UploadResultDTO(Path.GetFileName(path), newFile.ID, suspicious);
+        await FinalizeUploadStatus(newFile, suspicious);
+        return new UploadResultDTO(Path.GetFileName(path), newFile.PublicToken, suspicious);
     }
 
     public async Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, IFormFile file)
     {
         if (!await Validate(analyst, file)) return null;
-        CSVFile newFile = new CSVFile(analyst.Id, file.FileName);
-        var result = Interpret(newFile, new StreamReader(file.OpenReadStream()));
-        if (result is null) return null;
-        var (newTable, suspicious) = result.Value;
-        foreach (FieldValues fv in newTable.Columns) DetectCategory(fv);
-        await Insert(newTable);
-        return new UploadResultDTO(file.FileName, newFile.ID, suspicious);
+
+        // IFormFile is request-scoped — copy the bytes before the request ends.
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var bytes = ms.ToArray();
+
+        // Persist the placeholder so the home page can render a Processing card
+        // immediately on reload; the heavy work runs in the background.
+        var newFile = new CSVFile(analyst.Id, file.FileName);
+        await InsertFile(newFile);
+
+        var token = newFile.PublicToken;
+        var fileName = file.FileName;
+        _ = Task.Run(() => RunInScope(token, bytes, useSinglePass: false));
+
+        return new UploadResultDTO(fileName, token, new List<SuspiciousListDTO>());
+    }
+
+    private async Task FinalizeUploadStatus(CSVFile file, List<SuspiciousListDTO> suspicious)
+    {
+        file.Status = suspicious.Count > 0 ? UploadStatus.AwaitingListConfirmation : UploadStatus.Ready;
+        file.ProcessingPayload = suspicious.Count > 0 ? JsonSerializer.Serialize(suspicious, PayloadJson) : null;
+        file.ModifiedTime = DateTime.UtcNow;
+        await _lqDbContext.SaveChangesAsync();
     }
 
     private (Table table, List<SuspiciousListDTO> suspicious)? InterpretSinglePass(CSVFile csvFile, StreamReader reader)
@@ -680,18 +715,77 @@ public class CSVService : TableRepository, ICSVService
     {
         if (await FileExists(guestToken, file.FileName)) return null;
 
-        CSVFile newFile = new CSVFile(guestToken, file.FileName, true);
-        using var reader = new StreamReader(file.OpenReadStream());
-        var result = InterpretSinglePass(newFile, reader);
-        if (result is null) return null;
-        var (newTable, suspicious) = result.Value;
-        await Insert(newTable);
-        return new UploadResultDTO(file.FileName, newFile.ID, suspicious);
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var bytes = ms.ToArray();
+
+        var newFile = new CSVFile(guestToken, file.FileName, true);
+        await InsertFile(newFile);
+
+        var token = newFile.PublicToken;
+        var fileName = file.FileName;
+        _ = Task.Run(() => RunInScope(token, bytes, useSinglePass: true));
+
+        return new UploadResultDTO(fileName, token, new List<SuspiciousListDTO>());
     }
 
-    public async Task<bool> ConfirmListFields(int fileId, string? analystId, string? guestToken, List<ConfirmFieldDTO> confirmed)
+    // Resolves a fresh ICSVService in a new DI scope and dispatches to the
+    // continuation. Kept here so the kickoff paths don't leak scope-management
+    // detail into the controller.
+    private async Task RunInScope(Guid token, byte[] bytes, bool useSinglePass)
     {
-        var file = await _lqDbContext.CSVFiles.FirstOrDefaultAsync(f => f.ID == fileId);
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var svc = scope.ServiceProvider.GetRequiredService<ICSVService>();
+            await svc.ContinueProcessAsync(token, bytes, useSinglePass);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Background upload processing failed for {Token}", token);
+        }
+    }
+
+    public async Task ContinueProcessAsync(Guid token, byte[] fileBytes, bool useSinglePass)
+    {
+        var file = await _lqDbContext.CSVFiles.FirstOrDefaultAsync(f => f.PublicToken == token);
+        if (file is null) return;
+
+        try
+        {
+            using var ms = new MemoryStream(fileBytes);
+            using var reader = new StreamReader(ms);
+            var result = useSinglePass ? InterpretSinglePass(file, reader) : Interpret(file, reader);
+            if (result is null)
+            {
+                file.Status = UploadStatus.Failed;
+                file.ProcessingPayload = JsonSerializer.Serialize(new { error = "Failed to parse CSV" }, PayloadJson);
+                file.ModifiedTime = DateTime.UtcNow;
+                await _lqDbContext.SaveChangesAsync();
+                return;
+            }
+
+            var (newTable, suspicious) = result.Value;
+            // InterpretSinglePass already runs DetectCategory inside its parallel loop.
+            if (!useSinglePass)
+                foreach (var fv in newTable.Columns) DetectCategory(fv);
+
+            await InsertFieldsAndValues(newTable);
+            await FinalizeUploadStatus(file, suspicious);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "ContinueProcessAsync failed for {Token}", token);
+            file.Status = UploadStatus.Failed;
+            file.ProcessingPayload = JsonSerializer.Serialize(new { error = ex.Message }, PayloadJson);
+            file.ModifiedTime = DateTime.UtcNow;
+            try { await _lqDbContext.SaveChangesAsync(); } catch { /* swallow — surface via Failed status */ }
+        }
+    }
+
+    public async Task<bool> ConfirmListFields(Guid token, string? analystId, string? guestToken, List<ConfirmFieldDTO> confirmed)
+    {
+        var file = await _lqDbContext.CSVFiles.FirstOrDefaultAsync(f => f.PublicToken == token);
         if (file is null) return false;
         if (analystId is not null && file.AnalystID != analystId) return false;
         if (analystId is null && file.GuestToken != guestToken) return false;
@@ -699,12 +793,47 @@ public class CSVService : TableRepository, ICSVService
         foreach (var c in confirmed)
         {
             var field = await _lqDbContext.Fields
-                .FirstOrDefaultAsync(f => f.CSVFile.ID == fileId && f.Index == c.FieldIndex);
+                .FirstOrDefaultAsync(f => f.CSVFile.ID == file.ID && f.Index == c.FieldIndex);
             if (field is null) continue;
             char sep = c.Separator.Length == 1 ? c.Separator[0] : ',';
             await ChangeFieldType(new ChangeFieldTypeDTO(field.ID, typeof(List<string>), sep));
         }
+
+        file.Status = UploadStatus.Ready;
+        file.ProcessingPayload = null;
+        file.ModifiedTime = DateTime.UtcNow;
+        await _lqDbContext.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<List<PendingUploadDTO>> GetPendingUploads(string? analystId, string? guestToken)
+    {
+        IQueryable<CSVFile> query = _lqDbContext.CSVFiles.Where(f => f.Status != UploadStatus.Ready);
+        query = analystId is not null
+            ? query.Where(f => f.AnalystID == analystId)
+            : guestToken is not null
+                ? query.Where(f => f.GuestToken == guestToken)
+                : query.Where(_ => false);
+
+        var rows = await query.OrderByDescending(f => f.CreatedTime).ToListAsync();
+        return rows.Select(f =>
+        {
+            List<SuspiciousListDTO>? suspicious = null;
+            string? error = null;
+            if (f.ProcessingPayload is not null)
+            {
+                try
+                {
+                    if (f.Status == UploadStatus.AwaitingListConfirmation)
+                        suspicious = JsonSerializer.Deserialize<List<SuspiciousListDTO>>(f.ProcessingPayload, PayloadJson);
+                    else if (f.Status == UploadStatus.Failed)
+                        error = JsonSerializer.Deserialize<JsonElement>(f.ProcessingPayload)
+                            .GetProperty("error").GetString();
+                }
+                catch (JsonException) { /* malformed payload — surface as null */ }
+            }
+            return new PendingUploadDTO(f.PublicToken, f.Name, f.Status.ToString(), suspicious, error);
+        }).ToList();
     }
 
     public async Task<CSVFile> GetFileGuest(string guestToken, string fileName)
@@ -724,6 +853,11 @@ public class CSVService : TableRepository, ICSVService
     public new async Task<CSVFile> GetFile(int csvFileId)
     {
         return await base.GetFile(csvFileId);
+    }
+
+    public async Task<CSVFile?> GetFile(Guid publicToken)
+    {
+        return await _lqDbContext.CSVFiles.FirstOrDefaultAsync(f => f.PublicToken == publicToken);
     }
 
     public new async Task<List<CSVFile>> GetAllFiles(Analyst analyst)

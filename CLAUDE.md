@@ -20,7 +20,6 @@ ACPTDA (Automatic CSV Plotting Tool for Data Analysts) is a data-storytelling we
 | CSS | Tailwind CSS v4 CLI build | `@tailwindcss/cli` in `LQ/wwwroot/package.json`; compiled to `wwwroot/style_tw.css` |
 | Charting | Chart.js 4.5.1 (local, `node_modules/chart.js/dist/chart.umd.min.js`) | |
 | Matrix chart | `chartjs-chart-matrix` 1.3.0 | Loaded from jsDelivr CDN |
-| Grid / drag | Muuri 0.9.5 | Local `node_modules` |
 | Animation | `web-animations-js` 2.3.2 | Local `node_modules` |
 | Fonts | Syne + DM Sans | Google Fonts CDN |
 
@@ -84,9 +83,6 @@ Three controllers; no `[Authorize]` attributes — all auth checks are manual se
 |---|---|---|
 | Table / left | `#tablePanel` → `#dataTable` | `main.js`, `filter.js`, `workspace.js` |
 | Document canvas / right | `#plotPanel` → `#doc-canvas` | `chart.js`, `editor.js`, `main.js` |
-
-`WorkspaceSpecific.cshtml` loads both `main.js` and `editor.js` (authenticated users).  
-`Workspace.cshtml` (guest) loads only `main.js`.
 
 ### How backend infers chart type
 

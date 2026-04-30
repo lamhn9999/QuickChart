@@ -155,7 +155,7 @@ public class HomeController : Controller
 
         var result = await _csvService.ProcessUploaded(analyst, file);
         if (result is null) return Json(new { badcsv = file.FileName });
-        return Json(new { received = result.FileName, fileId = result.FileId, suspicious = result.SuspiciousLists });
+        return Json(new { received = result.FileName, token = result.Token, suspicious = result.SuspiciousLists });
     }
 
     [HttpPost("guest-upload")]
@@ -167,7 +167,7 @@ public class HomeController : Controller
         var token = EnsureGuestToken();
         var result = await _csvService.ProcessUploadedGuest(token, file);
         if (result is null) return Json(new { badcsv = file.FileName });
-        return Json(new { received = result.FileName, fileId = result.FileId, suspicious = result.SuspiciousLists });
+        return Json(new { received = result.FileName, token = result.Token, suspicious = result.SuspiciousLists });
     }
 
     [HttpPost("confirm-list-fields")]
@@ -175,8 +175,15 @@ public class HomeController : Controller
     public async Task<IActionResult> ConfirmListFields([FromBody] ConfirmListRequestDTO dto)
     {
         var ok = await _csvService.ConfirmListFields(
-            dto.FileId, CurrentAnalyst?.ID, GuestToken, dto.Confirmed);
+            dto.Token, CurrentAnalyst?.ID, GuestToken, dto.Confirmed);
         return ok ? Ok() : Forbid();
+    }
+
+    [HttpGet("pending-uploads")]
+    public async Task<IActionResult> PendingUploads()
+    {
+        var pending = await _csvService.GetPendingUploads(CurrentAnalyst?.ID, GuestToken);
+        return Json(pending);
     }
 
     [HttpDelete("guest-remove")]

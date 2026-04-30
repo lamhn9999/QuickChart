@@ -11,8 +11,12 @@ public interface ICSVService
     public Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, IFormFile file);
 
     Task<UploadResultDTO?> ProcessUploadedGuest(string guestToken, IFormFile file);
+    // Background continuation invoked from a fresh DI scope after the kickoff
+    // has persisted the CSVFile placeholder and returned to the user.
+    Task ContinueProcessAsync(Guid token, byte[] fileBytes, bool useSinglePass);
     // Returns false if the file doesn't exist or doesn't belong to the caller.
-    Task<bool> ConfirmListFields(int fileId, string? analystId, string? guestToken, List<ConfirmFieldDTO> confirmed);
+    Task<bool> ConfirmListFields(Guid token, string? analystId, string? guestToken, List<ConfirmFieldDTO> confirmed);
+    Task<List<PendingUploadDTO>> GetPendingUploads(string? analystId, string? guestToken);
     Task<CSVFile> GetFileGuest(string guestToken, string fileName);
     Task<List<CSVFile>> GetAllFilesGuest(string guestToken);                               
     Task RemoveFileGuest(string guestToken, string fileName);     
@@ -20,6 +24,7 @@ public interface ICSVService
     public Task<TryChangeFieldTypeDTO> ChangeFieldType(CSVFile csvFile, int fieldIndex, string newType, char? listSplitChar);
     public Task<CSVFile> GetFile(Analyst analyst, string fileName);
     public Task<CSVFile> GetFile(int csvFileId);
+    public Task<CSVFile?> GetFile(Guid publicToken);
     public Task<List<CSVFile>> GetAllFiles(Analyst analyst);
     public Task RemoveFile(Analyst analyst, string fileName);
     public Task RenameFile(Analyst analyst, string fileName, string newFileName);

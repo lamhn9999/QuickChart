@@ -98,11 +98,29 @@ namespace LQ.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ProcessingPayload")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("PublicToken")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(2);
+
                     b.HasKey("ID");
 
-                    b.HasIndex("AnalystID");
-
                     b.HasIndex("GuestToken");
+
+                    b.HasIndex("PublicToken")
+                        .IsUnique();
+
+                    b.HasIndex("AnalystID", "Status");
+
+                    b.HasIndex("GuestToken", "Status");
 
                     b.ToTable("CSVFile", "app");
                 });

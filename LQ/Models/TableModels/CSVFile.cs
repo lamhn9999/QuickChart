@@ -5,12 +5,15 @@ namespace LQ.Models.TableModels;
 public class CSVFile
 {
     public int ID { get; private set; }
+    public Guid PublicToken { get; private set; } = Guid.NewGuid();
     public required string Name { get; set; }
     public required DateTime CreatedTime { get; set; } = DateTime.UtcNow;
     public required DateTime ModifiedTime { get; set; } = DateTime.UtcNow;
     public string? AnalystID { get; private set; }
     public Analyst? Analyst { get; private set; }
     public string? GuestToken { get; private set; }
+    public UploadStatus Status { get; set; } = UploadStatus.Processing;
+    public string? ProcessingPayload { get; set; }
     protected CSVFile() {} // For EF-Core
 
     [SetsRequiredMembers]

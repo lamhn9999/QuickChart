@@ -155,7 +155,7 @@ public class ListDetectionTest
         var result = await Upload("top_rated_2000webseries.csv");
         Assert.IsNotNull(result);
 
-        var csvFile = await _csvService.GetFile(result.FileId);
+        var csvFile = await _csvService.GetFile(result.Token);
         var display = await _csvService.GetTableDisplayLimited(csvFile, 5);
         var genre   = display.Fields.First(f => f.Name == "genre");
 
@@ -170,10 +170,10 @@ public class ListDetectionTest
         Assert.IsNotNull(result);
 
         var genreSuspicion = result.SuspiciousLists.First(s => s.FieldName == "genre");
-        await _csvService.ConfirmListFields(result.FileId, _analyst.Id, null,
+        await _csvService.ConfirmListFields(result.Token, _analyst.Id, null,
             [new ConfirmFieldDTO(genreSuspicion.FieldIndex, genreSuspicion.Separator)]);
 
-        var csvFile = await _csvService.GetFile(result.FileId);
+        var csvFile = await _csvService.GetFile(result.Token);
         var display = await _csvService.GetTableDisplayLimited(csvFile, 5);
         var genre   = display.Fields.First(f => f.Name == "genre");
 
@@ -188,7 +188,7 @@ public class ListDetectionTest
         Assert.IsNotNull(result);
 
         // Deliberately do NOT call ConfirmListFields
-        var csvFile = await _csvService.GetFile(result.FileId);
+        var csvFile = await _csvService.GetFile(result.Token);
         var display = await _csvService.GetTableDisplayLimited(csvFile, 5);
         var genre   = display.Fields.First(f => f.Name == "genre");
 
@@ -226,7 +226,7 @@ public class ListDetectionTest
         var result = await Upload("duolingo_learning_traces_reduced.csv");
         Assert.IsNotNull(result);
 
-        var csvFile = await _csvService.GetFile(result.FileId);
+        var csvFile = await _csvService.GetFile(result.Token);
         var display = await _csvService.GetTableDisplayLimited(csvFile, 5);
         var lexeme  = display.Fields.First(f => f.Name == "lexeme_string");
 
@@ -329,9 +329,9 @@ public class ListDetectionTest
         var result = await Upload("top_rated_2000webseries.csv");
         Assert.IsNotNull(result);
 
-        await _csvService.ConfirmListFields(result.FileId, _analyst.Id, null, []);
+        await _csvService.ConfirmListFields(result.Token, _analyst.Id, null, []);
 
-        var csvFile = await _csvService.GetFile(result.FileId);
+        var csvFile = await _csvService.GetFile(result.Token);
         var display = await _csvService.GetTableDisplayLimited(csvFile, 5);
         var genre   = display.Fields.First(f => f.Name == "genre");
 
@@ -346,6 +346,6 @@ public class ListDetectionTest
         Assert.IsNotNull(result);
 
         // Should silently skip unknown field indexes without throwing
-        await _csvService.ConfirmListFields(result.FileId, _analyst.Id, null, [new ConfirmFieldDTO(9999, ",")]);
+        await _csvService.ConfirmListFields(result.Token, _analyst.Id, null, [new ConfirmFieldDTO(9999, ",")]);
     }
 }

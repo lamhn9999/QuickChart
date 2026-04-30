@@ -2023,7 +2023,7 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
             wrapper.removeChild(ctx);
             wrapper.classList.add('items-center', 'justify-center');
             const pieBox = document.createElement("div");
-            pieBox.style.cssText = 'width:100%;max-width:370px;position:relative;flex-shrink:0';
+            pieBox.style.cssText = 'width:100%;position:relative;flex-shrink:0';
             pieBox.appendChild(ctx);
             wrapper.appendChild(pieBox);
         }

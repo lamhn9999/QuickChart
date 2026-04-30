@@ -79,7 +79,14 @@ public class TableRepository : TableRepositoryAbstract
     protected override async Task Insert(Table table)
     {
         await InsertFile(table.CSVFile);
+        await InsertFieldsAndValues(table);
+    }
 
+    // For the async-upload kickoff path: the CSVFile placeholder is persisted
+    // up-front so a card can render immediately, and the background task only
+    // needs to add fields + values to the already-tracked file.
+    protected async Task InsertFieldsAndValues(Table table)
+    {
         await _lqDbContext.Fields.AddRangeAsync(table.Columns.Select(f => f.Field));
         await _lqDbContext.SaveChangesAsync();
 

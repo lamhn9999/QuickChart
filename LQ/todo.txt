@@ -16,3 +16,5 @@ main_dataset:
     cast + director, cast + keywords, cast + genres
     genres + budget_adj + revenue_adj
     
+
+mỗi điểm trên biểu đồ sẽ đi kèm một list row index liên quan

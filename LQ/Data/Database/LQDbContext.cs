@@ -33,6 +33,17 @@ public class LQDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
             eb.Property(f => f.GuestToken).IsRequired(false);
             eb.HasIndex(f => f.GuestToken);
+            eb.Property(f => f.PublicToken).HasDefaultValueSql("gen_random_uuid()");
+            eb.HasIndex(f => f.PublicToken).IsUnique();
+            eb.Property(f => f.Status)
+                .HasConversion<int>()
+                .HasDefaultValue(UploadStatus.Ready)
+                .HasSentinel(UploadStatus.Ready);
+            eb.Property(f => f.ProcessingPayload)
+                .HasColumnType("jsonb")
+                .IsRequired(false);
+            eb.HasIndex(f => new { f.AnalystID, f.Status });
+            eb.HasIndex(f => new { f.GuestToken, f.Status });
         });
         modelBuilder.Entity<Field>().ToTable("Field", "app");
         modelBuilder.Entity<Value>(eb =>
