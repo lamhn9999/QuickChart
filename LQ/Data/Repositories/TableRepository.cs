@@ -6,6 +6,7 @@ using LQ.Models.DTOs;
 using LQ.Models.TableModels;
 using LQ.Services.Implementations;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Linq.Expressions;
 
 namespace LQ.Data.Repositories;
@@ -271,14 +272,25 @@ public class TableRepository : TableRepositoryAbstract
         var field = await _lqDbContext.Fields.SingleOrDefaultAsync(f => f.ID == dto.FieldId)
                     ?? throw new BadHttpRequestException("Field not found.");
 
-        var tryResult = await TryChangeFieldType(field, dto.NewType);
+        var (tryResult, plan) = await TryChangeFieldType(field, dto.NewType);
         if (!tryResult.Status) return tryResult;
+        if (field.Type == dto.NewType) return tryResult;
+
+        await using var tx = await _lqDbContext.Database.BeginTransactionAsync();
 
         field.Type = dto.NewType;
-        if (dto.NewType == typeof(List<string>))
-            await ReformatListValues(dto);
 
+        if (dto.NewType == typeof(DateTime))
+        {
+            await ReformatDateTimeValues(dto.FieldId, plan!.Unit);
+            field.Categories = new List<Category> { Category.Categorical };
+        }
+        else if (dto.NewType == typeof(List<string>))
+            await ReformatListValues(dto);
+        
         await _lqDbContext.SaveChangesAsync();
+        await tx.CommitAsync();
+
         return tryResult;
     }
 
@@ -460,21 +472,38 @@ public class TableRepository : TableRepositoryAbstract
         return Expression.Lambda<Func<Value, bool>>(combined, param);
     }
 
-    private async Task<TryChangeFieldTypeDTO> TryChangeFieldType(Field field, Type newType)
+    // ─── Field type change: validation + reformat ─────────────────────────────
+
+    private enum DateTimeUnit { Native, UnixSeconds, UnixMilliseconds, UnixMicroseconds, UnixNanoseconds }
+
+    private sealed record DateTimeParseResult(DateTimeUnit Unit, List<string> Mismatches);
+
+    // Year 2200-01-01 UTC, expressed in each Unix unit.
+    private const long Year2200UnixSeconds      = 7_258_118_400L;
+    private const long Year2200UnixMilliseconds = 7_258_118_400_000L;
+    private const long Year2200UnixMicroseconds = 7_258_118_400_000_000L;
+
+    private async Task<(TryChangeFieldTypeDTO Dto, DateTimeParseResult? Plan)> TryChangeFieldType(Field field, Type newType)
     {
-        if (field.Type == newType) return new TryChangeFieldTypeDTO(null);
+        if (field.Type == newType) return (new TryChangeFieldTypeDTO(null), null);
 
         var rawValues = await _lqDbContext.Values
             .Where(v => v.Field == field && v.ValueStringFormatted != null)
             .OrderBy(v => v.RowIndex)
-            .Select(v => v.ValueStringFormatted)
+            .Select(v => v.ValueStringFormatted!)
             .ToListAsync();
 
+        if (newType == typeof(DateTime))
+        {
+            var plan = DetectDateTimeStrategy(rawValues);
+            return (new TryChangeFieldTypeDTO(plan.Mismatches), plan);
+        }
+
         var mismatches = rawValues
-            .Where(val => !CanConvert(val!, newType))
+            .Where(val => !CanConvert(val, newType))
             .ToList();
 
-        return new TryChangeFieldTypeDTO(mismatches);
+        return (new TryChangeFieldTypeDTO(mismatches), null);
     }
 
     private static bool CanConvert(string value, Type targetType) => targetType switch
@@ -482,10 +511,118 @@ public class TableRepository : TableRepositoryAbstract
         _ when targetType == typeof(string) => true,
         _ when targetType == typeof(int) => int.TryParse(value, out _),
         _ when targetType == typeof(double) => double.TryParse(value, out _),
-        _ when targetType == typeof(DateTime) => DateTime.TryParse(value, out _),
         _ when targetType == typeof(List<string>) => true,
         _ => false
     };
+
+    /// <summary>
+    /// Picks a single DateTime parsing strategy for the column.
+    /// Tries DateTime.TryParse first; if that fails on any value, falls back to Unix-epoch
+    /// numerics and chooses the smallest unit (s / ms / µs / ns) whose max value lands at or
+    /// before year 2200. Values that don't land in [1900, 2200] under the chosen strategy are
+    /// returned as mismatches. Negative numerics are rejected.
+    /// Mixed-unit columns (some seconds + some ms) cannot be recovered automatically; the
+    /// chosen unit is applied uniformly and the user must clean their data.
+    /// </summary>
+    private static DateTimeParseResult DetectDateTimeStrategy(IReadOnlyList<string> values)
+    {
+        if (values.Count == 0)
+            return new DateTimeParseResult(DateTimeUnit.Native, new List<string>());
+
+        var nativeMismatches = new List<string>();
+        foreach (var v in values)
+        {
+            if (string.IsNullOrWhiteSpace(v)) continue;
+            if (!DateTime.TryParse(v, out _)) nativeMismatches.Add(v);
+        }
+        if (nativeMismatches.Count == 0)
+            return new DateTimeParseResult(DateTimeUnit.Native, new List<string>());
+
+        double max = double.MinValue;
+        bool anyNumeric = false;
+        foreach (var v in values)
+        {
+            if (string.IsNullOrWhiteSpace(v)) continue;
+            if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && d >= 0)
+            {
+                anyNumeric = true;
+                if (d > max) max = d;
+            }
+        }
+
+        if (!anyNumeric)
+            return new DateTimeParseResult(DateTimeUnit.Native, nativeMismatches);
+
+        DateTimeUnit unit =
+            max <= Year2200UnixSeconds      ? DateTimeUnit.UnixSeconds      :
+            max <= Year2200UnixMilliseconds ? DateTimeUnit.UnixMilliseconds :
+            max <= Year2200UnixMicroseconds ? DateTimeUnit.UnixMicroseconds :
+                                              DateTimeUnit.UnixNanoseconds;
+
+        var rangeMismatches = new List<string>();
+        foreach (var v in values)
+        {
+            if (string.IsNullOrWhiteSpace(v)) continue;
+            if (!TryToDateTime(v, unit, out var dt) || dt.Year < 1900 || dt.Year > 2200)
+                rangeMismatches.Add(v);
+        }
+
+        return new DateTimeParseResult(unit, rangeMismatches);
+    }
+
+    private static bool TryToDateTime(string value, DateTimeUnit unit, out DateTime result)
+    {
+        result = default;
+
+        if (unit == DateTimeUnit.Native)
+            return DateTime.TryParse(value, out result);
+
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) || d < 0)
+            return false;
+
+        try
+        {
+            result = unit switch
+            {
+                DateTimeUnit.UnixSeconds      => DateTime.UnixEpoch.AddSeconds(d),
+                DateTimeUnit.UnixMilliseconds => DateTime.UnixEpoch.AddMilliseconds(d),
+                DateTimeUnit.UnixMicroseconds => DateTime.UnixEpoch.AddTicks((long)(d * 10)),
+                DateTimeUnit.UnixNanoseconds  => DateTime.UnixEpoch.AddTicks((long)(d / 100)),
+                _ => default
+            };
+            return true;
+        }
+        catch (ArgumentOutOfRangeException) { return false; }
+        catch (OverflowException) { return false; }
+    }
+
+    private async Task ReformatDateTimeValues(int fieldId, DateTimeUnit unit)
+    {
+        var values = await _lqDbContext.Values
+            .Where(v => v.FieldID == fieldId)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var enUS = CultureInfo.GetCultureInfo("en-US");
+
+        foreach (var v in values)
+        {
+            if (string.IsNullOrWhiteSpace(v.ValueStringFormatted))
+            {
+                v.ValueStringFormatted = null;
+                continue;
+            }
+
+            v.ValueStringFormatted = TryToDateTime(v.ValueStringFormatted, unit, out var dt)
+                ? dt.ToString(enUS)
+                : null;
+        }
+
+        await _lqDbContext.BulkUpdateAsync(values, new BulkConfig
+        {
+            PropertiesToInclude = new List<string> { nameof(Value.ValueStringFormatted) }
+        });
+    }
 
     private async Task ReformatListValues(ChangeFieldTypeDTO dto)
     {
@@ -494,6 +631,7 @@ public class TableRepository : TableRepositoryAbstract
 
         var values = await _lqDbContext.Values
             .Where(v => v.FieldID == dto.FieldId)
+            .AsNoTracking()
             .ToListAsync();
 
         foreach (var v in values)
