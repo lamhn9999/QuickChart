@@ -10,6 +10,7 @@ public class LQDbContext : DbContext
     public DbSet<CSVFile> CSVFiles { get; set; }
     public DbSet<Field> Fields { get; set; }
     public DbSet<Value> Values { get; set; }
+    public DbSet<Canvas> Canvases { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,9 +50,20 @@ public class LQDbContext : DbContext
         modelBuilder.Entity<Value>(eb =>
             {
                 eb.HasKey(value => new { value.FieldID, value.RowIndex });
-                eb.ToTable("Value", "app"); 
+                eb.ToTable("Value", "app");
                 eb.Property(v => v.Existance).HasDefaultValue(true);
             });
+        modelBuilder.Entity<Canvas>(eb =>
+        {
+            eb.ToTable("Canvas", "app");
+            eb.HasKey(c => c.CSVFileID);
+            eb.Property(c => c.CSVFileID).ValueGeneratedNever();
+            eb.HasOne(c => c.CSVFile)
+                .WithOne()
+                .HasForeignKey<Canvas>(c => c.CSVFileID)
+                .OnDelete(DeleteBehavior.Cascade);
+            eb.Property(c => c.Document).HasColumnType("jsonb").IsRequired();
+        });
     }
     
     // Schema: analyst

@@ -125,6 +125,23 @@ namespace LQ.Migrations
                     b.ToTable("CSVFile", "app");
                 });
 
+            modelBuilder.Entity("LQ.Models.TableModels.Canvas", b =>
+                {
+                    b.Property<int>("CSVFileID")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Document")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("CSVFileID");
+
+                    b.ToTable("Canvas", "app");
+                });
+
             modelBuilder.Entity("LQ.Models.TableModels.Field", b =>
                 {
                     b.Property<int>("ID")
@@ -188,6 +205,17 @@ namespace LQ.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Analyst");
+                });
+
+            modelBuilder.Entity("LQ.Models.TableModels.Canvas", b =>
+                {
+                    b.HasOne("LQ.Models.TableModels.CSVFile", "CSVFile")
+                        .WithOne()
+                        .HasForeignKey("LQ.Models.TableModels.Canvas", "CSVFileID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CSVFile");
                 });
 
             modelBuilder.Entity("LQ.Models.TableModels.Field", b =>

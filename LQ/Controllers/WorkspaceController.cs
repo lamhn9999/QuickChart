@@ -15,6 +15,7 @@ public class WorkspaceController : Controller
 {
     private readonly ICSVService _csvService;
     private readonly IAutoChartService _autoChartService;
+    private readonly TableRepositoryAbstract _repo;
     private readonly ILogger<WorkspaceController> _logger;
     private readonly Stopwatch _stopwatch = new Stopwatch();
 
@@ -22,6 +23,7 @@ public class WorkspaceController : Controller
     {
         _csvService = csvService;
         _autoChartService = autoChartService;
+        _repo = repo;
         _logger = logger;
     }
 
@@ -99,7 +101,36 @@ public class WorkspaceController : Controller
             catch (JsonException) { /* malformed — leave null, modal won't pop */ }
         }
         ViewBag.SuspiciousJson = suspiciousJson;
-        return View("Workspace", tableDisplay);
+
+        var savedCanvas = await _repo.GetCanvasDocument(currentFile.ID);
+        var hydrated = tableDisplay with { SavedCanvasJson = savedCanvas };
+        return View("Workspace", hydrated);
+    }
+
+    [HttpGet("canvas")]
+    public async Task<IActionResult> GetCanvas()
+    {
+        if (CurrentCSVFileDTO is null) return NotFound();
+        var doc = await _repo.GetCanvasDocument(CurrentCSVFileDTO.currentFileID);
+        return Content(doc ?? "null", "application/json");
+    }
+
+    [HttpPost("canvas")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> SaveCanvas([FromBody] CanvasDTO body)
+    {
+        if (CurrentCSVFileDTO is null) return NotFound();
+        if (string.IsNullOrWhiteSpace(body.Document)) return BadRequest("empty document");
+        try
+        {
+            await _repo.UpsertCanvasDocument(CurrentCSVFileDTO.currentFileID, body.Document);
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "canvas save failed");
+            return StatusCode(StatusCodes.Status500InternalServerError, "save failed");
+        }
     }
 
     [HttpPost]

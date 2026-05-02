@@ -40,6 +40,12 @@ public abstract class TableRepositoryAbstract
 
     protected abstract Task<TryChangeFieldTypeDTO> ChangeFieldType(ChangeFieldTypeDTO dto);
 
+    /// <summary>Returns the saved canvas document JSON for a CSVFile, or null if none exists.</summary>
+    public abstract Task<string?> GetCanvasDocument(int csvFileId);
+
+    /// <summary>Inserts or updates the canvas document for a CSVFile. Caller is responsible for ownership checks.</summary>
+    public abstract Task UpsertCanvasDocument(int csvFileId, string documentJson);
+
     /// <summary>
     /// Materialises the row indexes that survive <paramref name="filters"/>.
     /// Returns an empty array (not null) when no rows match.

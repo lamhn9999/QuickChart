@@ -1263,4 +1263,30 @@ public class TableRepository : TableRepositoryAbstract
     private record TimeBucketSumRow     { public DateTime Bucket { get; init; } public double Sum { get; init; } }
     private record TimeBucketCatCountRow { public DateTime Bucket { get; init; } public string? Category { get; init; } public int Count { get; init; } }
     private record TimeBucketCatAvgRow  { public DateTime Bucket { get; init; } public string? Category { get; init; } public double Average { get; init; } }
+
+    // ─── Canvas persistence ───────────────────────────────────────────────────
+
+    public override async Task<string?> GetCanvasDocument(int csvFileId)
+    {
+        return await _lqDbContext.Canvases
+            .AsNoTracking()
+            .Where(c => c.CSVFileID == csvFileId)
+            .Select(c => c.Document)
+            .SingleOrDefaultAsync();
+    }
+
+    public override async Task UpsertCanvasDocument(int csvFileId, string documentJson)
+    {
+        var existing = await _lqDbContext.Canvases.FindAsync(csvFileId);
+        if (existing is null)
+        {
+            _lqDbContext.Canvases.Add(new Canvas(csvFileId, documentJson));
+        }
+        else
+        {
+            existing.Document = documentJson;
+            existing.UpdatedAt = DateTime.UtcNow;
+        }
+        await _lqDbContext.SaveChangesAsync();
+    }
 }

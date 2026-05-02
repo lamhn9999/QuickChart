@@ -550,8 +550,10 @@
             margin: 0 3px; flex-shrink: 0;
         }
     </style>
-    <script type="module" src="~/js/main.js"></script>
+    <script id="saved-canvas" type="application/json">@Html.Raw(string.IsNullOrEmpty(Model.SavedCanvasJson) ? "null" : Model.SavedCanvasJson)</script>
     <script type="module" src="~/js/editor.js"></script>
+    <script type="module" src="~/js/main.js"></script>
+    <script type="module" src="~/js/canvas-persist.js"></script>
 </head>
 <body class="bg-[#FAFAFA] text-[#18181B]">
 <div class="flex flex-col h-screen max-h-screen">

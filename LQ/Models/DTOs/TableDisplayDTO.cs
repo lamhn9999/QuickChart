@@ -17,4 +17,5 @@ public record TableDisplayDTO
     public required List<TableFieldDTO> Fields { get; init; }
     public required string[][] Values { get; init; }
     public int RowCount => Values.Length;
+    public string? SavedCanvasJson { get; init; }
 }
