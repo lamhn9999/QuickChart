@@ -22,6 +22,7 @@ public interface ICSVService
     Task RemoveFileGuest(string guestToken, string fileName);     
     
     public Task<TryChangeFieldTypeDTO> ChangeFieldType(CSVFile csvFile, int fieldIndex, string newType, char? listSplitChar);
+    public Task<string> ChangeFieldCategories(CSVFile csvFile, int fieldIndex, List<Category> newCategories);
     public Task<CSVFile> GetFile(Analyst analyst, string fileName);
     public Task<CSVFile> GetFile(int csvFileId);
     public Task<CSVFile?> GetFile(Guid publicToken);

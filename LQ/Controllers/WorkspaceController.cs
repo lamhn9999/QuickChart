@@ -282,6 +282,26 @@ public class WorkspaceController : Controller
         }
     }
 
+    public record ChangeCategoriesRequest(int FieldIndex, List<Category> Categories);
+
+    [HttpPost("changeCategories")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> ChangeCategories([FromBody] ChangeCategoriesRequest req)
+    {
+        if (CurrentCSVFileDTO is null || CurrentTableDTO is null) return NotFound();
+        if (req.FieldIndex < 0 || req.FieldIndex >= CurrentTableDTO.FieldCount) return BadRequest("Invalid field index");
+        try
+        {
+            var csv = await _csvService.GetFile(CurrentCSVFileDTO.currentFileID);
+            var res = await _csvService.ChangeFieldCategories(csv, req.FieldIndex, req.Categories ?? new List<Category>());
+            return Json(res);
+        }
+        catch (Exception ex)
+        {
+            return Json(ex.Message);
+        }
+    }
+
     // Lists the current user's other CSVFiles (excluding the active workspace's
     // own file) for the "Copy chart to file…" picker. Returns public Guid tokens
     // and display names — the integer CSVFile.ID is never exposed.

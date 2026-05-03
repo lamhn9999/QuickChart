@@ -927,4 +927,12 @@ public class CSVService : TableRepository, ICSVService
         var field = await base.GetField(csvFile.ID, fieldIndex);
         return await ChangeFieldType(new ChangeFieldTypeDTO(field.ID, value, listSplitChar));
     }
+
+    public async Task<string> ChangeFieldCategories(CSVFile csvFile, int fieldIndex, List<Category> newCategories)
+    {
+        var field = await base.GetField(csvFile.ID, fieldIndex);
+        field.Categories = newCategories.Distinct().ToList();
+        await _lqDbContext.SaveChangesAsync();
+        return "Categories updated";
+    }
 }

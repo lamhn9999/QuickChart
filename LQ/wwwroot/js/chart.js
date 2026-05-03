@@ -2,7 +2,7 @@ import { listIndexes, appState } from './workspace.js';
 
 // ── Chart globals ─────────────────────────────────────────────────────────────
 export let chartInstances = [];
-export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble'];
+export const chartArray = ['pie', 'bar', 'line', 'bar', 'scatter', 'polarArea', 'bar', 'mixed', 'matrix', 'mixedBar', 'bubble', 'line'];
 
 // ── Chart group tracking ──────────────────────────────────────────────────────
 let _groupCounter = 0;
@@ -513,15 +513,16 @@ const _ICONS = {
     matrix:   `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="1.5" width="3.5" height="3.5" rx=".4" opacity=".9"/><rect x="6.2" y="1.5" width="3.5" height="3.5" rx=".4" opacity=".45"/><rect x="11"  y="1.5" width="3.5" height="3.5" rx=".4" opacity=".12"/><rect x="1.5" y="6.2" width="3.5" height="3.5" rx=".4" opacity=".5"/><rect x="6.2" y="6.2" width="3.5" height="3.5" rx=".4" opacity=".82"/><rect x="11"  y="6.2" width="3.5" height="3.5" rx=".4" opacity=".35"/><rect x="1.5" y="11"  width="3.5" height="3.5" rx=".4" opacity=".18"/><rect x="6.2" y="11"  width="3.5" height="3.5" rx=".4" opacity=".6"/><rect x="11"  y="11"  width="3.5" height="3.5" rx=".4" opacity=".95"/></svg>`,
     mixedbar: `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="8"   width="3" height="6"   rx=".5" opacity=".65"/><rect x="6.5" y="5"   width="3" height="9"   rx=".5" opacity=".65"/><rect x="11.5" y="7"  width="3" height="7"   rx=".5" opacity=".65"/><circle cx="3" cy="4" r="1.2" opacity=".9"/><circle cx="8" cy="2" r="1.2" opacity=".9"/><circle cx="13" cy="5.5" r="1.2" opacity=".9"/><polyline points="3,4 8,2 13,5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     bubble:   `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="3.5"  cy="12"   r="1.8" opacity=".55"/><circle cx="8.5"  cy="6.5"  r="3.5" opacity=".7"/><circle cx="13.5" cy="11"   r="2.5" opacity=".4"/></svg>`,
+    area:     `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 12.5C3.5 10 4 8.5 5.5 8C7.5 6.5 8.5 5.8 10 5.5C11.5 5.2 12.5 3.5 14 2.5L14 14L1.5 14Z" fill="currentColor" opacity=".55"/><path d="M1.5 12.5C3.5 10 4 8.5 5.5 8C7.5 6.5 8.5 5.8 10 5.5C11.5 5.2 12.5 3.5 14 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 
 // Row 0: Pie · Bar · Line · Histogram   (matches enum 0–3)
 // Row 1: Scatter · Polar · Side Bar · Mixed  (enum 4–7)
-// Row 2: Matrix · Mixed Bar · Bubble    (enum 8–10)
+// Row 2: Matrix · Mixed Bar · Bubble · Area (enum 8–11)
 const CHART_META = [
     { label: 'Pie',       svg: _ICONS.pie      }, { label: 'Bar',       svg: _ICONS.bar      }, { label: 'Line',      svg: _ICONS.line     }, { label: 'Histogram', svg: _ICONS.histogram },
     { label: 'Scatter',   svg: _ICONS.scatter  }, { label: 'Polar',     svg: _ICONS.polar    }, { label: 'Side Bar',  svg: _ICONS.sidebar  }, { label: 'Mixed',     svg: _ICONS.mixed    },
-    { label: 'Matrix',    svg: _ICONS.matrix   }, { label: 'Mixed Bar', svg: _ICONS.mixedbar }, { label: 'Bubble',    svg: _ICONS.bubble   },
+    { label: 'Matrix',    svg: _ICONS.matrix   }, { label: 'Mixed Bar', svg: _ICONS.mixedbar }, { label: 'Bubble',    svg: _ICONS.bubble   }, { label: 'Area',      svg: _ICONS.area     },
 ];
 
 
@@ -1797,10 +1798,10 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
 
     // ── "Turn into" — stacked chart deck button ──────────────────────────
     {
-        // Signature color per ChartType enum index (0–10)
+        // Signature color per ChartType enum index (0–11)
         const TYPE_COLORS = [
             '#E9967A','#60A5FA','#34D399','#FBBF24','#A78BFA',
-            '#FB7185','#2DD4BF','#FB923C','#818CF8','#86EFAC','#F472B6',
+            '#FB7185','#2DD4BF','#FB923C','#818CF8','#86EFAC','#F472B6','#22D3EE',
         ];
 
         // Three card indices shown in the deck: back → front
@@ -2079,6 +2080,7 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
         const isBar             = chartArray[sample.chartType] === 'bar';
         const isPie             = chartArray[sample.chartType] === 'pie';
         const isLine            = chartArray[sample.chartType] === 'line';
+        const isArea            = sample.chartType === 11;
         const isHorizontalBar   = sample.chartType === 6;
 
         if (isPie) {
@@ -2116,6 +2118,11 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
                                 tension: 0.3,
                                 pointRadius: 3,
                                 pointHoverRadius: 6,
+                            }),
+                            ...(isArea && {
+                                fill: 'origin',
+                                pointRadius: 2,
+                                pointHoverRadius: 5,
                             }),
                         };
                         if (typeof ds.label === 'string' && ds.label.startsWith('Trend:')) {

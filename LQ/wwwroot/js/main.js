@@ -2,6 +2,7 @@ import {
     appState,
     pendingIndexes,
     backHome, gearBtnClicked, toggleFieldTypeMenu, changeFieldType,
+    toggleCategoriesMenu, toggleCategory,
 } from './workspace.js';
 import { chartInstances, closeZoom, initSparklines, createChartGroup, replaceChartGroup, clearAllChartGroups, exportCanvas, createTextCard, setCanvasSize, setCanvasBg } from './chart.js';
 import {
@@ -108,6 +109,7 @@ Object.assign(window, {
     addTextCard: () => createTextCard(), _tcCreate: createTextCard, setCanvasSize, setCanvasBg,
     headerDragStart, headerDragEnd,
     gearBtnClicked, toggleFieldTypeMenu, changeFieldType,
+    toggleCategoriesMenu, toggleCategory,
     filterClicked, filterPopupClicked, filterInputKey,
     excludeCheckboxClicked, filterIntSpecificKey, filterIntRangeKey,
     applyIntRangeFilter, applyDtRangeFilter, excludeDtCheckboxClicked,
@@ -187,6 +189,8 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
         document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
         document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
+        document.querySelectorAll('.cat-menu-popup').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('.cat-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
     });
 
     if (left) {
@@ -196,6 +200,8 @@ document.addEventListener("DOMContentLoaded", () => {
             document.querySelectorAll('.gear-btn svg').forEach(s => s.classList.remove('rotate-180'));
             document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
             document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
+            document.querySelectorAll('.cat-menu-popup').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.cat-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
         });
     }
 

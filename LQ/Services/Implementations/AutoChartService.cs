@@ -511,6 +511,13 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
+    private async Task<Chart?> DetectTimeSeriesAreaAsync(Field dateField, IReadOnlyList<Field> numericFields, int[]? rowFilter = null)
+    {
+        var c = await DetectTimeSeriesLineAsync(dateField, numericFields, rowFilter);
+        if (c != null) c.ChartType = ChartType.Area;
+        return c;
+    }
+
     private async Task<Chart?> DetectTimeSeriesEnhancedAsync(Field dateField, IReadOnlyList<Field> numericFields, int[]? rowFilter = null)
     {
         if (numericFields.Count == 0) return null;
@@ -612,7 +619,9 @@ public class AutoChartService : IAutoChartService
 
         var identifier  = fields.Where(f => f.Categories.Contains(Category.Identifier)).ToList();
         var categorical = fields.Where(f => f.Categories.Contains(Category.Categorical)).ToList();
-        var numericAll  = fields.Where(f => f.Categories.Contains(Category.Numeric) && !f.Categories.Contains(Category.Identifier)).ToList();
+        var numericAll  = fields.Where(f => f.Categories.Contains(Category.Numeric) 
+                                            //&& !f.Categories.Contains(Category.Identifier)
+                                            ).ToList();
 
         // ── Scale-group numeric fields so fields with compatible IQR/median share a panel ──
         // Each group is a list of fields that can be plotted on the same y-axis.
@@ -772,6 +781,7 @@ public class AutoChartService : IAutoChartService
             if (catF.Type == typeof(DateTime))
             {
                 Add(await DetectTimeSeriesLineAsync(catF, new[] { nf }, rowFilter), k);
+                Add(await DetectTimeSeriesAreaAsync(catF, new[] { nf }, rowFilter), k);
                 Add(await DetectTimeSeriesEnhancedAsync(catF, new[] { nf }, rowFilter), k);
                 Add(await DetectCumulativeSumAsync(catF, nf, rowFilter), k);
                 Add(await DetectGrowthRateAsync(catF, nf, rowFilter), k);

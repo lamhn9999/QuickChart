@@ -194,3 +194,65 @@ export async function changeFieldType(event, fieldIndex, newType) {
         console.error("[changeFieldType] Fetch error:", e);
     }
 }
+
+// ── Field categories management ───────────────────────────────────────────────
+
+export function toggleCategoriesMenu(btn) {
+    const popup    = btn.nextElementSibling;
+    const isHidden = popup.classList.contains('hidden');
+
+    document.querySelectorAll('.cat-menu-popup').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('.cat-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
+    document.querySelectorAll('.type-menu-popup').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('.type-menu-btn svg').forEach(s => s.classList.remove('rotate-180'));
+
+    if (isHidden) {
+        popup.classList.remove('hidden');
+        btn.querySelector('svg').classList.add('rotate-180');
+    }
+}
+
+function setCategoryButtonActive(btn, active) {
+    btn.dataset.catActive = active ? 'true' : 'false';
+    btn.classList.toggle('bg-[#E9967A]/10', active);
+    btn.classList.toggle('text-[#18181B]', active);
+    btn.classList.toggle('text-zinc-600', !active);
+    btn.classList.toggle('hover:bg-zinc-100', !active);
+    btn.classList.toggle('hover:text-[#18181B]', !active);
+    btn.querySelector('.cat-check')?.classList.toggle('invisible', !active);
+}
+
+export async function toggleCategory(event, btn) {
+    event.stopPropagation();
+
+    const popup      = btn.closest('.cat-menu-popup');
+    const fieldIndex = parseInt(popup.dataset.fieldIndex, 10);
+    const wasActive  = btn.dataset.catActive === 'true';
+
+    // Optimistic flip
+    setCategoryButtonActive(btn, !wasActive);
+
+    const categories = [...popup.querySelectorAll('.cat-toggle-btn')]
+        .filter(b => b.dataset.catActive === 'true')
+        .map(b => parseInt(b.dataset.catValue, 10));
+
+    try {
+        const response = await fetch('/workspace/changeCategories', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ fieldIndex, categories })
+        });
+        const result = await response.json();
+        if (result !== 'Categories updated') throw new Error(result);
+
+        const sparkDiv = document.querySelector(`[data-spark-col="${fieldIndex}"]`);
+        if (sparkDiv) {
+            sparkDiv.dataset.sparkCategorical = categories.includes(0) ? 'true' : 'false';
+        }
+        showToast('Categories updated.');
+    } catch (e) {
+        setCategoryButtonActive(btn, wasActive);
+        showToast('Failed to update categories.', true);
+        console.error('[toggleCategory]', e);
+    }
+}

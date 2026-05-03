@@ -204,6 +204,9 @@
   .pointer-events-none {
     pointer-events: none;
   }
+  .invisible {
+    visibility: hidden;
+  }
   .visible {
     visibility: visible;
   }
@@ -488,6 +491,9 @@
   }
   .min-w-\[120px\] {
     min-width: 120px;
+  }
+  .min-w-\[160px\] {
+    min-width: 160px;
   }
   .flex-1 {
     flex: 1;
