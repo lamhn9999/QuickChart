@@ -16,6 +16,21 @@ import { createChartGroup, createTextCard } from './chart.js';
 const SAVE_URL = '/workspace/canvas';
 const DEBOUNCE_MS = 1500;
 
+// The Razor view emits this so we know which CSVFile token counts as "implicit /
+// native" for chart blocks. Charts whose csvFileToken matches the owner are
+// serialized without the token (compactness + back-compat); foreign-file
+// charts always carry it.
+function getOwnerFileToken() {
+    const tag = document.getElementById('canvas-owner-file-token');
+    if (!tag) return null;
+    try {
+        const v = JSON.parse(tag.textContent);
+        return typeof v === 'string' && v.length > 0 ? v : null;
+    } catch {
+        return null;
+    }
+}
+
 // ── DOM helpers for flow blocks ──────────────────────────────────────────────
 
 function makeTextBlock(blockType, content) {
@@ -77,19 +92,27 @@ const KINDS = [
             let fieldIndexes;
             try { fieldIndexes = JSON.parse(panel.dataset.fieldIndexes); }
             catch { fieldIndexes = []; }
-            return {
+            const out = {
                 fieldIndexes,
                 x: parseFloat(el.style.left) || 0,
                 y: parseFloat(el.style.top)  || 0,
                 width:  el.offsetWidth,
                 height: el.offsetHeight,
             };
+            // Emit csvFileToken only when the chart's source differs from this
+            // canvas's owner — keeps the common (native) case compact and
+            // backward-compatible with rows persisted before cross-file charts.
+            const panelToken = panel.dataset.csvFileToken;
+            if (panelToken && panelToken !== getOwnerFileToken()) {
+                out.csvFileToken = panelToken;
+            }
+            return out;
         },
         hydrate: async spec => {
             if (!Array.isArray(spec.fieldIndexes) || spec.fieldIndexes.length === 0) return null;
             const groupId = await createChartGroup(
                 spec.fieldIndexes,
-                { x: spec.x ?? 0, y: spec.y ?? 0 }
+                { x: spec.x ?? 0, y: spec.y ?? 0, csvFileToken: spec.csvFileToken ?? null }
             );
             if (groupId == null) return null;
             const card = document.querySelector(`#doc-canvas .canvas-card[data-groupId="${groupId}"]`);

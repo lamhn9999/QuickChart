@@ -1717,7 +1717,7 @@ function _onEscClose(e) {
 // ── appendChart ───────────────────────────────────────────────────────────────
 // Builds ONE panel-level header toolbar, wraps in grid item, registers.
 // groupId / fieldIndexes: when provided, stored on the DOM for drop-onto-card.
-function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, groupId = null, fieldIndexes = null) {
+function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, groupId = null, fieldIndexes = null, csvFileToken = null) {
     // ── 1. Build ONE panel-level header (always visible, owns drag-handle) ─
     const header = document.createElement("div");
     header.className = "drag-handle flex justify-between items-center px-3 py-1.5 border-b border-zinc-100 bg-white/90 backdrop-blur-sm relative z-50 select-none cursor-grab active:cursor-grabbing rounded-t-2xl";
@@ -1942,6 +1942,63 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
             removeChartGroup(groupId);
         };
         container.appendChild(removeBtn);
+
+        // ── Copy to file… button ──────────────────────────────────────────
+        // Lets the user copy this chart's spec into another CSVFile's canvas.
+        // The picker fetches accessible files lazily and posts to
+        // /workspace/canvas/append-chart with the source token baked in.
+        const copyWrapper = document.createElement('div');
+        copyWrapper.className = 'relative';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = "plot-btn cursor-pointer h-7 w-7 flex items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-400 hover:text-[#E9967A] hover:border-[#E9967A]/30 hover:bg-[#E9967A]/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none";
+        copyBtn.title = "Copy chart to another file";
+        copyBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`;
+
+        const copyPanel = document.createElement('div');
+        copyPanel.className = 'plot-menu hidden absolute top-full right-0 mt-1.5 min-w-[220px] max-h-[260px] overflow-auto p-2 bg-white border border-zinc-200 rounded-xl shadow-xl shadow-black/8 z-30 flex flex-col gap-1';
+        copyPanel.onclick = (e) => e.stopPropagation();
+
+        copyBtn.onclick = async (e) => {
+            e.stopPropagation();
+            const isHidden = copyPanel.classList.contains('hidden');
+            document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
+            if (!isHidden) return;
+
+            copyPanel.classList.remove('hidden');
+            copyPanel.innerHTML = '<div class="text-xs text-zinc-400 px-2 py-1">Loading…</div>';
+            try {
+                const r = await fetch('/workspace/files-for-copy');
+                if (!r.ok) throw new Error(String(r.status));
+                const files = await r.json();
+                copyPanel.innerHTML = '';
+                if (!Array.isArray(files) || files.length === 0) {
+                    copyPanel.innerHTML = '<div class="text-xs text-zinc-400 px-2 py-1">No other files to copy to.</div>';
+                    return;
+                }
+                const header = document.createElement('div');
+                header.className = 'text-[11px] uppercase tracking-wide text-zinc-400 px-2 py-1';
+                header.textContent = 'Copy to file…';
+                copyPanel.appendChild(header);
+
+                files.forEach(f => {
+                    const row = document.createElement('button');
+                    row.className = 'text-left text-xs px-2 py-1.5 rounded-md hover:bg-[#E9967A]/10 hover:text-[#E9967A] text-zinc-700 truncate';
+                    row.textContent = f.name;
+                    row.onclick = async () => {
+                        copyPanel.classList.add('hidden');
+                        await _copyChartToFile(panelDivCopy, csvFileToken, f.token);
+                    };
+                    copyPanel.appendChild(row);
+                });
+            } catch {
+                copyPanel.innerHTML = '<div class="text-xs text-red-400 px-2 py-1">Failed to load files.</div>';
+            }
+        };
+
+        copyWrapper.appendChild(copyBtn);
+        copyWrapper.appendChild(copyPanel);
+        container.appendChild(copyWrapper);
     }
 
     container.appendChild(bgbtnWrapper);
@@ -1956,6 +2013,11 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
     if (groupId !== null) {
         panelDivCopy.dataset.groupId      = String(groupId);
         panelDivCopy.dataset.fieldIndexes = JSON.stringify(fieldIndexes ? [...fieldIndexes] : []);
+        // Foreign-file charts carry their source token; native charts (drawn
+        // from the active workspace) leave the attribute unset so the
+        // serializer treats them as implicit/native.
+        if (csvFileToken) panelDivCopy.dataset.csvFileToken = csvFileToken;
+        else delete panelDivCopy.dataset.csvFileToken;
     }
 
     // ── Drop zone: another column header dragged onto this panel ─────────
@@ -1991,7 +2053,7 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
 // ── _buildPanel ───────────────────────────────────────────────────────────────
 // Builds one panel (a set of chart variants for a single panelIndex),
 // creates Chart.js instances, and appends them to the provided gridContainer.
-function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldIndexes = null) {
+function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldIndexes = null, csvFileToken = null) {
     const panelDiv = document.createElement("div");
     panelDiv.classList.add("flex", "flex-col");
     panelDiv.id = "panel" + pIdx;
@@ -2275,15 +2337,118 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
         chartInstances.push(chartInstance);
     });
 
-    appendChart(panelSamples, pIdx, wrappers, panelDiv, gridContainer, groupId, fieldIndexes);
+    appendChart(panelSamples, pIdx, wrappers, panelDiv, gridContainer, groupId, fieldIndexes, csvFileToken);
 }
 
 
+// ── _ownerFileToken ───────────────────────────────────────────────────────────
+// Reads the active workspace's CSVFile public token from the Razor-emitted
+// bootstrap script. Used as the source token for "Copy chart to file…" when
+// the chart was authored against the active workspace (no foreign token set).
+function _ownerFileToken() {
+    const tag = document.getElementById('canvas-owner-file-token');
+    if (!tag) return null;
+    try {
+        const v = JSON.parse(tag.textContent);
+        return typeof v === 'string' && v.length > 0 ? v : null;
+    } catch {
+        return null;
+    }
+}
+
+// ── _copyChartToFile ──────────────────────────────────────────────────────────
+// Posts the chart's spec to /workspace/canvas/append-chart for the chosen
+// target file. The source token is the chart's foreign csvFileToken if it
+// has one (it was already authored from another file); otherwise it's the
+// active workspace's owner token. We always send a source token so the
+// appended block is self-describing in the target canvas.
+async function _copyChartToFile(panelDiv, panelCsvFileToken, targetFileToken) {
+    let fieldIndexes;
+    try { fieldIndexes = JSON.parse(panelDiv.dataset.fieldIndexes || '[]'); }
+    catch { fieldIndexes = []; }
+    if (!Array.isArray(fieldIndexes) || fieldIndexes.length === 0) return;
+
+    const sourceToken = panelCsvFileToken
+        || panelDiv.dataset.csvFileToken
+        || _ownerFileToken();
+    if (!sourceToken) return;
+
+    const card = panelDiv.closest('.canvas-card');
+    const width  = card?.offsetWidth  || 480;
+    const height = card?.offsetHeight || 361;
+
+    try {
+        const r = await fetch('/workspace/canvas/append-chart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                targetFileToken,
+                chartSpec: { csvFileToken: sourceToken, fieldIndexes, width, height },
+            }),
+        });
+        if (!r.ok) console.error('[copyChartToFile] failed:', r.status);
+    } catch (err) {
+        console.error('[copyChartToFile] error:', err);
+    }
+}
+
+// ── _buildUnavailableCard ─────────────────────────────────────────────────────
+// Placeholder rendered when a foreign-file chart's source CSVFile is no
+// longer accessible (deleted, or access revoked). The block stays in the
+// canvas JSON so the user can decide whether to delete it explicitly — we
+// don't auto-prune, so a transient 403 (e.g. session expiry) doesn't lose
+// the chart.
+function _buildUnavailableCard(groupId, fieldIndexes, csvFileToken, dropPos) {
+    const card = document.createElement('div');
+    card.classList.add('canvas-card');
+    card.dataset.groupId = String(groupId);
+
+    const pos = dropPos ?? _getNextCardPosition();
+    card.style.cssText =
+        `position:absolute;left:${Math.max(0, pos.x ?? 0)}px;top:${Math.max(0, pos.y ?? 0)}px;` +
+        `width:480px;z-index:${++_zOrderCounter}`;
+
+    const panelsRow = document.createElement('div');
+    panelsRow.classList.add('canvas-card-panels');
+    card.appendChild(panelsRow);
+
+    const panel = document.createElement('div');
+    panel.className = 'flex flex-col items-center justify-center p-8 text-center text-zinc-500 bg-zinc-50 rounded-2xl';
+    panel.style.minHeight = '180px';
+    panel.dataset.groupId      = String(groupId);
+    panel.dataset.fieldIndexes = JSON.stringify(fieldIndexes ? [...fieldIndexes] : []);
+    panel.dataset.csvFileToken = csvFileToken;
+
+    const icon = document.createElement('div');
+    icon.className = 'text-3xl mb-2 opacity-60';
+    icon.textContent = '⚠️';
+    const title = document.createElement('div');
+    title.className = 'font-medium text-sm text-zinc-700';
+    title.textContent = 'Source file unavailable';
+    const sub = document.createElement('div');
+    sub.className = 'text-xs mt-1 text-zinc-500';
+    sub.textContent = 'The CSVFile this chart was sourced from has been removed or is no longer accessible.';
+
+    panel.appendChild(icon);
+    panel.appendChild(title);
+    panel.appendChild(sub);
+    panelsRow.appendChild(panel);
+
+    _groupData.set(groupId, { card, instances: [], ro: null });
+    return card;
+}
+
 // ── createChartGroup ──────────────────────────────────────────────────────────
 // Creates a free-form canvas card from a set of field indexes.
-// dropPos: optional { x, y } in canvas-relative pixels where the card should appear.
-export async function createChartGroup(fieldIndexes, dropPos = null) {
+// opts: optional bag — { x, y, csvFileToken }.
+//   x, y         — canvas-relative pixel position where the card should appear.
+//   csvFileToken — Guid string identifying the source CSVFile, if the chart
+//                  pulls from a file other than the active workspace's owner.
+//                  Omit (or pass null) to default to the active workspace.
+export async function createChartGroup(fieldIndexes, opts = null) {
     const groupId = ++_groupCounter;
+    const dropPos = opts ?? null;
+    const csvFileToken = (opts && opts.csvFileToken) || null;
 
     const selPlot = document.getElementById("selPlot");
     const noPlot  = document.getElementById("noPlot");
@@ -2297,11 +2462,30 @@ export async function createChartGroup(fieldIndexes, dropPos = null) {
         const response = await fetch("/workspace", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify([...fieldIndexes].map(Number)),
+            body: JSON.stringify({
+                csvFileToken,
+                fieldIndexes: [...fieldIndexes].map(Number),
+            }),
             signal: appState.controller.signal,
         });
-        const result = await response.json();
         if (loader) loader.hidden = true;
+
+        // Foreign-file charts may fail to fetch when the source CSVFile has
+        // been deleted or the user no longer has access. Render a placeholder
+        // card instead of crashing the whole canvas. We don't auto-prune the
+        // block — the user removes it explicitly.
+        if (response.status === 403 || response.status === 404) {
+            if (csvFileToken) {
+                const card = _buildUnavailableCard(groupId, fieldIndexes, csvFileToken, dropPos);
+                _docCanvas().appendChild(card);
+                _makeDraggable(card);
+                _updateCanvasSize();
+                return groupId;
+            }
+            return null;
+        }
+
+        const result = await response.json();
 
         if (result.length === 0) {
             if (_groupData.size === 0) {
@@ -2334,7 +2518,7 @@ export async function createChartGroup(fieldIndexes, dropPos = null) {
         Object.keys(grouped)
             .sort((a, b) => +a - +b)
             .forEach(pIdx => {
-                _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, panelsRow, groupId, fieldIndexes);
+                _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, panelsRow, groupId, fieldIndexes, csvFileToken);
             });
 
         const newInstances = chartInstances.slice(domsBefore);
@@ -2403,12 +2587,18 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
     const noPlot  = document.getElementById("noPlot");
     if (loader) loader.hidden = false;
 
+    // Replacement headers always come from the active workspace's table, so
+    // the rebuilt chart is implicit/native — drop any csvFileToken the old
+    // card may have carried.
     appState.controller = new AbortController();
     try {
         const response = await fetch("/workspace", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify([...newFieldIndexes].map(Number)),
+            body: JSON.stringify({
+                csvFileToken: null,
+                fieldIndexes: [...newFieldIndexes].map(Number),
+            }),
             signal: appState.controller.signal,
         });
         const result = await response.json();
@@ -2438,7 +2628,7 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
             return acc;
         }, {});
         Object.keys(grouped).sort((a, b) => +a - +b).forEach(pIdx => {
-            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, panelsRow, groupId, newFieldIndexes);
+            _buildPanel(grouped[pIdx], `${pIdx}_g${groupId}`, panelsRow, groupId, newFieldIndexes, null);
         });
 
         const newInstances = chartInstances.slice(domsBefore);

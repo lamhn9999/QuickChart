@@ -11,6 +11,7 @@ public abstract class TableRepositoryAbstract
 
     public abstract Task<CSVFile> GetFile(Analyst analyst, string fileName);
     public abstract Task<CSVFile> GetFile(int csvFileId);
+    public abstract Task<CSVFile?> GetFileByPublicToken(Guid publicToken);
     public abstract Task<List<CSVFile>> GetAllFiles(Analyst analyst);
     public abstract Task<bool> FileExists(Analyst analyst, string fileName);
     

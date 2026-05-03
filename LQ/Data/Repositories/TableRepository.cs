@@ -37,6 +37,11 @@ public class TableRepository : TableRepositoryAbstract
         return await _lqDbContext.CSVFiles.SingleAsync(f => f.ID == csvFileId);
     }
 
+    public override async Task<CSVFile?> GetFileByPublicToken(Guid publicToken)
+    {
+        return await _lqDbContext.CSVFiles.SingleOrDefaultAsync(f => f.PublicToken == publicToken);
+    }
+
     public override async Task<List<CSVFile>> GetAllFiles(Analyst analyst)
     {
         return await _lqDbContext.CSVFiles

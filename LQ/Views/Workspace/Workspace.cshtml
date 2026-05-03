@@ -551,6 +551,7 @@
         }
     </style>
     <script id="saved-canvas" type="application/json">@Html.Raw(string.IsNullOrEmpty(Model.SavedCanvasJson) ? "null" : Model.SavedCanvasJson)</script>
+    <script id="canvas-owner-file-token" type="application/json">"@ViewBag.FileToken"</script>
     <script type="module" src="~/js/editor.js"></script>
     <script type="module" src="~/js/main.js"></script>
     <script type="module" src="~/js/canvas-persist.js"></script>

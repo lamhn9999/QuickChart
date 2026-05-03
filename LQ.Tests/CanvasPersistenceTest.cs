@@ -208,6 +208,59 @@ public class CanvasPersistenceTest
         Assert.AreEqual(360, card.GetProperty("width").GetInt32());
     }
 
+    [TestMethod]
+    public async Task Document_RoundTrips_ChartBlockWithCsvFileToken()
+    {
+        // Cross-file charts carry their source CSVFile's public Guid token in
+        // the persisted block. The token is opaque to the repository — it must
+        // round-trip unchanged so the front-end can resolve it on hydrate.
+        var file = await SeedFile();
+        var sourceToken = Guid.NewGuid().ToString();
+        var payload = new
+        {
+            title = "with foreign chart",
+            blocks = new object[]
+            {
+                new
+                {
+                    kind = "chart",
+                    csvFileToken = sourceToken,
+                    fieldIndexes = new[] { 1, 4 },
+                    x = 24, y = 24, width = 480, height = 361,
+                },
+            },
+        };
+        await _repo.UpsertCanvasDocument(file.ID, JsonSerializer.Serialize(payload));
+
+        var got = await _repo.GetCanvasDocument(file.ID);
+        Assert.IsNotNull(got);
+
+        using var doc = JsonDocument.Parse(got);
+        var chart = doc.RootElement.GetProperty("blocks")[0];
+        Assert.AreEqual("chart", chart.GetProperty("kind").GetString());
+        Assert.AreEqual(sourceToken, chart.GetProperty("csvFileToken").GetString());
+        CollectionAssert.AreEqual(
+            new[] { 1, 4 },
+            chart.GetProperty("fieldIndexes").EnumerateArray().Select(e => e.GetInt32()).ToArray());
+    }
+
+    [TestMethod]
+    public async Task GetFileByPublicToken_ReturnsFile_WhenTokenMatches()
+    {
+        var file = await SeedFile();
+        var got = await _repo.GetFileByPublicToken(file.PublicToken);
+
+        Assert.IsNotNull(got);
+        Assert.AreEqual(file.ID, got!.ID);
+    }
+
+    [TestMethod]
+    public async Task GetFileByPublicToken_ReturnsNull_WhenTokenUnknown()
+    {
+        var got = await _repo.GetFileByPublicToken(Guid.NewGuid());
+        Assert.IsNull(got);
+    }
+
     private static void AssertJsonEqual(string expected, string actual)
     {
         using var e = JsonDocument.Parse(expected);
