@@ -292,6 +292,28 @@ public class AutoChartService : IAutoChartService
         c.Y.Add(new LabelData { Label = $"Mean of \"{numericField.Name}\" by \"{catField.Name}\"", Data = ordered.Select(r => (object)Math.Round(r.Average, 4)).ToList() });
         return c;
     }
+    
+    private async Task<Chart?> DetectLineChartAsync(Field catField, Field numericField, int[]? rowFilter = null)
+    {
+        var rows = await _repo.AverageByGroup(numericField, catField, rowFilter);
+        if (rows.Count == 0) return null;
+        var ordered = rows.OrderBy(r => r.Key.ToString()).ToList();
+        var c = new Chart { ChartType = ChartType.Line };
+        c.X = ordered.Select(r => r.Key).ToList();
+        c.Y.Add(new LabelData { Label = $"Mean of \"{numericField.Name}\" by \"{catField.Name}\"", Data = ordered.Select(r => (object)Math.Round(r.Average, 4)).ToList() });
+        return c;
+    }
+    
+    private async Task<Chart?> DetectAreaChartAsync(Field catField, Field numericField, int[]? rowFilter = null)
+    {
+        var rows = await _repo.AverageByGroup(numericField, catField, rowFilter);
+        if (rows.Count == 0) return null;
+        var ordered = rows.OrderBy(r => r.Key.ToString()).ToList();
+        var c = new Chart { ChartType = ChartType.Area };
+        c.X = ordered.Select(r => r.Key).ToList();
+        c.Y.Add(new LabelData { Label = $"Mean of \"{numericField.Name}\" by \"{catField.Name}\"", Data = ordered.Select(r => (object)Math.Round(r.Average, 4)).ToList() });
+        return c;
+    }
 
     private async Task<Chart?> DetectGroupedBarAsync(Field numericField, Field catFieldA, Field catFieldB, int[]? rowFilter = null)
     {
@@ -715,17 +737,19 @@ public class AutoChartService : IAutoChartService
         // ── 2-field: cat × cat ────────────────────────────────────────────────
         for (int ci = 0; ci < categorical.Count; ci++)
         for (int cj = ci + 1; cj < categorical.Count; cj++)
-        {
+        {   
             var catA = categorical[ci]; var catB = categorical[cj];
             if (catA.Type == typeof(DateTime))
             {
                 var k = Key(catA, catB); // Reg(k);
+                Console.WriteLine(chartIndex.GetValueOrDefault(k, -1));
                 if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 Add(await DetectTimeSeriesCategoricalAsync(catA, catB, rowFilter), k);
             }
             else if (catB.Type == typeof(DateTime))
             {
                 var k = Key(catB, catA); //Reg(k);
+                Console.WriteLine(chartIndex.GetValueOrDefault(k, -1));
                 if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
                 Add(await DetectTimeSeriesCategoricalAsync(catB, catA, rowFilter), k);
             }
@@ -755,6 +779,11 @@ public class AutoChartService : IAutoChartService
             else
             {
                 Add(cardMap[catF.ID] <= 20 ? await DetectBarChartAsync(catF, nf, rowFilter) : await DetectSideBarAsync(catF, nf, rowFilter), k);
+                if (cardMap[catF.ID] <= 20)
+                {
+                    Add(await DetectLineChartAsync(catF, nf, rowFilter), k);
+                    Add(await DetectAreaChartAsync(catF, nf, rowFilter), k);
+                }
                 Add(await DetectRankedBarAsync(catF, nf, rowFilter), k);
                 Add(await DetectBoxPlotAsync(catF, nf, rowFilter), k);
             }
