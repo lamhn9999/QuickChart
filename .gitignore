@@ -15,3 +15,6 @@ LQ/wwwroot/output.css
 /LQ/wwwroot/Angels Egg 1985.mp4
 
 LQ.Tests/*.log
+
+*.sql
+

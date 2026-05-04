@@ -4,7 +4,7 @@ import {
     backHome, gearBtnClicked, toggleFieldTypeMenu, changeFieldType,
     toggleCategoriesMenu, toggleCategory,
 } from './workspace.js';
-import { chartInstances, closeZoom, initSparklines, createChartGroup, replaceChartGroup, clearAllChartGroups, exportCanvas, createTextCard, setCanvasSize, setCanvasBg } from './chart.js';
+import { chartInstances, closeZoom, initSparklines, createChartGroup, replaceChartGroup, clearAllChartGroups, exportCanvas, createTextCard, setCanvasSize, setCanvasBg } from './chart.js?v=3';
 import {
     filterClicked, filterPopupClicked, filterInputKey,
     excludeCheckboxClicked, filterIntSpecificKey, filterIntRangeKey,

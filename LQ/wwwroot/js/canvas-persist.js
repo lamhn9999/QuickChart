@@ -11,7 +11,7 @@
 // Adding a new persistable element type is a single new entry in the KINDS
 // registry below — define how to recognise, serialise, and hydrate it.
 
-import { createChartGroup, createTextCard } from './chart.js';
+import { createChartGroup, createTextCard } from './chart.js?v=3';
 
 const SAVE_URL = '/workspace/canvas';
 const DEBOUNCE_MS = 1500;

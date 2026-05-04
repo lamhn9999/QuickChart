@@ -17,7 +17,8 @@ public enum ChartType
     Matrix,
     MixedBar,
     Bubble,
-    Area
+    Area,
+    Radar
 }
 
 public class LabelData
