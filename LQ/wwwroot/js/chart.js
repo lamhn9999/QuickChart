@@ -2067,6 +2067,7 @@ function _buildPanel(panelSamples, pIdx, gridContainer, groupId = null, fieldInd
         if (sIdx > 0) wrapper.style.display = 'none';
 
         wrapper.dataset.chartTitle = sample.title || `Chart ${sIdx + 1}`;
+        wrapper.dataset.chartType = String(sample.chartType);
 
         const ctx = document.createElement("canvas");
         wrapper.appendChild(ctx);
@@ -2411,9 +2412,11 @@ function _buildUnavailableCard(groupId, fieldIndexes, csvFileToken, dropPos) {
     card.dataset.groupId = String(groupId);
 
     const pos = dropPos ?? _getNextCardPosition();
+    const initW = dropPos?.width  ?? 480;
+    const initH = dropPos?.height;
     card.style.cssText =
         `position:absolute;left:${Math.max(0, pos.x ?? 0)}px;top:${Math.max(0, pos.y ?? 0)}px;` +
-        `width:480px;z-index:${++_zOrderCounter}`;
+        `width:${initW}px;${initH ? `height:${initH}px;` : ''}z-index:${++_zOrderCounter}`;
 
     const panelsRow = document.createElement('div');
     panelsRow.classList.add('canvas-card-panels');
@@ -2508,9 +2511,11 @@ export async function createChartGroup(fieldIndexes, opts = null) {
         card.dataset.groupId = String(groupId);
 
         const pos = dropPos ?? _getNextCardPosition();
+        const initW = opts?.width  ?? 480;
+        const initH = opts?.height;
         card.style.cssText =
             `position:absolute;left:${Math.max(0,pos.x)}px;top:${Math.max(0,pos.y)}px;` +
-            `width:480px;z-index:${++_zOrderCounter}`;
+            `width:${initW}px;${initH ? `height:${initH}px;` : ''}z-index:${++_zOrderCounter}`;
 
         // Flex-row container for multiple panels
         const panelsRow = document.createElement('div');

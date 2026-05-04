@@ -106,19 +106,46 @@ const KINDS = [
             if (panelToken && panelToken !== getOwnerFileToken()) {
                 out.csvFileToken = panelToken;
             }
+            const wrappers = [...panel.querySelectorAll('[data-chart-type]')];
+            const visible = wrappers.find(w => w.style.display !== 'none') ?? wrappers[0];
+            if (visible?.dataset.chartType != null) {
+                out.chartType = Number(visible.dataset.chartType);
+            }
             return out;
         },
         hydrate: async spec => {
             if (!Array.isArray(spec.fieldIndexes) || spec.fieldIndexes.length === 0) return null;
+            // Width/height go through createChartGroup so the card is sized
+            // up-front. Chart.js measures its parent at construction time; if
+            // we resize the card AFTER the chart is built, the canvas keeps
+            // the wrong (default 480px) dimensions until a later redraw.
             const groupId = await createChartGroup(
                 spec.fieldIndexes,
-                { x: spec.x ?? 0, y: spec.y ?? 0, csvFileToken: spec.csvFileToken ?? null }
+                {
+                    x: spec.x ?? 0,
+                    y: spec.y ?? 0,
+                    csvFileToken: spec.csvFileToken ?? null,
+                    width:  spec.width,
+                    height: spec.height,
+                }
             );
             if (groupId == null) return null;
             const card = document.querySelector(`#doc-canvas .canvas-card[data-groupId="${groupId}"]`);
             if (!card) return null;
-            if (spec.width)  card.style.width  = `${spec.width}px`;
-            if (spec.height) card.style.height = `${spec.height}px`;
+            if (Number.isInteger(spec.chartType)) {
+                const targets = card.querySelectorAll(`[data-chart-type="${spec.chartType}"]`);
+                targets.forEach(target => {
+                    const siblings = target.parentNode?.children ?? [];
+                    for (const w of siblings) {
+                        if (w.dataset && w.dataset.chartType !== undefined) {
+                            w.style.display = (w === target) ? 'flex' : 'none';
+                        }
+                    }
+                    const c = target.querySelector('canvas');
+                    const inst = c && (typeof Chart !== 'undefined' ? Chart.getChart(c) : null);
+                    if (inst) requestAnimationFrame(() => inst.resize());
+                });
+            }
             return card;
         },
         attachesItself: true,
@@ -127,18 +154,25 @@ const KINDS = [
         name: 'textCard',
         match: el => el.classList.contains('canvas-card')
                   && el.classList.contains('text-card'),
-        serialize: el => ({
-            content: el.querySelector('.tc-content')?.textContent ?? '',
-            x: parseFloat(el.style.left) || 0,
-            y: parseFloat(el.style.top)  || 0,
-            width:  el.offsetWidth,
-            // height intentionally omitted — text cards auto-size vertically
-        }),
+        serialize: el => {
+            const c = el.querySelector('.tc-content');
+            return {
+                content: c?.textContent ?? '',
+                blockType: c?.dataset.blockType || 'paragraph',
+                x: parseFloat(el.style.left) || 0,
+                y: parseFloat(el.style.top)  || 0,
+                width:  el.offsetWidth,
+                // height intentionally omitted — text cards auto-size vertically
+            };
+        },
         hydrate: spec => {
             const card = createTextCard({ x: spec.x ?? 0, y: spec.y ?? 0 });
             if (!card) return null;
             const c = card.querySelector('.tc-content');
-            if (c && spec.content) c.textContent = spec.content;
+            if (c) {
+                if (spec.blockType) c.dataset.blockType = spec.blockType;
+                if (spec.content)   c.textContent = spec.content;
+            }
             if (spec.width) card.style.width = `${spec.width}px`;
             return card;
         },
