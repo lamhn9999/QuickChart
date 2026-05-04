@@ -553,8 +553,8 @@
     <script id="saved-canvas" type="application/json">@Html.Raw(string.IsNullOrEmpty(Model.SavedCanvasJson) ? "null" : Model.SavedCanvasJson)</script>
     <script id="canvas-owner-file-token" type="application/json">"@ViewBag.FileToken"</script>
     <script type="module" src="~/js/editor.js"></script>
-    <script type="module" src="~/js/main.js"></script>
-    <script type="module" src="~/js/canvas-persist.js"></script>
+    <script type="module" src="~/js/main.js?v=3"></script>
+    <script type="module" src="~/js/canvas-persist.js?v=3"></script>
 </head>
 <body class="bg-[#FAFAFA] text-[#18181B]">
 <div class="flex flex-col h-screen max-h-screen">

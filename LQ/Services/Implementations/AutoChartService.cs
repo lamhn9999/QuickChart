@@ -601,6 +601,64 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
+    // ── Radar ─────────────────────────────────────────────────────────────────
+
+    private async Task<Chart?> DetectRadarChartAsync(Field catField, IReadOnlyList<Field> numericFields, int[]? rowFilter = null)
+    {
+        if (numericFields.Count < 3) return null;
+        var counts = await _repo.CountByGroup(catField, rowFilter);
+        if (counts.Count == 0) return null;
+        var topCats = counts.OrderByDescending(r => r.Count).Take(8).Select(r => r.Key.ToString()!).ToList();
+
+        // mean[fieldIndex][catValue]
+        var means = new Dictionary<string, Dictionary<string, double>>();
+        foreach (var nf in numericFields)
+        {
+            var rows = await _repo.AverageByGroup(nf, catField, rowFilter);
+            means[nf.Name] = rows.ToDictionary(r => r.Key.ToString()!, r => r.Average);
+        }
+
+        // Normalise each axis independently to [0, 100]
+        var axisNorm = new Dictionary<string, (double min, double range)>();
+        foreach (var nf in numericFields)
+        {
+            var vals = topCats.Select(c => means[nf.Name].GetValueOrDefault(c, 0.0)).ToList();
+            double mn = vals.Min(), mx = vals.Max(), rng = mx - mn;
+            axisNorm[nf.Name] = (mn, rng < 1e-10 ? 1.0 : rng);
+        }
+
+        var chart = new Chart { ChartType = ChartType.Radar, Title = $"Radar: {catField.Name}" };
+        chart.X = numericFields.Select(nf => (object)nf.Name).ToList();
+        foreach (var cat in topCats)
+        {
+            var data = numericFields
+                .Select(nf =>
+                {
+                    var raw = means[nf.Name].GetValueOrDefault(cat, 0.0);
+                    var (mn, rng) = axisNorm[nf.Name];
+                    return (object)Math.Round((raw - mn) / rng * 100, 2);
+                })
+                .ToList();
+            chart.Y.Add(new LabelData { Label = cat, Data = data });
+        }
+        return chart;
+    }
+
+    private async Task<Chart?> DetectRadarChartAsync(IReadOnlyList<Field> numericFields, int[]? rowFilter = null)
+    {
+        if (numericFields.Count < 3) return null;
+        var chart = new Chart { ChartType = ChartType.Radar };
+        chart.X = numericFields.Select(nf => (object)nf.Name).ToList();
+        var data = new List<object>();
+        foreach (var nf in numericFields)
+        {
+            var (median, _) = await _repo.GetScaleInfo(nf, rowFilter);
+            data.Add(Math.Round(median, 4));
+        }
+        chart.Y.Add(new LabelData { Label = "Median", Data = data });
+        return chart;
+    }
+
     // ─── Async CreateChart ────────────────────────────────────────────────────
 
     private async Task<List<Chart>> CreateChartAsync(int csvFileId, List<int> fieldIndexes, List<ValueFilterDTO>? filters = null)
@@ -899,6 +957,23 @@ public class AutoChartService : IAutoChartService
                 if (fvA != null && fvB != null && fvC != null)
                     Add(DetectBubbleChart(new List<FieldValues> { fvA, fvB, fvC }), k);
             }
+        }
+
+        // ── Radar: 1 categorical + 3+ numerics ───────────────────────────────
+        if (categorical.Count == 1 && numeric.Count >= 3
+            && !categorical[0].Type.Equals(typeof(DateTime)) && identifier.Count == 0)
+        {
+            var k = Key(fields.ToArray());
+            if (chartIndex.GetValueOrDefault(k, -1) == 0)
+                Add(await DetectRadarChartAsync(categorical[0], numeric, rowFilter), k);
+        }
+
+        // ── Radar: 3+ numerics only ───────────────────────────────────────────
+        if (categorical.Count == 0 && numeric.Count >= 3 && identifier.Count == 0)
+        {
+            var k = Key(numeric.ToArray());
+            if (chartIndex.GetValueOrDefault(k, -1) == 0)
+                Add(await DetectRadarChartAsync(numeric, rowFilter), k);
         }
 
         return res.Where(c => c != null).Select(c => c!).ToList();
