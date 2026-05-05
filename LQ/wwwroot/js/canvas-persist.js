@@ -130,7 +130,7 @@ const KINDS = [
                 }
             );
             if (groupId == null) return null;
-            const card = document.querySelector(`#doc-canvas .canvas-card[data-groupId="${groupId}"]`);
+            const card = document.querySelector(`#doc-canvas .canvas-card[data-group-id="${groupId}"]`);
             if (!card) return null;
             if (Number.isInteger(spec.chartType)) {
                 const targets = card.querySelectorAll(`[data-chart-type="${spec.chartType}"]`);

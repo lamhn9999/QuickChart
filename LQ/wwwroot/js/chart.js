@@ -1897,6 +1897,41 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
                         });
                     }
                     cell.addEventListener('click', () => {
+                        const fromLabel    = CHART_META[activeType]?.label ?? `type ${activeType}`;
+                        const toLabel      = CHART_META[typeIdx]?.label   ?? `type ${typeIdx}`;
+                        const fromSample   = panelSamples[effectiveIdx];
+                        const toSample     = panelSamples[matchIdx];
+                        const fromWrapper  = wrappers[effectiveIdx];
+                        const toWrapper    = wrappers[matchIdx];
+                        const fromInstance = Chart.getChart(fromWrapper?.querySelector('canvas'));
+                        const toInstance   = Chart.getChart(toWrapper?.querySelector('canvas'));
+                        console.groupCollapsed(`[Turn into] ${fromLabel} (type ${activeType}) → ${toLabel} (type ${typeIdx})`);
+                        console.log('from:', {
+                            chartType: activeType,
+                            label:     fromLabel,
+                            wrapperIdx: effectiveIdx,
+                            title:     fromSample?.title,
+                            x:         fromSample?.x,
+                            y:         fromSample?.y,
+                            z:         fromSample?.z,
+                            sample:    fromSample,
+                            wrapper:   fromWrapper,
+                            chart:     fromInstance,
+                        });
+                        console.log('to:', {
+                            chartType: typeIdx,
+                            label:     toLabel,
+                            wrapperIdx: matchIdx,
+                            title:     toSample?.title,
+                            x:         toSample?.x,
+                            y:         toSample?.y,
+                            z:         toSample?.z,
+                            sample:    toSample,
+                            wrapper:   toWrapper,
+                            chart:     toInstance,
+                        });
+                        console.log('groupId:', groupId, 'fieldIndexes:', fieldIndexes, 'panelSamples:', panelSamples);
+                        console.groupEnd();
                         wrappers.forEach((w, i) => { w.style.display = i === matchIdx ? 'flex' : 'none'; });
                         const c = Chart.getChart(wrappers[matchIdx].querySelector('canvas'));
                         if (c) requestAnimationFrame(() => c.resize());
