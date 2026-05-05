@@ -618,7 +618,7 @@ public class AutoChartService : IAutoChartService
             means[nf.Name] = rows.ToDictionary(r => r.Key.ToString()!, r => r.Average);
         }
 
-        // Normalise each axis independently to [0, 100]
+        // Normalise each axis independently to [25, 100]
         var axisNorm = new Dictionary<string, (double min, double range)>();
         foreach (var nf in numericFields)
         {
@@ -656,6 +656,30 @@ public class AutoChartService : IAutoChartService
             data.Add(Math.Round(median, 4));
         }
         chart.Y.Add(new LabelData { Label = "Median", Data = data });
+        return chart;
+    }
+
+    private async Task<Chart?> DetectRadarChartAsync(Field catFieldAxes, Field catFieldSeries, Field numericField, int[]? rowFilter = null)
+    {
+        var axesCounts   = await _repo.CountByGroup(catFieldAxes, rowFilter);
+        var seriesCounts = await _repo.CountByGroup(catFieldSeries, rowFilter);
+        if (axesCounts.Count < 3 || axesCounts.Count > 12) return null;
+        if (seriesCounts.Count < 2 || seriesCounts.Count > 8) return null;
+
+        var axes   = axesCounts.OrderByDescending(r => r.Count).Take(10).Select(r => r.Key.ToString()!).ToList();
+        var series = seriesCounts.OrderByDescending(r => r.Count).Take(6).Select(r => r.Key.ToString()!).ToList();
+
+        var rows   = await _repo.AverageByGroup(numericField, catFieldAxes, catFieldSeries, rowFilter);
+        var lookup = rows.ToDictionary(r => (r.KeyA.ToString()!, r.KeyB.ToString()!), r => r.Average);
+
+        // Normalise all values globally to [25, 100] so shapes are comparable across spokes.
+        var allVals = axes.SelectMany(ax => series.Select(s => lookup.GetValueOrDefault((ax, s), 0.0))).ToList();
+        double mn  = allVals.Min(), rng = Math.Max(allVals.Max() - mn, 1e-10);
+
+        var chart = new Chart { ChartType = ChartType.Radar, Title = $"Radar: {numericField.Name} by {catFieldAxes.Name} and {catFieldSeries.Name}" };
+        chart.X = axes.Cast<object>().ToList();
+        foreach (var s in series)
+            chart.Y.Add(new LabelData { Label = s, Data = axes.Select(ax => (object)Math.Round((lookup.GetValueOrDefault((ax, s), 0.0) - mn) / rng * 75 + 25, 2)).ToList() });
         return chart;
     }
 
@@ -974,6 +998,20 @@ public class AutoChartService : IAutoChartService
             var k = Key(numeric.ToArray());
             if (chartIndex.GetValueOrDefault(k, -1) == 0)
                 Add(await DetectRadarChartAsync(numeric, rowFilter), k);
+        }
+
+        // ── Radar: exactly 2 categoricals + 1 numeric ────────────────────────
+        if (categorical.Count == 2 && numeric.Count == 1
+            && !categorical[0].Type.Equals(typeof(DateTime)) && !categorical[1].Type.Equals(typeof(DateTime)))
+        {
+            var k = Key(fields.ToArray());
+            if (chartIndex.GetValueOrDefault(k, -1) == 0)
+            {
+                var (catAxes, catSeries) = cardMap[categorical[0].ID] >= cardMap[categorical[1].ID]
+                    ? (categorical[0], categorical[1])
+                    : (categorical[1], categorical[0]);
+                Add(await DetectRadarChartAsync(catAxes, catSeries, numeric[0], rowFilter), k);
+            }
         }
 
         return res.Where(c => c != null).Select(c => c!).ToList();
