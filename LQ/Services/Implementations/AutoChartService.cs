@@ -636,7 +636,7 @@ public class AutoChartService : IAutoChartService
                 {
                     var raw = means[nf.Name].GetValueOrDefault(cat, 0.0);
                     var (mn, rng) = axisNorm[nf.Name];
-                    return (object)Math.Round((raw - mn) / rng * 100, 2);
+                    return (object)Math.Round((raw - mn) / rng * 75 + 25, 2);
                 })
                 .ToList();
             chart.Y.Add(new LabelData { Label = cat, Data = data });
