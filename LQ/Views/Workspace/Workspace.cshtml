@@ -303,12 +303,12 @@
             border-radius: 14px;
             overflow: hidden;
         }
-        .canvas-card-panels > .flex.flex-col {
+        .canvas-card-panels > .flex.flex-col:not(.drag-handle) {
             flex: 1;
             min-width: 0;
             border-right: 1px solid rgba(0,0,0,.05);
         }
-        .canvas-card-panels > .flex.flex-col:last-child { border-right: none; }
+        .canvas-card-panels > .flex.flex-col:not(.drag-handle):last-child { border-right: none; }
 
         /* ── Editor UX: animations ────────────────────────────────────────── */
         @@keyframes blockIn {

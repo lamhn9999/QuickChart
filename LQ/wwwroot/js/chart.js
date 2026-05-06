@@ -312,7 +312,7 @@ export function exportCanvas() {
             `box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);overflow:hidden`;
 
         let panelsHTML = '';
-        card.querySelectorAll('.canvas-card-panels > .flex.flex-col').forEach(panel => {
+        card.querySelectorAll('.canvas-card-panels > .flex.flex-col:not(.drag-handle)').forEach(panel => {
             let wrappersHTML = '';
             panel.querySelectorAll('[data-chart-title]').forEach(wrapper => {
                 if (wrapper.style.display === 'none') return;
@@ -1726,7 +1726,9 @@ function _onEscClose(e) {
 function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, groupId = null, fieldIndexes = null, csvFileToken = null) {
     // ── 1. Build ONE panel-level header (always visible, owns drag-handle) ─
     const header = document.createElement("div");
-    header.className = "drag-handle flex justify-between items-center px-3 py-1.5 border-b border-zinc-100 bg-white/90 backdrop-blur-sm relative z-50 select-none cursor-grab active:cursor-grabbing rounded-t-2xl";
+    // `opacity-0` is safelisted in Views/tailwind_classes_in_js.html so the
+    // Tailwind CLI compiles it; we toggle it from JS to fade the handle in/out.
+    header.className = "drag-handle flex flex-col items-center gap-2 px-1.5 py-3 border-r border-zinc-100 bg-white/90 backdrop-blur-sm z-50 select-none cursor-grab active:cursor-grabbing rounded-l-2xl opacity-0 transition-opacity flex-shrink-0";
 
     // Drag grip icon (left side — visual affordance)
     const grip = document.createElement("div");
@@ -1739,20 +1741,16 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
         </svg>`;
 
     const container = document.createElement("div");
-    container.className = "flex items-center justify-end gap-2";
+    container.className = "flex flex-col items-center gap-2";
 
     // ── Background color button ───────────────────────────────────────────
     const bgbtnWrapper = document.createElement("div");
     bgbtnWrapper.className = "relative flex flex-col items-end";
 
     const bgbtn = document.createElement("button");
-    bgbtn.className = "cursor-pointer h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-zinc-200 bg-white text-[11px] font-medium text-zinc-500 hover:text-[#E9967A] hover:border-[#E9967A]/30 hover:bg-[#E9967A]/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none";
-    bgbtn.innerHTML = `
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
-        Bg
-        <svg class="w-3 h-3 transition-transform duration-200 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-        </svg>`;
+    bgbtn.className = "cursor-pointer h-7 w-7 flex items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 hover:text-[#E9967A] hover:border-[#E9967A]/30 hover:bg-[#E9967A]/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none";
+    bgbtn.title = "Background color";
+    bgbtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
 
     const colormap = document.createElement("div");
     colormap.className = "hidden absolute top-full right-0 mt-1.5 min-w-[150px] p-3 bg-white border border-zinc-200 rounded-xl shadow-xl shadow-black/8 z-30 flex flex-col gap-2 backdrop-blur-sm";
@@ -1794,7 +1792,6 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
         document.querySelectorAll('.plot-btn svg:last-of-type, .plot-bgbtn svg:last-of-type').forEach(s => s.classList.remove('rotate-180'));
         if (isHidden) {
             colormap.classList.remove("hidden");
-            bgbtn.querySelectorAll('svg')[bgbtn.querySelectorAll('svg').length - 1].classList.add('rotate-180');
         }
     };
 
@@ -1820,23 +1817,21 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
 
         // ── Deck button ───────────────────────────────────────────────────
         const turnBtn = document.createElement('button');
-        turnBtn.style.cssText = 'position:relative;height:28px;padding:0 10px 0 6px;display:flex;align-items:center;gap:7px;border-radius:6px;border:1px solid #e4e4e7;background:#fff;font-size:11px;font-weight:500;color:#71717a;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:border-color 150ms,color 150ms,box-shadow 150ms;white-space:nowrap;flex-shrink:0;outline:none';
+        turnBtn.title = 'Turn into';
+        turnBtn.style.cssText = 'position:relative;width:32px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid #e4e4e7;background:#fff;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:border-color 150ms,color 150ms,box-shadow 150ms;flex-shrink:0;outline:none';
 
         const stackEl = document.createElement('div');
-        stackEl.style.cssText = 'position:relative;width:28px;height:22px;flex-shrink:0';
+        stackEl.style.cssText = 'position:relative;width:24px;height:22px;flex-shrink:0';
 
         const stackCards = DECK.map((typeIdx, i) => {
             const card = document.createElement('div');
-            card.style.cssText = `position:absolute;left:2px;top:1px;width:20px;height:20px;border-radius:5px;background:${TYPE_COLORS[typeIdx]};display:flex;align-items:center;justify-content:center;transform:${idleXforms[i]};z-index:${i+1};box-shadow:0 1px 4px rgba(0,0,0,.22);transition:transform 220ms cubic-bezier(.34,1.56,.64,1);color:rgba(255,255,255,.9);flex-shrink:0`;
-            card.innerHTML = `<span style="width:12px;height:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${CHART_META[typeIdx].svg}</span>`;
+            card.style.cssText = `position:absolute;left:2px;top:1px;width:18px;height:18px;border-radius:5px;background:${TYPE_COLORS[typeIdx]};display:flex;align-items:center;justify-content:center;transform:${idleXforms[i]};z-index:${i+1};box-shadow:0 1px 4px rgba(0,0,0,.22);transition:transform 220ms cubic-bezier(.34,1.56,.64,1);color:rgba(255,255,255,.9);flex-shrink:0`;
+            card.innerHTML = `<span style="width:10px;height:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${CHART_META[typeIdx].svg}</span>`;
             stackEl.appendChild(card);
             return card;
         });
 
-        const deckLabel = document.createElement('span');
-        deckLabel.textContent = 'Turn into';
         turnBtn.appendChild(stackEl);
-        turnBtn.appendChild(deckLabel);
 
         const setDeckState = (open) => {
             stackCards.forEach((c, i) => { c.style.transform = open ? openXforms[i] : idleXforms[i]; });
@@ -1850,9 +1845,14 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
         document.addEventListener('click', () => { setDeckState(false); });
 
         // ── Panel ─────────────────────────────────────────────────────────
+        // Lives on the .canvas-card (which has overflow:visible) rather than
+        // inside .canvas-card-panels (overflow:hidden) so the popup isn't
+        // clipped by the toolbar's parent. Positioned per-open against the
+        // turnBtn's bounding rect so the panel anchors to the button's right edge.
         const turnPanel = document.createElement('div');
         turnPanel.className = 'hidden plot-menu';
-        turnPanel.style.cssText = 'position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid #e4e4e7;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.11),0 2px 8px rgba(0,0,0,.06);padding:10px;z-index:30';
+        turnPanel.style.cssText = 'position:absolute;background:#fff;border:1px solid #e4e4e7;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.11),0 2px 8px rgba(0,0,0,.06);padding:10px;z-index:30';
+        turnPanel.onclick = (e) => e.stopPropagation();
 
         const rebuildGrid = () => {
             const activeIdx    = wrappers.findIndex(w => w.style.display !== 'none');
@@ -1950,13 +1950,28 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
             const isHidden = turnPanel.classList.contains('hidden');
             document.querySelectorAll('.plot-menu, .plot-colormap').forEach(m => m.classList.add('hidden'));
             document.querySelectorAll('.plot-btn svg:last-of-type, .plot-bgbtn svg:last-of-type').forEach(s => s.classList.remove('rotate-180'));
-            if (isHidden) { rebuildGrid(); turnPanel.classList.remove('hidden'); setDeckState(true); }
-            else          { setDeckState(false); }
+            if (isHidden) {
+                rebuildGrid();
+                turnPanel.classList.remove('hidden');
+                const card = turnBtn.closest('.canvas-card');
+                if (card) {
+                    const cardR = card.getBoundingClientRect();
+                    const btnR  = turnBtn.getBoundingClientRect();
+                    turnPanel.style.left = `${btnR.right - cardR.left + 6}px`;
+                    turnPanel.style.top  = `${btnR.top   - cardR.top}px`;
+                }
+                setDeckState(true);
+            } else {
+                setDeckState(false);
+            }
         };
 
         turnWrapper.appendChild(turnBtn);
-        turnWrapper.appendChild(turnPanel);
         container.appendChild(turnWrapper);
+        // Attach the popup to the card itself so it escapes
+        // .canvas-card-panels' overflow:hidden boundary.
+        const cardForMenu = gridContainer.closest('.canvas-card') || gridContainer.parentNode;
+        (cardForMenu || turnWrapper).appendChild(turnPanel);
     }
 
     // ── Zoom button ───────────────────────────────────────────────────────
@@ -2048,8 +2063,37 @@ function appendChart(panelSamples, pIdx, wrappers, panelDivCopy, gridContainer, 
     header.appendChild(grip);
     header.appendChild(container);
 
-    // Prepend the single header to the panel div (before all chart wrappers)
-    panelDivCopy.prepend(header);
+    // Append the header to the .canvas-card (parent of .canvas-card-panels)
+    // rather than into the panels row itself. The panels row has
+    // overflow:hidden which would clip a handle floated outside its left
+    // edge; the .canvas-card has overflow:visible so the handle can sit
+    // beside the chart without being clipped.
+    // Absolutely position the handle so its right edge meets the card's
+    // left edge — the handle appears OUTSIDE the card on the left and
+    // never affects the chart's size or position.
+    header.style.position = 'absolute';
+    header.style.right    = '100%';
+    header.style.top      = '0';
+    header.style.bottom   = '0';
+    gridContainer.parentElement.appendChild(header);
+
+    // ── Hover-toggle: fade drag-handle in on chart hover OR handle hover ──
+    // opacity:0 (rather than display:none) keeps the handle's bounding box
+    // alive in its absolute slot beside the card, so mouseenter still fires
+    // when the cursor enters that (invisible) region — the user can reveal
+    // the handle by hovering either the chart or the handle's own zone.
+    // The relatedTarget check on mouseleave keeps the handle visible while
+    // the cursor moves between the chart and the handle.
+    const showHandle = () => header.classList.remove('opacity-0');
+    const hideHandle = (e) => {
+        const goingTo = e.relatedTarget;
+        if (goingTo && (header.contains(goingTo) || gridContainer.contains(goingTo))) return;
+        header.classList.add('opacity-0');
+    };
+    gridContainer.addEventListener('mouseenter', showHandle);
+    gridContainer.addEventListener('mouseleave', hideHandle);
+    header.addEventListener('mouseenter', showHandle);
+    header.addEventListener('mouseleave', hideHandle);
 
     // ── Store group metadata on DOM for drop-onto-card ────────────────────
     if (groupId !== null) {
@@ -2472,7 +2516,7 @@ function _buildUnavailableCard(groupId, fieldIndexes, csvFileToken, dropPos) {
         `width:${initW}px;${initH ? `height:${initH}px;` : ''}z-index:${++_zOrderCounter}`;
 
     const panelsRow = document.createElement('div');
-    panelsRow.classList.add('canvas-card-panels');
+    panelsRow.classList.add('canvas-card-panels', 'group');
     card.appendChild(panelsRow);
 
     const panel = document.createElement('div');
@@ -2572,7 +2616,7 @@ export async function createChartGroup(fieldIndexes, opts = null) {
 
         // Flex-row container for multiple panels
         const panelsRow = document.createElement('div');
-        panelsRow.classList.add('canvas-card-panels');
+        panelsRow.classList.add('canvas-card-panels', 'group');
         card.appendChild(panelsRow);
 
         const domsBefore = chartInstances.length;
