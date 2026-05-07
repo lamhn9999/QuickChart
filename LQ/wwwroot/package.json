@@ -1,9 +1,8 @@
 {
+  "//": "Runtime-only deps. These end up under wwwroot/node_modules/ which is git-tracked because Razor serves chart.js directly from /node_modules/chart.js/.... Dev tooling (typescript, prettier) lives in the root package.json instead.",
   "dependencies": {
     "@tailwindcss/cli": "^4.1.18",
     "chart.js": "^4.5.1",
-    "muuri": "^0.9.5",
-    "tailwindcss": "^4.1.18",
-    "web-animations-js": "^2.3.2"
+    "tailwindcss": "^4.1.18"
   }
 }

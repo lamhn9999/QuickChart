@@ -1,0 +1,20 @@
+{
+  "//": "Type-checks LQ/wwwroot/js/ via JSDoc + // @ts-check (no transpile, no emit). See ../../.claude/plans/analyze-wwwroot-js-how-would-snug-donut.md (Phase 0). VS Code/Cursor treats this directory as the JS project root for IntelliSense; npm scripts at ../../package.json invoke tsc against this file.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true
+  },
+  "include": ["js/**/*.js", "js/**/*.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

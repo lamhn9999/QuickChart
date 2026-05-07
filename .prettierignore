@@ -1,0 +1,8 @@
+node_modules/
+LQ/wwwroot/node_modules/
+LQ/wwwroot/style_tw.css
+LQ/bin/
+LQ/obj/
+LQ.Tests/bin/
+LQ.Tests/obj/
+*.min.js

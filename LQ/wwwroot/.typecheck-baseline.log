@@ -1,0 +1,18 @@
+Phase-0 baseline (Tailwind v4 cleanup + JSDoc plan, recorded before any carve):
+  83 errors across 6 god-modules (chart.js, editor.js, main.js, filter.js, workspace.js, canvas-persist.js)
+  jsconfig: strict:false, noImplicitAny:false, strictNullChecks:false
+
+Phase-7 baseline (god modules deleted, all carves complete):
+  0 errors under non-strict
+
+Phase-9 final (strict mode flip):
+  0 errors under strict:true (noImplicitAny:true + strictNullChecks:true)
+  jsconfig: strict:true, noImplicitAny:true, strictNullChecks:true
+
+  Path 0 → 40 (under strict) → 0:
+    -  16 implicit-any params (filter/index.js, core/menus.js, filter/state.js,
+                                chart/data-utils.js, workspace/table.js)
+    -   6 enumMap/TYPE_LABEL index sigs (typed as Record<string, …>)
+    -   8 possibly-null DOM refs (editor/, navigator.js — captured non-null locals)
+    -   2 catch-error type checks (filter/api.js)
+    -   8 number-filter null/undefined (FilterSpec arrays now `… | null`)
