@@ -56,7 +56,7 @@ export function toggleFieldTypeMenu(btn) {
   if (!popup) return;
   const isHidden = popup.classList.contains('hidden');
 
-  closeMenus(['fieldType']);
+  closeMenus(['fieldType', 'category']);
 
   if (isHidden) {
     popup.classList.remove('hidden');
