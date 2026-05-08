@@ -1145,8 +1145,20 @@
     async function loadAll() {
         const containers = Array.from(document.querySelectorAll('[data-spark-col]'));
         const BATCH = 4;
-        for (let i=0; i<containers.length; i+=BATCH)
-            await Promise.allSettled(containers.slice(i, i+BATCH).map(loadSparkline));
+        const sparklinesReady = (async () => {
+            for (let i=0; i<containers.length; i+=BATCH)
+                await Promise.allSettled(containers.slice(i, i+BATCH).map(loadSparkline));
+        })();
+
+        await Promise.race([sparklinesReady, new Promise(r => setTimeout(r, 1750))]);
+
+        const tp = document.getElementById('tablePanel');
+        const mw = document.getElementById('mainWrapper');
+        if (tp && mw && !mw.classList.contains('is-collapsed')) {
+            tp.style.transition = 'all 0.5s ease-in-out';
+            mw.classList.add('is-collapsed');
+            setTimeout(() => { tp.style.transition = ''; }, 500);
+        }
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadAll);
