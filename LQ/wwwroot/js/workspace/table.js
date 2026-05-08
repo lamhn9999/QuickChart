@@ -24,8 +24,22 @@ export function updateTable(dto) {
     document.querySelector('#dataTable tbody')
   );
   if (!tbody) return;
-  const trs = tbody.querySelectorAll('tr');
 
+  // Build per-column numeric flag from thead data-spark-type attributes.
+  const table = tbody.closest('table');
+  const colIsNum = table
+    ? Array.from(table.querySelectorAll('thead th')).map((th) => {
+        const t = th.querySelector('[data-spark-type]')?.dataset.sparkType ?? '';
+        return t === 'Int32' || t === 'Double';
+      })
+    : /** @type {boolean[]} */ ([]);
+
+  const TR_CLASS =
+    'even:bg-zinc-50/70 hover:bg-[#E9967A]/5 transition-colors duration-75 group/row cursor-default';
+  const TD_BASE =
+    'px-3 py-2 text-xs border-b border-zinc-100 whitespace-nowrap max-w-[220px] overflow-hidden text-ellipsis transition-colors duration-75';
+
+  const trs = tbody.querySelectorAll('tr');
   const dataRows = dto.values;
 
   dataRows.forEach((row, i) => {
@@ -36,16 +50,28 @@ export function updateTable(dto) {
       tr = trs[i];
     } else {
       tr = document.createElement('tr');
+      tr.className = TR_CLASS;
       tbody.appendChild(tr);
-      row.forEach(() => {
-        const td = document.createElement('td');
-        tr.appendChild(td);
-      });
+      row.forEach(() => tr.appendChild(document.createElement('td')));
     }
 
     const tds = tr.querySelectorAll('td');
     row.forEach((cell, j) => {
-      tds[j].textContent = /** @type {any} */ (cell);
+      const td = tds[j];
+      const text = cell == null ? '' : String(cell);
+      td.textContent = text;
+
+      const isNum = colIsNum[j] ?? false;
+      const isEmpty = text === '';
+      const isZero = isNum && (text === '0' || text === '0.0' || text === '0.00');
+
+      let cls = TD_BASE;
+      if (isNum) cls += ' text-right tabular-nums';
+      if (isEmpty) cls += ' text-zinc-300';
+      else if (isZero) cls += ' text-zinc-400 group-hover/row:text-zinc-600';
+      else cls += ' text-zinc-500 group-hover/row:text-zinc-900';
+
+      td.className = cls;
     });
   });
 
