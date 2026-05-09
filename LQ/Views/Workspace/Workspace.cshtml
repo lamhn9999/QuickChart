@@ -1127,18 +1127,31 @@
             else if (labels.length>0) { let topIdx=0; for(let i=0;i<labels.length;i++){if(!NA_RE.test(String(labels[i]).trim())){topIdx=i;break;}} const topPct=Math.round(nums[topIdx]/total*100); stat=`${String(labels[topIdx]??'').slice(0,16)} · ${topPct}%  ·  ${nums.length} cat`; }
             else { stat=`${nums.length} values`; }
         }
-        if (statEl) statEl.textContent = stat;
+        if (statEl && type !== 3) {
+            if (stat.includes('  –  ')) {
+                const [left, right] = stat.split('  –  ');
+                statEl.style.cssText = 'display:flex;justify-content:space-between;width:100%';
+                statEl.innerHTML = `<span>${left}</span><span>${right}</span>`;
+            } else {
+                statEl.style.cssText = '';
+                statEl.textContent = stat;
+            }
+        }
     }
 
     async function loadSparkline(container) {
         const idx = container.dataset.sparkCol;
+        if (container.dataset.sparkType === 'Boolean') return;
         try {
             const res = await fetch(`/workspace/sparkline/${idx}`);
             if (!res.ok || res.status === 204) return;
             const sample = await res.json();
             const canvas = container.querySelector('.sparkline-canvas');
             const statEl = container.querySelector('.sparkline-stat');
-            if (canvas) draw(canvas, statEl, sample);
+            if (canvas) {
+                canvas.style.display = '';
+                draw(canvas, statEl, sample);
+            }
         } catch {}
     }
 
