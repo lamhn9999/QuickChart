@@ -414,6 +414,15 @@
         .tab-btn.tab-active { color: var(--text); border-bottom-color: var(--accent); }
         .tab-btn:hover { color: var(--text); }
 
+        .tab-content {
+            display: none;
+        }
+        .tab-content.tab-active {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+
         .form-group { display: flex; flex-direction: column; gap: 0.55rem; }
         .form-input {
             width: 100%; background: #F4F4F5; color: var(--text);
@@ -519,19 +528,19 @@
         function focusAuth() { openModal('signin'); }
 
         function showTab(type) {
-            const siGroup  = document.getElementById('signin-group');
-            const regGroup = document.getElementById('register-group');
-            const btnSi    = document.getElementById('tab-signin');
-            const btnReg   = document.getElementById('tab-register');
+            const siContent = document.getElementById('signin-content');
+            const regContent = document.getElementById('register-content');
+            const btnSi = document.getElementById('tab-signin');
+            const btnReg = document.getElementById('tab-register');
             if (type === 'signin') {
-                regGroup.classList.add('hidden');
-                siGroup.classList.remove('hidden');
+                regContent.classList.remove('tab-active');
+                siContent.classList.add('tab-active');
                 btnReg.classList.remove('tab-active');
                 btnSi.classList.add('tab-active');
                 document.getElementById('nameinput').focus();
             } else {
-                siGroup.classList.add('hidden');
-                regGroup.classList.remove('hidden');
+                siContent.classList.remove('tab-active');
+                regContent.classList.add('tab-active');
                 btnSi.classList.remove('tab-active');
                 btnReg.classList.add('tab-active');
                 document.getElementById('nameinputr').focus();
@@ -552,8 +561,8 @@
         }
 
         async function register() {
-            document.querySelectorAll('#register-group .error-log').forEach(e => e.remove());
-            document.querySelectorAll('#register-group input').forEach(i => {
+            document.querySelectorAll('#register-content .error-log').forEach(e => e.remove());
+            document.querySelectorAll('#register-content input').forEach(i => {
                 i.classList.remove('error-border', 'shake');
                 i._errorLog = null;
             });
@@ -736,13 +745,13 @@
             <button class="tab-btn" id="tab-register">Register</button>
         </div>
 
-        <div id="signin-group" class="form-group">
+        <div id="signin-content" class="tab-content tab-active">
             <input class="form-input" type="text"     id="nameinput"  placeholder="Name or Email"  autocomplete="username">
             <input class="form-input" type="password" id="pwinput"    placeholder="Password"        autocomplete="current-password">
             <button class="form-submit" id="signinbutton1">SIGN IN</button>
         </div>
 
-        <div id="register-group" class="form-group hidden">
+        <div id="register-content" class="tab-content">
             <input class="form-input" type="text"     id="nameinputr"      placeholder="Your name">
             <input class="form-input" type="text"     id="emailinputr"     placeholder="Email address"    autocomplete="email">
             <input class="form-input" type="password" id="pwinputr"        placeholder="Password"          autocomplete="new-password">
