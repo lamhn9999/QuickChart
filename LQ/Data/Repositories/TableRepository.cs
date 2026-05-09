@@ -283,6 +283,8 @@ public class TableRepository : TableRepositoryAbstract
 
         await using var tx = await _lqDbContext.Database.BeginTransactionAsync();
 
+        field.SparklineJson = null;
+        field.SparklineTypeName = null;
         field.Type = dto.NewType;
 
         if (dto.NewType == typeof(DateTime))
@@ -1293,5 +1295,26 @@ public class TableRepository : TableRepositoryAbstract
             existing.UpdatedAt = DateTime.UtcNow;
         }
         await _lqDbContext.SaveChangesAsync();
+    }
+
+    public override async Task<string?> GetSparklineJsonAsync(int csvFileId, int fieldIndex)
+    {
+        return await _lqDbContext.Fields
+            .AsNoTracking()
+            .Where(f => f.CSVFile.ID == csvFileId
+                     && f.Index == fieldIndex
+                     && f.SparklineJson != null
+                     && f.SparklineTypeName == f.TypeName)
+            .Select(f => f.SparklineJson)
+            .SingleOrDefaultAsync();
+    }
+
+    public override async Task SetSparklineJsonAsync(int csvFileId, int fieldIndex, string json, string typeName)
+    {
+        await _lqDbContext.Fields
+            .Where(f => f.CSVFile.ID == csvFileId && f.Index == fieldIndex && f.TypeName == typeName)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(f => f.SparklineJson, json)
+                .SetProperty(f => f.SparklineTypeName, typeName));
     }
 }

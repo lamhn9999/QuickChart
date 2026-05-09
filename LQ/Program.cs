@@ -1,6 +1,7 @@
 using LQ.Data.Database;
 using LQ.Data.Repositories;
 using LQ.Models.AnalystModels;
+using LQ.Services;
 using LQ.Services.Implementations;
 using LQ.Services.Interfaces;
 using Microsoft.AspNetCore.Http.Features;
@@ -55,6 +56,7 @@ builder.Services.AddScoped<IAnalystService, AnalystService>();
 builder.Services.AddScoped<ICSVService, CSVService>();
 builder.Services.AddScoped<TableRepositoryAbstract, TableRepository>();
 builder.Services.AddScoped<IAutoChartService, AutoChartService>();
+builder.Services.AddSingleton<SparklineCancelService>();
 builder.Services.AddHostedService<GuestCleanupService>();
 // AddSession
 builder.Services.AddDistributedMemoryCache();

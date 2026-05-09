@@ -48,6 +48,18 @@ public abstract class TableRepositoryAbstract
     public abstract Task UpsertCanvasDocument(int csvFileId, string documentJson);
 
     /// <summary>
+    /// Returns cached sparkline JSON if it was computed for the field's current type.
+    /// Returns null on cache miss or TypeName mismatch.
+    /// </summary>
+    public abstract Task<string?> GetSparklineJsonAsync(int csvFileId, int fieldIndex);
+
+    /// <summary>
+    /// Conditionally stores sparkline JSON. The write is a no-op if TypeName has changed
+    /// since <paramref name="typeName"/> was captured, preventing stale cache on type-change races.
+    /// </summary>
+    public abstract Task SetSparklineJsonAsync(int csvFileId, int fieldIndex, string json, string typeName);
+
+    /// <summary>
     /// Materialises the row indexes that survive <paramref name="filters"/>.
     /// Returns an empty array (not null) when no rows match.
     /// Pass the result as <c>rowFilter</c> to any aggregate method to scope

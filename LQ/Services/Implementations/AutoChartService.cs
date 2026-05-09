@@ -1019,7 +1019,7 @@ public class AutoChartService : IAutoChartService
 
     // ── Single-field chart for sparklines ─────────────────────────────────────
 
-    public async Task<Chart?> DetectSingleFieldChartAsync(int csvFileId, int fieldIndex, List<ValueFilterDTO>? filters = null)
+    public async Task<Chart?> DetectSingleFieldChartAsync(int csvFileId, int fieldIndex, List<ValueFilterDTO>? filters = null, CancellationToken ct = default)
     {
         var csvFile = await _repo.GetFile(csvFileId);
         var fields  = await _repo.GetFields(csvFile, [fieldIndex]);
@@ -1031,15 +1031,22 @@ public class AutoChartService : IAutoChartService
             : null;
         if (rowFilter is { Length: 0 }) return null;
 
+        ct.ThrowIfCancellationRequested();
+
         if (field.Type == typeof(DateTime))
             return await DetectDateTimeFrequencyAsync(field, rowFilter);
+
+        ct.ThrowIfCancellationRequested();
 
         if (field.Categories.Contains(Category.Numeric))
             return await DetectHistogramAsync(field, rowFilter);
 
+        ct.ThrowIfCancellationRequested();
+
         if (field.Categories.Contains(Category.Categorical))
         {
             int dc = await _repo.CountDistinct(field, rowFilter);
+            ct.ThrowIfCancellationRequested();
             return dc <= 20
                 ? await DetectPieChartAsync(field, rowFilter)
                 : await DetectSideBarAsync(field, rowFilter);

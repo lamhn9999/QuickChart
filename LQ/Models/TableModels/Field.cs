@@ -47,5 +47,7 @@ public class Field
     }
 
     public required List<Category> Categories { get; set; } = new();
+    public string? SparklineJson { get; set; }
+    public string? SparklineTypeName { get; set; }
     public required CSVFile CSVFile { get; set; }
 }

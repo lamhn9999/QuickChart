@@ -163,6 +163,12 @@ namespace LQ.Migrations
                     b.Property<string>("Name")
                         .HasColumnType("text");
 
+                    b.Property<string>("SparklineJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SparklineTypeName")
+                        .HasColumnType("text");
+
                     b.Property<string>("TypeName")
                         .HasColumnType("text");
 

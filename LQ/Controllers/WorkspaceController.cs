@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using LQ.Data.Repositories;
 using LQ.Models.TableModels;
+using LQ.Services;
 using LQ.Services.Implementations;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
@@ -17,15 +18,18 @@ public class WorkspaceController : Controller
     private readonly IAnalystService _analystService;
     private readonly IAutoChartService _autoChartService;
     private readonly TableRepositoryAbstract _repo;
+    private readonly SparklineCancelService _sparklineCancel;
     private readonly ILogger<WorkspaceController> _logger;
     private readonly Stopwatch _stopwatch = new Stopwatch();
+    private static readonly JsonSerializerOptions _camelCaseJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, TableRepositoryAbstract repo, ILogger<WorkspaceController> logger)
+    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, TableRepositoryAbstract repo, SparklineCancelService sparklineCancel, ILogger<WorkspaceController> logger)
     {
         _csvService = csvService;
         _analystService = analystService;
         _autoChartService = autoChartService;
         _repo = repo;
+        _sparklineCancel = sparklineCancel;
         _logger = logger;
     }
 
@@ -259,10 +263,31 @@ public class WorkspaceController : Controller
     {
         if (CurrentCSVFileDTO is null || CurrentTableDTO is null) return NotFound();
         if (fieldIndex < 0 || fieldIndex >= CurrentTableDTO.FieldCount) return BadRequest();
-        var chart = await _autoChartService.DetectSingleFieldChartAsync(
-            CurrentCSVFileDTO.currentFileID, fieldIndex, CurrentFilters);
-        if (chart is null) return NoContent();
-        return Json(chart);
+
+        var cached = await _repo.GetSparklineJsonAsync(CurrentCSVFileDTO.currentFileID, fieldIndex);
+        if (cached is not null && cached.Contains("\"chartType\"")) return Content(cached, "application/json");
+
+        var field = await _repo.GetField(CurrentCSVFileDTO.currentFileID, fieldIndex);
+        var ct = _sparklineCancel.Register(CurrentCSVFileDTO.currentFileID, fieldIndex);
+        try
+        {
+            var chart = await _autoChartService.DetectSingleFieldChartAsync(
+                CurrentCSVFileDTO.currentFileID, fieldIndex, null, ct);
+            if (chart is null) return NoContent();
+
+            var json = JsonSerializer.Serialize(chart, _camelCaseJson);
+            await _repo.SetSparklineJsonAsync(
+                CurrentCSVFileDTO.currentFileID, fieldIndex, json, field.TypeName ?? "");
+            return Content(json, "application/json");
+        }
+        catch (OperationCanceledException)
+        {
+            return NoContent();
+        }
+        finally
+        {
+            _sparklineCancel.Unregister(CurrentCSVFileDTO.currentFileID, fieldIndex);
+        }
     }
 
     [HttpPost("changeFieldType")]
@@ -273,6 +298,7 @@ public class WorkspaceController : Controller
         if (fieldIndex < 0 || fieldIndex >= CurrentTableDTO.FieldCount) return BadRequest("Invalid field index");
         try
         {
+            _sparklineCancel.Cancel(CurrentCSVFileDTO.currentFileID, fieldIndex);
             var res = await _csvService.ChangeFieldType(await _csvService.GetFile(CurrentCSVFileDTO.currentFileID), fieldIndex, newType, listSplitChar);
             return Json(res);
         }

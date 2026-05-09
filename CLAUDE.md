@@ -126,7 +126,7 @@ Three controllers; no `[Authorize]` attributes — all auth checks are manual se
 | Table | Key | Notable columns | Relationships |
 |---|---|---|---|
 | `CSVFile` | `ID` (serial) | `Name`, `CreatedTime`, `ModifiedTime`, `AnalystID` (nullable FK → Analyst), `GuestToken` (nullable, indexed) | Cascade delete from Analyst |
-| `Field` | `ID` (serial) | `Name`, `Index`, `TypeName` (C# AssemblyQualifiedName), `Categories` (serialised) | FK → CSVFile |
+| `Field` | `ID` (serial) | `Name`, `Index`, `TypeName` (C# AssemblyQualifiedName), `Categories` (serialised), `SparklineJson` (nullable, camelCase), `SparklineTypeName` (nullable, mirrors `TypeName` at cache-write time) | FK → CSVFile |
 | `Value` | **(FieldID, RowIndex)** composite PK | `ValueString` (raw from CSV), `ValueStringFormatted` (normalised for queries), `Existance` (default true) | FK → Field |
 
 **Key invariants:**
@@ -160,7 +160,7 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 - **Column filtering** — Numeric range/exact, string search (partial/exact/exclude), DateTime range, Bool toggle, List search. Controller: `WorkspaceController.FilterTable()`, JS: `filter.js`, View: filter popup HTML in both workspace views
 - **AutoChart** — Drag column headers onto canvas → fetches chart recommendations. Controller: `WorkspaceController.AutoChart()`, Service: `AutoChartService`, JS: `chart.js:createChartGroup()`
 - **Chart drop onto existing chart** — Header drop onto an existing chart card replaces it. JS: `chart.js:replaceChartGroup()`, `main.js:_chartDropOnCard()`
-- **Sparklines** — Per-column mini charts in header cells. Controller: `WorkspaceController.SparklineChart()`, JS: inline `<script>` in both workspace views
+- **Sparklines** — Per-column mini charts in header cells. Controller: `WorkspaceController.SparklineChart()`, JS: inline `<script>` in both workspace views. Results are cached in `Field.SparklineJson` (camelCase JSON) / `Field.SparklineTypeName`; cache is invalidated when the field type changes. `SparklineCancelService` (singleton) cancels in-flight computation for a field when its type is changed mid-request.
 - **Zoom overlay** — Click chart → full-screen overlay with option pane. JS: `chart.js:openZoom()`, `closeZoom()`
 - **Zoom navigator** — Time series get a range-selector mini chart below the zoom view. JS: `chart.js` navigator section
 - **Table panel collapse** — Toggle between full table and field-card mode. JS: inline `onclick` in workspace views
@@ -176,13 +176,12 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 
 ## 6. Partially Implemented / In Progress ⚠️
 
-- **`WorkspaceController.AutoChart()` stopwatch** ⚠️ — The `Stopwatch` is declared as a controller field (`_stopwatch`) and called `.Start()` without `.Reset()` before each request; on a second call it will accumulate rather than reset. Also, `_stopwatch` is not thread-safe at field level.
+- **`WorkspaceController._stopwatch` dead field** ⚠️ — `AutoChart()` was fixed to use a local `Stopwatch.StartNew()` per request, but the controller still declares `private readonly Stopwatch _stopwatch = new Stopwatch()` which is now unused. Safe to delete.
 - **`AuthController.SignIn()` sign-in result** ⚠️ — Calls `CheckPasswordSignIn()` to validate but after `Register()` also calls `CheckPasswordSignIn()` without actually signing a cookie (ASP.NET Identity cookie auth is not configured — `AddAuthentication()` with no scheme and no cookie handler). Session is set manually; the `SignInManager` call is a no-op for cookie issuance.
 - **`Value.Existance` column** ⚠️ — Persisted with default `true` but never queried or toggled. Appears to be scaffolding for a soft-delete / "exclude row" feature.
 - **Multi-select block selection** ⚠️ — `editor.js` registers `Shift+click` on blocks (`onSelectionMousedown`) and toggles `block-selected` visually, but no action operates on the multi-selection (copy, delete, etc.).
 - **Inline toolbar "Comment" button** ⚠️ — `editor.js` has `if (action === 'comment') return; // future`.
 - **`listIndexes` export in `workspace.js`** ⚠️ — Exported but never populated or read in any imported module.
-- **`WorkspaceController` injected `TableRepositoryAbstract`** ⚠️ — Injected in constructor but never used (commented-out file load remains as `// var currentFile = ...`).
 - **Guest cannot rename files** — `HomeController.RenameFile()` returns `"Cannot perform action: analyst not signed in"` for guests; the home view for guests (`Home.cshtml`) shows no rename UI.
 - **`zoomOptionPane` chart-type panel in `Workspace.cshtml`** ⚠️ — The pane HTML is present in the guest view (`Workspace.cshtml`) but `editor.js` (which wires up the pane in WorkspaceSpecific) is not loaded for guests. The zoom option pane wiring lives in `chart.js` so it should work for guests too, but not verified.
 
@@ -199,17 +198,17 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 - **Usage tracking / analytics** 🔲 — Only request-level `ILogger` calls; no per-user event tracking.
 - **Rate limiting** 🔲 — No middleware; upload limit is a `RequestSizeLimit(209715200)` attribute (200 MB).
 - **Email confirmation** 🔲 — `RequireUniqueEmail = true` in Identity config but no confirmation flow.
-- **Chart persistence** 🔲 — Charts exist only in the browser DOM; reloading the workspace page loses all charts. There is no `Canvas` or `ChartLayout` entity in the DB.
-- **Text block persistence** 🔲 — Same; the `#doc-canvas` content is ephemeral.
+- **Canvas persistence (charts + text blocks)** ✅ — `#doc-canvas` content is serialised to JSON and stored in `app.CanvasDocument` (per-CSVFile). On workspace load the Razor view injects the saved JSON into `<script id="saved-canvas">` and `canvas-persist/index.js` hydrates it. A debounced `MutationObserver` auto-saves changes; `beforeunload` flushes via `sendBeacon`. Endpoints: `GET /workspace/canvas`, `POST /workspace/canvas`, `POST /workspace/canvas/append-chart`. JS modules: `canvas-persist/{index,hydrate,autosave,serialize,kinds,state}.js`.
 
 ---
 
 ## 8. Conventions
 
 ### C\#
+- **LQDbContext**: Only used in TableRepository.cs and AnalystRepository, nowhere else. Only allow inheritance from Services.
 - **Naming**: PascalCase everywhere; no `I`-prefixed fields except interfaces (`ICSVService`). Repository abstract is `TableRepositoryAbstract` (suffix, not prefix).
 - **ViewModels / DTOs**: Immutable `record` types in `Models/DTOs/`. Named `*DTO` or `*DisplayDTO`.
-- **Services**: Injected via constructor; `ICSVService` / `IAutoChartService` / `IAnalystService` interfaces; concrete in `Services/Implementations/`.
+- **Services**: Injected via constructor; `ICSVService` / `IAutoChartService` / `IAnalystService` interfaces; concrete in `Services/Implementations/`. No direct use of LQDbContext, inherit from TableRepository or AnalystRepository to use.
 - **Repository pattern**: `TableRepositoryAbstract` (abstract class, not interface) → `TableRepository` (concrete). `CSVService` inherits `TableRepository` directly.
 - **Error handling**: Most action methods catch `Exception` and return `Json(ex.Message)` or `StatusCode(500)`. No global exception middleware.
 - **Static factory methods**: `Analyst.GiveBirth(name)` pattern for domain validation.

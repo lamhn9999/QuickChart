@@ -62,8 +62,19 @@ function sparkNumeric(canvas, statDiv, rawValues) {
   }
   canvas.style.display = 'block';
   const [min, max] = drawHistogram(canvas, nums);
-  statDiv.style.cssText = 'display:flex;justify-content:space-between';
-  statDiv.innerHTML = `<span>${fmtNum(min)}</span><span>${fmtNum(max)}</span>`;
+  // statDiv.style.cssText = 'display:flex;justify-content:space-between';
+  // statDiv.innerHTML = `<span>${fmtNum(min)}</span><span>${fmtNum(max)}</span>`;
+  statDiv.style.cssText = `
+    display:flex;
+    justify-content:space-between;
+    width:100%;
+  `;
+
+  statDiv.innerHTML = `
+    <span style="text-align:left;">${fmtNum(min)}</span>
+    <span style="text-align:right;">${fmtNum(max)}</span>
+  `;
+  console.log(statDiv.innerHTML);
 }
 
 /**
