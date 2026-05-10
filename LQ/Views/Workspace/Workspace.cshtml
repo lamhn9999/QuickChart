@@ -1117,6 +1117,8 @@
             const lo=parseFloat(first.replace(/[\[\(]/,'')), hi=parseFloat(last.split(',')[1]);
             if (!isNaN(lo)&&!isNaN(hi)) stat=`${fmtN(lo)} – ${fmtN(hi)}`;
         } else {
+            canvas.parentElement.querySelectorAll('.spark-row').forEach(el => el.remove());
+            canvas.style.display = '';
             const peak = Math.max(...nums);
             if (!peak) return;
             const total = nums.reduce((a,b)=>a+b,0);

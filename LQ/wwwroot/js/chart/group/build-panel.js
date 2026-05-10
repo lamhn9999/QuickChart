@@ -105,6 +105,7 @@ export function buildPanel(
                 }),
                 ...(isArea && {
                   fill: true,
+                  stack: 'stack',
                   tension: 0.3,
                   pointRadius: 3,
                   pointHoverRadius: 6,

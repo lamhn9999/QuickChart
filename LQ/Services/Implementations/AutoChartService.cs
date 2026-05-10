@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LQ.Data.Repositories;
 using LQ.Models.ChartModels;
 using LQ.Models.DTOs;
@@ -292,7 +293,7 @@ public class AutoChartService : IAutoChartService
         c.Y.Add(new LabelData { Label = $"Mean of \"{numericField.Name}\" by \"{catField.Name}\"", Data = ordered.Select(r => (object)Math.Round(r.Average, 4)).ToList() });
         return c;
     }
-    
+
     private async Task<Chart?> DetectLineChartAsync(Field catField, Field numericField, int[]? rowFilter = null)
     {
         var rows = await _repo.AverageByGroup(numericField, catField, rowFilter);
@@ -303,7 +304,7 @@ public class AutoChartService : IAutoChartService
         c.Y.Add(new LabelData { Label = $"Mean of \"{numericField.Name}\" by \"{catField.Name}\"", Data = ordered.Select(r => (object)Math.Round(r.Average, 4)).ToList() });
         return c;
     }
-    
+
     private async Task<Chart?> DetectAreaChartAsync(Field catField, Field numericField, int[]? rowFilter = null)
     {
         var rows = await _repo.AverageByGroup(numericField, catField, rowFilter);
@@ -601,6 +602,14 @@ public class AutoChartService : IAutoChartService
         return c;
     }
 
+    private Chart DetectAreaTimeSeriesCategoricalNumeric(Chart cLine)
+    {
+        var json = JsonSerializer.Serialize(cLine);
+        var cArea = JsonSerializer.Deserialize<Chart>(json);
+        cArea.ChartType = ChartType.Area;
+        return cArea;
+    }
+
     // ── Radar ─────────────────────────────────────────────────────────────────
 
     private async Task<Chart?> DetectRadarChartAsync(Field catField, IReadOnlyList<Field> numericFields, int[]? rowFilter = null)
@@ -701,7 +710,7 @@ public class AutoChartService : IAutoChartService
 
         var identifier  = fields.Where(f => f.Categories.Contains(Category.Identifier)).ToList();
         var categorical = fields.Where(f => f.Categories.Contains(Category.Categorical)).ToList();
-        var numericAll  = fields.Where(f => f.Categories.Contains(Category.Numeric) 
+        var numericAll  = fields.Where(f => f.Categories.Contains(Category.Numeric)
                                             //&& !f.Categories.Contains(Category.Identifier)
                                             ).ToList();
 
@@ -784,8 +793,12 @@ public class AutoChartService : IAutoChartService
                 var catF = categorical[ci].Type == typeof(DateTime) ? categorical[cj] : categorical[ci];
                 var k = Key(dtF, catF, nf); //Reg(k);
                 if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
-                Add(await DetectTimeSeriesCategoricalNumericAsync(nf, dtF, catF, rowFilter), k);
+
+                var CLine = await DetectTimeSeriesCategoricalNumericAsync(nf, dtF, catF, rowFilter);
+                var CArea = DetectAreaTimeSeriesCategoricalNumeric(CLine);
+                Add(CLine, k);
                 Add(await DetectTimeSeriesEnhancedAsync(dtF, new[] { nf }, rowFilter), k);
+                Add(CArea, k);
             }
         }
 
@@ -828,7 +841,7 @@ public class AutoChartService : IAutoChartService
         // ── 2-field: cat × cat ────────────────────────────────────────────────
         for (int ci = 0; ci < categorical.Count; ci++)
         for (int cj = ci + 1; cj < categorical.Count; cj++)
-        {   
+        {
             var catA = categorical[ci]; var catB = categorical[cj];
             if (catA.Type == typeof(DateTime))
             {
@@ -936,7 +949,7 @@ public class AutoChartService : IAutoChartService
         // ── single identifier ─────────────────────────────────────────────────
         foreach (var id in identifier)
         {
-            var k = Key(id); //Reg(k); 
+            var k = Key(id); //Reg(k);
             if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
             Add(await DetectSideBarAsync(id, rowFilter), k);
         }
@@ -944,7 +957,7 @@ public class AutoChartService : IAutoChartService
         // ── single numeric ────────────────────────────────────────────────────
         foreach (var nf in numeric)
         {
-            var k = Key(nf); //Reg(k); 
+            var k = Key(nf); //Reg(k);
             if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
             Add(await DetectHistogramAsync(nf, rowFilter), k);
         }
