@@ -8,6 +8,7 @@
  * - `wireTextCardResize(card, handleE)` is simpler: only horizontal resize, height auto.
  */
 
+import { snapResize, clearGuides } from './snap.js';
 import { updateCanvasSize } from './canvas.js';
 
 /**
@@ -58,6 +59,8 @@ export function makeResizable(card, instancesRef, opts = {}) {
         H = Math.max(minH, sh - dy);
         T = st + (sh - H);
       }
+      const snapped = snapResize(card, L, T, W, H, dir, sl + sw, st + sh, minW, minH);
+      L = snapped.left; T = snapped.top; W = snapped.width; H = snapped.height;
       card.style.width = `${W}px`;
       card.style.height = `${H}px`;
       card.style.left = `${L}px`;
@@ -67,6 +70,7 @@ export function makeResizable(card, instancesRef, opts = {}) {
     };
     const onUp = () => {
       card.classList.remove('is-resizing');
+      clearGuides();
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
       document.removeEventListener('pointermove', onMove);
@@ -98,12 +102,18 @@ export function makeResizable(card, instancesRef, opts = {}) {
 export function wireTextCardResize(card, handleE) {
   let sx = 0;
   let sw = 0;
+  let sl = 0;
+  let st = 0;
+  let sh = 0;
   const onMove = (/** @type {PointerEvent} */ e) => {
-    card.style.width = `${Math.max(160, sw + (e.clientX - sx))}px`;
+    let W = Math.max(160, sw + (e.clientX - sx));
+    const snapped = snapResize(card, sl, st, W, sh, 'e', sl + sw, st + sh, 160, 0);
+    card.style.width = `${snapped.width}px`;
     updateCanvasSize();
   };
   const onUp = () => {
     card.classList.remove('is-resizing');
+    clearGuides();
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
     document.removeEventListener('pointermove', onMove);
@@ -114,6 +124,9 @@ export function wireTextCardResize(card, handleE) {
     e.preventDefault();
     sx = e.clientX;
     sw = card.offsetWidth;
+    sl = card.offsetLeft;
+    st = card.offsetTop;
+    sh = card.offsetHeight;
     card.classList.add('is-resizing');
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'e-resize';

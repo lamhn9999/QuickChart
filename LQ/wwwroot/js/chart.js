@@ -15,7 +15,7 @@
  *   chart/data-utils.js            buildHeatmapData, buildMatrixDataset, drawBoxPlot
  *   chart/canvas-engine/canvas.js  docCanvas, getNextCardPosition, updateCanvasSize,
  *                                   exportCanvas, setCanvasSize, setCanvasBg
- *   chart/canvas-engine/snap.js    snapWithGuides, clearGuides
+ *   chart/canvas-engine/snap.js    snapWithGuides, clearGuides, setGridSnap, getGridSnap
  *   chart/canvas-engine/draggable.js  makeDraggable, nextZOrder
  *   chart/canvas-engine/resizable.js  makeResizable, wireTextCardResize
  *   chart/text-card.js             createTextCard
@@ -49,8 +49,9 @@ Chart.defaults.plugins.legend.labels.borderRadius = 4;
 export { chartInstances } from './chart/state.js';
 export { chartArray } from './chart/group/types.js';
 
-// Canvas + free-form layout
+// Canvas + free-form layout + snapping
 export { exportCanvas, setCanvasSize, setCanvasBg } from './chart/canvas-engine/canvas.js';
+export { setGridSnap, getGridSnap } from './chart/canvas-engine/snap.js';
 
 // Sparklines
 export { initSparklines } from './chart/sparklines.js';

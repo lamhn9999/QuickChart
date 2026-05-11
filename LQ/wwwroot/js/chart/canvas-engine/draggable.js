@@ -13,10 +13,20 @@
  * Idempotent — re-calling on a card with `[data-draggable]` skips re-wiring.
  */
 
-import { snapWithGuides, clearGuides } from './snap.js';
+import { snapWithGuides, clearGuides, setGridSnap } from './snap.js';
 import { updateCanvasSize } from './canvas.js';
 
 let _zOrderCounter = 10;
+
+// ── Global grid-snap toggle (G key) ─────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'g' || e.key === 'G') {
+    if (!e.repeat && !(e.target instanceof Element && e.target.closest('input,textarea,[contenteditable]'))) {
+      e.preventDefault();
+      setGridSnap();
+    }
+  }
+});
 
 /** Returns the next z-index to assign to a card. Bumps the global counter. */
 export function nextZOrder() {
