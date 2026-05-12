@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-ACPTDA (Automatic CSV Plotting Tool for Data Analysts) is a data-storytelling web application that lets users upload CSV files and instantly generate rich, auto-detected charts without writing any code. The product vision is "Notion meets Tableau": a split-pane workspace where the left side shows the raw data table and the right side is a Notion-like document canvas where users drop column headers to summon charts, then annotate them with text, headings, and callouts. It supports both authenticated analysts and anonymous guests (cookie-based, 7-day ephemeral session).
+This is a data-storytelling web application that lets users upload CSV files and instantly generate rich, auto-detected charts without writing any code. The product vision is "Notion meets Tableau": a split-pane workspace where the left side shows the raw data table and the right side is a Notion-like document canvas where users drop column headers to summon charts, then annotate them with text, headings, and callouts. It supports both authenticated analysts and anonymous guests (cookie-based, 7-day ephemeral session).
 
 ---
 
@@ -12,7 +12,7 @@ ACPTDA (Automatic CSV Plotting Tool for Data Analysts) is a data-storytelling we
 |---|---|---|
 | Runtime | .NET 9 / ASP.NET Core MVC | `net9.0`, nullable enabled, implicit usings |
 | Language | C# 13 | |
-| ORM | EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL` 9.0.4) | Code-first, two applied migrations |
+| ORM | EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL` 9.0.4) | Code-first, five applied migrations |
 | Bulk insert | `EFCore.BulkExtensions` 9.0.2 | Used for initial CSV value insert and bulk-update list fields |
 | Identity | `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 9.0.11 | `IdentityUser` subclass `Analyst`; session-based, no JWT |
 | API docs | `Swashbuckle.AspNetCore` 10.1.0 | Swagger UI at `/swagger` |
@@ -70,7 +70,11 @@ Three controllers; no `[Authorize]` attributes — all auth checks are manual se
 5. Filtering
    User configures filter popup → filter.js → fetch POST /workspace/filter
      → WorkspaceController.FilterTable() → stores filters in session
-     → subsequent AutoChart calls use filters
+     → `onFilterApplied` event fires
+     → `filter/reactor.js` debounces call to `refreshAllCharts()`
+     → For each chart group, re-fetches from POST /workspace with same field indexes
+     → Updates Chart.js instances in-place (labels + data), calls `chart.update('none')`
+     → subsequent AutoChart calls also use filters
 
 6. Sparklines
    On page load each th[data-spark-col] hits GET /workspace/sparkline/{fieldIndex}
@@ -125,9 +129,10 @@ Three controllers; no `[Authorize]` attributes — all auth checks are manual se
 
 | Table | Key | Notable columns | Relationships |
 |---|---|---|---|
-| `CSVFile` | `ID` (serial) | `Name`, `CreatedTime`, `ModifiedTime`, `AnalystID` (nullable FK → Analyst), `GuestToken` (nullable, indexed) | Cascade delete from Analyst |
-| `Field` | `ID` (serial) | `Name`, `Index`, `TypeName` (C# AssemblyQualifiedName), `Categories` (serialised), `SparklineJson` (nullable, camelCase), `SparklineTypeName` (nullable, mirrors `TypeName` at cache-write time) | FK → CSVFile |
-| `Value` | **(FieldID, RowIndex)** composite PK | `ValueString` (raw from CSV), `ValueStringFormatted` (normalised for queries), `Existance` (default true) | FK → Field |
+| `CSVFile` | `ID` (serial) | `PublicToken` (Guid, unique, external facing ID), `Name`, `CreatedTime`, `ModifiedTime`, `AnalystID` (nullable FK → Analyst), `GuestToken` (nullable, indexed), `Status` (UploadStatus enum: 0=Failed, 1=Completed, 2=Processing), `ProcessingPayload` (jsonb, nullable, error/metadata on fail) | Cascade delete from Analyst; composite indexes on (AnalystID, Status) and (GuestToken, Status) for queries |
+| `Canvas` | `CSVFileID` (serial, PK) | `Document` (jsonb), `UpdatedAt` (timestamp) | FK → CSVFile (cascade delete); one-to-one, stores persisted chart+text blocks |
+| `Field` | `ID` (serial) | `Name`, `Index`, `TypeName` (C# AssemblyQualifiedName), `Categories` (serialised), `SparklineJson` (nullable, camelCase JSON), `SparklineTypeName` (nullable, mirrors `TypeName` at cache-write time) | FK → CSVFile |
+| `Value` | **(FieldID, RowIndex)** composite PK | `ValueString` (raw from CSV), `ValueStringFormatted` (normalised for queries), `Existance` (bool, default true) | FK → Field |
 
 **Key invariants:**
 - `ValueStringFormatted` is what all SQL aggregates read. It is set during upload type detection. For DateTime fields it is a .NET `DateTime.ToString()` US-culture string (`M/D/YYYY H:MM:SS AM/PM`).
@@ -158,6 +163,7 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 - **Category detection** — Categorical / Numeric / Identifier classification by uniqueness ratio. Service: `CSVService.DetectCategory()`
 - **Field type change** — Gear icon → "Change Field Type" submenu. Re-validates existing values, reformats list fields. Controller: `WorkspaceController.ChangeFieldType()`, JS: `workspace.js:changeFieldType()`
 - **Column filtering** — Numeric range/exact, string search (partial/exact/exclude), DateTime range, Bool toggle, List search. Controller: `WorkspaceController.FilterTable()`, JS: `filter.js`, View: filter popup HTML in both workspace views
+- **Chart refresh on filter** — Applying table filters automatically updates all canvas charts by re-fetching data from the AutoChart endpoint and patching Chart.js instances in-place. No destroy/recreate flash; filters are session-persisted. Debounced 150ms to batch rapid filter clicks. Controller: `WorkspaceController.FilterTable()` emits `onFilterApplied` signal. JS: `filter/api.js` → `filter/reactor.js` → `chart-refresh/index.js`. Note: Box plots are skipped for in-place refresh (BoxPlot plugin captures boxData in closure; only raw data updates work).
 - **AutoChart** — Drag column headers onto canvas → fetches chart recommendations. Controller: `WorkspaceController.AutoChart()`, Service: `AutoChartService`, JS: `chart.js:createChartGroup()`
 - **Chart drop onto existing chart** — Header drop onto an existing chart card replaces it. JS: `chart.js:replaceChartGroup()`, `main.js:_chartDropOnCard()`
 - **Sparklines** — Per-column mini charts in header cells. Controller: `WorkspaceController.SparklineChart()`, JS: inline `<script>` in both workspace views. Results are cached in `Field.SparklineJson` (camelCase JSON) / `Field.SparklineTypeName`; cache is invalidated when the field type changes. `SparklineCancelService` (singleton) cancels in-flight computation for a field when its type is changed mid-request.
@@ -166,7 +172,6 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 - **Table panel collapse** — Toggle between full table and field-card mode. JS: inline `onclick` in workspace views
 - **Panel resize** — Drag the `#drag` divider to resize left/right panels. JS: `main.js` resizer section
 - **Document canvas (Notion-like editor)** — Block-based editor with paragraph, h1, h2, h3, callout, code, divider blocks. Slash command menu (`/h1`, `/code`, etc.), inline formatting toolbar (bold/italic/underline/strikethrough/code/link), block drag-reorder, block handle context menu (Duplicate, Turn into, Delete). JS: `editor.js` (loaded only in `WorkspaceSpecific.cshtml`)
-- **Markdown shortcuts** — `# `, `## `, `### `, `> `, ` ``` `, `---` auto-convert in editor. JS: `editor.js:checkMarkdown()`
 - **Sign in / Sign out** — Session-based. Controller: `AuthController.SignIn()`, `AuthController.SignOut()`
 - **Register** — `AuthController.Register()` with password policy enforcement
 - **Chart type panel** — In zoom mode, option pane shows chart-type selector with SVG icons. JS: `chart.js` zoom option pane
@@ -176,7 +181,6 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 
 ## 6. Partially Implemented / In Progress ⚠️
 
-- **`WorkspaceController._stopwatch` dead field** ⚠️ — `AutoChart()` was fixed to use a local `Stopwatch.StartNew()` per request, but the controller still declares `private readonly Stopwatch _stopwatch = new Stopwatch()` which is now unused. Safe to delete.
 - **`AuthController.SignIn()` sign-in result** ⚠️ — Calls `CheckPasswordSignIn()` to validate but after `Register()` also calls `CheckPasswordSignIn()` without actually signing a cookie (ASP.NET Identity cookie auth is not configured — `AddAuthentication()` with no scheme and no cookie handler). Session is set manually; the `SignInManager` call is a no-op for cookie issuance.
 - **`Value.Existance` column** ⚠️ — Persisted with default `true` but never queried or toggled. Appears to be scaffolding for a soft-delete / "exclude row" feature.
 - **Multi-select block selection** ⚠️ — `editor.js` registers `Shift+click` on blocks (`onSelectionMousedown`) and toggles `block-selected` visually, but no action operates on the multi-selection (copy, delete, etc.).
@@ -205,7 +209,7 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 ## 8. Conventions
 
 ### C\#
-- **LQDbContext**: Only used in TableRepository.cs and AnalystRepository, nowhere else. Only allow inheritance from Services.
+- **LQDbContext**: Only used in TableRepository.cs and AnalystRepository, nowhere else. Only allow inheritance of Repositories from Services.
 - **Naming**: PascalCase everywhere; no `I`-prefixed fields except interfaces (`ICSVService`). Repository abstract is `TableRepositoryAbstract` (suffix, not prefix).
 - **ViewModels / DTOs**: Immutable `record` types in `Models/DTOs/`. Named `*DTO` or `*DisplayDTO`.
 - **Services**: Injected via constructor; `ICSVService` / `IAutoChartService` / `IAnalystService` interfaces; concrete in `Services/Implementations/`. No direct use of LQDbContext, inherit from TableRepository or AnalystRepository to use.
@@ -238,7 +242,12 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 
 ### EF Core
 - **Code-first** with manual migrations.
-- Two migrations: `20260110022414_InitialCreate`, `20260421042659_GuestUploadSupport`.
+- Five migrations in order:
+  1. `20260110022414_InitialCreate` — CSVFile, Field, Value tables
+  2. `20260421042659_GuestUploadSupport` — AnalystID nullable, GuestToken indexed
+  3. `20260429091345_UploadStatusTracking` — PublicToken (Guid), Status (enum), ProcessingPayload (jsonb), composite indexes
+  4. `20260502133005_AddCanvasPersistence` — Canvas table (CSVFileID PK, Document jsonb, UpdatedAt)
+  5. `20260508035731_AddSparklineJsonToField` — SparklineJson, SparklineTypeName columns on Field
 - Direct `LQDbContext` injection; no Unit-of-Work wrapper beyond the DbContext.
 - Aggregate queries bypass LINQ entirely; only EF Core for inserts/updates/deletes and simple lookups.
 
@@ -263,7 +272,7 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 Edit `LQ/appsettings.json` (or use user secrets / environment variables):
 ```json
 "ConnectionStrings": {
-  "DefaultConnection": "Host=localhost;Port=5432;Database=LQDb;Username=lam;Password=123456789"
+  "DefaultConnection": "Host=localhost;Port=5432;Database=LQDb;Username=;Password="
 }
 ```
 
@@ -308,7 +317,7 @@ Available at `http://localhost:5000/swagger` when running.
 
 ---
 
-## 10. Monetization Considerations
+## 10. Considerations
 
 | Signal | Status |
 |---|---|
@@ -322,4 +331,4 @@ Available at `http://localhost:5000/swagger` when running.
 | Email confirmation flow | ❌ `RequireUniqueEmail = true` but no confirm/reset endpoint |
 | OAuth / social login | ❌ Not configured |
 
-The codebase is at the "working prototype" stage: authentication and guest access are functional, but no monetisation infrastructure exists yet.
+The codebase is at the "working prototype" stage

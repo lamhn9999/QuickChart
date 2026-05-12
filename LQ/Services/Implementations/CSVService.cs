@@ -661,7 +661,7 @@ public class CSVService : TableRepository, ICSVService
         file.Status = suspicious.Count > 0 ? UploadStatus.AwaitingListConfirmation : UploadStatus.Ready;
         file.ProcessingPayload = suspicious.Count > 0 ? JsonSerializer.Serialize(suspicious, PayloadJson) : null;
         file.ModifiedTime = DateTime.UtcNow;
-        await _lqDbContext.SaveChangesAsync();
+        await SaveChangesAsync();
     }
 
     private (Table table, List<SuspiciousListDTO> suspicious)? InterpretSinglePass(CSVFile csvFile, StreamReader reader)
@@ -748,7 +748,7 @@ public class CSVService : TableRepository, ICSVService
 
     public async Task ContinueProcessAsync(Guid token, byte[] fileBytes, bool useSinglePass)
     {
-        var file = await _lqDbContext.CSVFiles.FirstOrDefaultAsync(f => f.PublicToken == token);
+        var file = await GetFileByPublicToken(token);
         if (file is null) return;
 
         try
@@ -761,7 +761,7 @@ public class CSVService : TableRepository, ICSVService
                 file.Status = UploadStatus.Failed;
                 file.ProcessingPayload = JsonSerializer.Serialize(new { error = "Failed to parse CSV" }, PayloadJson);
                 file.ModifiedTime = DateTime.UtcNow;
-                await _lqDbContext.SaveChangesAsync();
+                await SaveChangesAsync();
                 return;
             }
 
@@ -779,21 +779,20 @@ public class CSVService : TableRepository, ICSVService
             file.Status = UploadStatus.Failed;
             file.ProcessingPayload = JsonSerializer.Serialize(new { error = ex.Message }, PayloadJson);
             file.ModifiedTime = DateTime.UtcNow;
-            try { await _lqDbContext.SaveChangesAsync(); } catch { /* swallow — surface via Failed status */ }
+            try { await SaveChangesAsync(); } catch { /* swallow — surface via Failed status */ }
         }
     }
 
     public async Task<bool> ConfirmListFields(Guid token, string? analystId, string? guestToken, List<ConfirmFieldDTO> confirmed)
     {
-        var file = await _lqDbContext.CSVFiles.FirstOrDefaultAsync(f => f.PublicToken == token);
+        var file = await GetFileByPublicToken(token);
         if (file is null) return false;
         if (analystId is not null && file.AnalystID != analystId) return false;
         if (analystId is null && file.GuestToken != guestToken) return false;
 
         foreach (var c in confirmed)
         {
-            var field = await _lqDbContext.Fields
-                .FirstOrDefaultAsync(f => f.CSVFile.ID == file.ID && f.Index == c.FieldIndex);
+            var field = await base.GetField(file.ID, c.FieldIndex);
             if (field is null) continue;
             char sep = c.Separator.Length == 1 ? c.Separator[0] : ',';
             await ChangeFieldType(new ChangeFieldTypeDTO(field.ID, typeof(List<string>), sep));
@@ -802,20 +801,13 @@ public class CSVService : TableRepository, ICSVService
         file.Status = UploadStatus.Ready;
         file.ProcessingPayload = null;
         file.ModifiedTime = DateTime.UtcNow;
-        await _lqDbContext.SaveChangesAsync();
+        await SaveChangesAsync();
         return true;
     }
 
     public async Task<List<PendingUploadDTO>> GetPendingUploads(string? analystId, string? guestToken)
     {
-        IQueryable<CSVFile> query = _lqDbContext.CSVFiles.Where(f => f.Status != UploadStatus.Ready);
-        query = analystId is not null
-            ? query.Where(f => f.AnalystID == analystId)
-            : guestToken is not null
-                ? query.Where(f => f.GuestToken == guestToken)
-                : query.Where(_ => false);
-
-        var rows = await query.OrderByDescending(f => f.CreatedTime).ToListAsync();
+        var rows = await GetAllNonReadyFilesAsync(analystId, guestToken);
         return rows.Select(f =>
         {
             List<SuspiciousListDTO>? suspicious = null;
@@ -857,7 +849,7 @@ public class CSVService : TableRepository, ICSVService
 
     public async Task<CSVFile?> GetFile(Guid publicToken)
     {
-        return await _lqDbContext.CSVFiles.FirstOrDefaultAsync(f => f.PublicToken == publicToken);
+        return await GetFileByPublicToken(publicToken);
     }
 
     public new async Task<List<CSVFile>> GetAllFiles(Analyst analyst)
@@ -899,10 +891,7 @@ public class CSVService : TableRepository, ICSVService
         if (!result.Status || dto.NewType != typeof(List<string>)) return result;
 
         char sep = dto.ListSplitChar ?? ',';
-        var rawValues = await _lqDbContext.Values
-            .Where(v => v.FieldID == dto.FieldId && !string.IsNullOrWhiteSpace(v.ValueString))
-            .Select(v => v.ValueString!)
-            .ToListAsync();
+        var rawValues = await GetFieldRawValuesAsync(dto.FieldId);
 
         var allItems = rawValues
             .SelectMany(v => v.Trim().Split(sep).Select(x => x.Trim()).Where(x => !string.IsNullOrEmpty(x)))
@@ -912,11 +901,11 @@ public class CSVService : TableRepository, ICSVService
             ? (double)allItems.Distinct().Count() / allItems.Count
             : 0;
 
-        var field = await _lqDbContext.Fields.SingleAsync(f => f.ID == dto.FieldId);
+        var field = await GetFieldById(dto.FieldId);
         field.Categories = uniqueRatio <= Field.CATEGORICAL_THRESHOLD
             ? [Category.Categorical]
             : [Category.Identifier];
-        await _lqDbContext.SaveChangesAsync();
+        await SaveChangesAsync();
 
         return result;
     }
@@ -932,7 +921,7 @@ public class CSVService : TableRepository, ICSVService
     {
         var field = await base.GetField(csvFile.ID, fieldIndex);
         field.Categories = newCategories.Distinct().ToList();
-        await _lqDbContext.SaveChangesAsync();
+        await SaveChangesAsync();
         return "Categories updated";
     }
 }

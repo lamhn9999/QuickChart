@@ -1317,4 +1317,37 @@ public class TableRepository : TableRepositoryAbstract
                 .SetProperty(f => f.SparklineJson, json)
                 .SetProperty(f => f.SparklineTypeName, typeName));
     }
+
+    protected override async Task SaveChangesAsync() => await _lqDbContext.SaveChangesAsync();
+
+    protected override async Task<Field> GetFieldById(int fieldId)
+        => await _lqDbContext.Fields.SingleAsync(f => f.ID == fieldId);
+
+    protected override async Task<List<string>> GetFieldRawValuesAsync(int fieldId)
+        => await _lqDbContext.Values
+            .Where(v => v.FieldID == fieldId && !string.IsNullOrWhiteSpace(v.ValueString))
+            .Select(v => v.ValueString!)
+            .ToListAsync();
+
+    protected override async Task<List<CSVFile>> GetPendingUploadsByStatusAsync(string? analystId, string? guestToken, UploadStatus status)
+    {
+        IQueryable<CSVFile> query = _lqDbContext.CSVFiles.Where(f => f.Status == status);
+        query = analystId is not null
+            ? query.Where(f => f.AnalystID == analystId)
+            : guestToken is not null
+                ? query.Where(f => f.GuestToken == guestToken)
+                : query.Where(_ => false);
+        return await query.OrderByDescending(f => f.CreatedTime).ToListAsync();
+    }
+
+    protected override async Task<List<CSVFile>> GetAllNonReadyFilesAsync(string? analystId, string? guestToken)
+    {
+        IQueryable<CSVFile> query = _lqDbContext.CSVFiles.Where(f => f.Status != UploadStatus.Ready);
+        query = analystId is not null
+            ? query.Where(f => f.AnalystID == analystId)
+            : guestToken is not null
+                ? query.Where(f => f.GuestToken == guestToken)
+                : query.Where(_ => false);
+        return await query.OrderByDescending(f => f.CreatedTime).ToListAsync();
+    }
 }

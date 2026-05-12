@@ -59,6 +59,21 @@ public abstract class TableRepositoryAbstract
     /// </summary>
     public abstract Task SetSparklineJsonAsync(int csvFileId, int fieldIndex, string json, string typeName);
 
+    /// <summary>Persists changes to the database. Destructive action — reserved for internal repository use.</summary>
+    protected abstract Task SaveChangesAsync();
+
+    /// <summary>Gets a field by ID. Reserved for internal repository use.</summary>
+    protected abstract Task<Field> GetFieldById(int fieldId);
+
+    /// <summary>Gets raw values for a field, excluding empty/null entries. Reserved for internal repository use.</summary>
+    protected abstract Task<List<string>> GetFieldRawValuesAsync(int fieldId);
+
+    /// <summary>Queries CSVFiles by upload status. Returns paginated results ordered by creation time descending.</summary>
+    protected abstract Task<List<CSVFile>> GetPendingUploadsByStatusAsync(string? analystId, string? guestToken, UploadStatus status);
+
+    /// <summary>Gets all CSVFiles with statuses other than Ready. Reserved for internal repository use.</summary>
+    protected abstract Task<List<CSVFile>> GetAllNonReadyFilesAsync(string? analystId, string? guestToken);
+
     /// <summary>
     /// Materialises the row indexes that survive <paramref name="filters"/>.
     /// Returns an empty array (not null) when no rows match.
