@@ -18,6 +18,9 @@ import { updateFilterChipUI } from './popup.js';
 /** @type {AbortController | null} */
 let executingFilterController = null;
 
+/** Subscribers notified after every successful filter execution + table update. */
+export const onFilterApplied = new Set();
+
 /**
  * Send the current `getActiveFilters()` list to /workspace/filter. Cancels any in-flight request.
  */
@@ -36,6 +39,7 @@ export async function executeFilterRequest() {
     });
     const result = await response.json();
     updateTable(result);
+    onFilterApplied.forEach((fn) => fn());
   } catch (e) {
     if (!(e instanceof Error) || e.name !== 'AbortError')
       console.error('[executeFilterRequest] Fetch error:', e);

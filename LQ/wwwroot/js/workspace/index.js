@@ -45,6 +45,7 @@ import {
   partialMatchStrCheckboxClicked,
   excludeClicked,
 } from '../filter/index.js';
+import { initFilterReactor } from '../filter/reactor.js';
 
 // ── Action registrations ──────────────────────────────────────────────────────
 // `data-action="header:click"` etc. dispatch into these. The matched element is the one
@@ -132,6 +133,8 @@ wireDelegatedActions();
 installChartDropOnCard();
 
 // ── DOM setup ─────────────────────────────────────────────────────────────────
+
+initFilterReactor();
 
 document.addEventListener('DOMContentLoaded', () => {
   initSparklines();
