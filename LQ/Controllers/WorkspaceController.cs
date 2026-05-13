@@ -305,6 +305,67 @@ public class WorkspaceController : Controller
         return Json(tableDisplay);
     }
 
+    // Per-chart filter support: returns the distinct-value list for a single field
+    // when that list is small enough to fit in a button-row UI, plus the total
+    // distinct count and whether the field is classified as categorical. The
+    // frontend uses this to choose between a button-list filter card variant and
+    // a search-bar variant. We never expose Field.ID — fieldIndex is the public
+    // handle, identical to the convention used for sparklines / changeFieldType.
+    //
+    // `csvFileToken` is optional. Without it, the lookup runs against the
+    // session's current file (the typical "filter for a chart on my own canvas"
+    // case). With it, the lookup runs against the token's file — required when
+    // a filter card was copied from another file: its fieldIndex is meaningful
+    // only against THAT file's schema, not the canvas owner's. The token must
+    // resolve to a file the current user can access.
+    [HttpGet("field/{fieldIndex:int}/distinct")]
+    public async Task<IActionResult> GetFieldDistinct(int fieldIndex,
+        [FromQuery] int limit = 8,
+        [FromQuery] Guid? csvFileToken = null)
+    {
+        int sourceFileId;
+        if (csvFileToken is Guid token)
+        {
+            var resolved = await ResolveAccessibleFileId(token);
+            if (resolved is null) return NotFound();
+            sourceFileId = resolved.Value;
+        }
+        else
+        {
+            if (CurrentCSVFileDTO is null || CurrentTableDTO is null) return NotFound();
+            if (fieldIndex < 0 || fieldIndex >= CurrentTableDTO.FieldCount) return BadRequest();
+            sourceFileId = CurrentCSVFileDTO.currentFileID;
+        }
+
+        var file   = await _csvService.GetFile(sourceFileId);
+        var fields = await _repo.GetFields(file, [fieldIndex]);
+        if (fields.Count == 0) return NotFound();
+        var field = fields[0];
+
+        int distinctCount = await _repo.CountDistinct(field);
+        // Materialise the value list if it fits within the limit. For very high limits
+        // (e.g. Infinity from unlimited frontend), fetch all values.
+        List<string?> values;
+        if (limit >= 1000000 || distinctCount <= limit)
+        {
+            var grouped = await _repo.CountByGroup(field);
+            values = grouped.Select(r => r.Key?.ToString()).ToList();
+        }
+        else
+        {
+            values = new List<string?>();
+        }
+
+        return Json(new
+        {
+            distinctCount,
+            values,
+            isCategorical = field.Categories.Contains(Category.Categorical),
+            typeName      = field.TypeName,
+            fieldName     = field.Name,
+        });
+    }
+
     [HttpGet("sparkline/{fieldIndex:int}")]
     public async Task<IActionResult> SparklineChart(int fieldIndex)
     {
@@ -440,6 +501,52 @@ public class WorkspaceController : Controller
             ["y"] = body.ChartSpec.Y ?? 24,
             ["width"] = body.ChartSpec.Width ?? 480,
             ["height"] = body.ChartSpec.Height ?? 361,
+        });
+        doc["blocks"] = blocks;
+
+        var json = JsonSerializer.Serialize(doc);
+        await _repo.UpsertCanvasDocument(targetId.Value, json);
+        return Ok();
+    }
+
+    // Appends a filter spec to the target file's canvas. Mirrors AppendChart:
+    // both the target and the source must resolve to files the current user can
+    // access. The source token is baked into the filter block as `csvFileToken`
+    // so the filter's `fieldIndex` is always interpreted against its OWN
+    // schema, never the canvas owner's — that prevents the "fieldIndex 1 means
+    // 'year' on source but 'date' on destination" silent-wrong-column bug.
+    //
+    // Per v1 the appliedTo set is emptied: source-canvas group ids don't
+    // survive a copy, and the hydrate path recomputes appliedTo from chart
+    // cards on the destination canvas that share the filter's csvFileToken.
+    [HttpPost("canvas/append-filter")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> AppendFilter([FromBody] AppendFilterRequestDTO body)
+    {
+        if (body is null) return BadRequest();
+        if (body.FilterSpec is null) return BadRequest("invalid filter spec");
+
+        var targetId = await ResolveAccessibleFileId(body.TargetFileToken);
+        if (targetId is null) return Forbid();
+
+        var sourceId = await ResolveAccessibleFileId(body.FilterSpec.CsvFileToken);
+        if (sourceId is null) return Forbid();
+
+        var existing = await _repo.GetCanvasDocument(targetId.Value);
+        var doc = ParseCanvasDocOrEmpty(existing);
+        var blocks = doc["blocks"] as List<object> ?? new List<object>();
+
+        blocks.Add(new Dictionary<string, object?>
+        {
+            ["kind"] = "filter",
+            ["csvFileToken"] = body.FilterSpec.CsvFileToken.ToString(),
+            ["fieldIndex"] = body.FilterSpec.FieldIndex,
+            ["selectedValues"] = body.FilterSpec.SelectedValues ?? new List<string?>(),
+            ["appliedTo"] = new List<int>(),
+            ["x"] = body.FilterSpec.X ?? 24,
+            ["y"] = body.FilterSpec.Y ?? 24,
+            ["width"] = body.FilterSpec.Width ?? 320,
+            ["height"] = body.FilterSpec.Height ?? 200,
         });
         doc["blocks"] = blocks;
 

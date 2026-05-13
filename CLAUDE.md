@@ -176,6 +176,7 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 - **Register** — `AuthController.Register()` with password policy enforcement
 - **Chart type panel** — In zoom mode, option pane shows chart-type selector with SVG icons. JS: `chart.js` zoom option pane
 - **Background color** — Per-chart card background color picker. JS: `chart.js` (colormap UI in hidden Tailwind section of workspace views)
+- **Per-chart filters** — Independent filter blocks on canvas for narrowing individual charts without affecting table-wide state. Convert chart to filter via "Turn into" menu or create new filter block. Filter scope is configurable (multi-chart via right panel checkboxes). Filter state persists in canvas; selected values are NOT persisted (resets on reload). Controller: `WorkspaceController.ChartWithInlineFilters()` (POST `/workspace/chart`), JS: `per-chart-filter/{api,convert,events,render,selection,state,toolbar}.js`, Backend: `PerChartRequestDTO`, `ValueFilterDTO` marshalling, `DetectChartWithFiltersAsync()`. Variant selection (buttons vs search) now unlimited (threshold 999999).
 
 ---
 

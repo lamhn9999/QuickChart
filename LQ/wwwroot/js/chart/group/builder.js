@@ -385,6 +385,23 @@ export function appendChart(
     };
     container.appendChild(removeBtn);
 
+    // ── Use as filter button ──────────────────────────────────────────
+    // Convert this chart card into a filter card scoped to its single
+    // field. Only meaningful for single-field charts; disabled otherwise
+    // (a tooltip explains why). The actual conversion is delegated via
+    // data-action so per-chart-filter/events.js owns the import side.
+    const isSingleField = Array.isArray(fieldIndexes) && fieldIndexes.length === 1;
+    const filterBtn = document.createElement('button');
+    filterBtn.className =
+      'cursor-pointer h-7 w-7 flex items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 hover:text-[#2383E2] hover:border-[#2383E2]/30 hover:bg-[#2383E2]/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150 focus:outline-none select-none disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-500 disabled:hover:border-zinc-200 disabled:hover:bg-white';
+    filterBtn.title = isSingleField
+      ? 'Use as filter'
+      : 'Use as filter — drag a single column to enable';
+    filterBtn.disabled = !isSingleField;
+    filterBtn.dataset.action = 'filter:use-as-filter';
+    filterBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg>`;
+    container.appendChild(filterBtn);
+
     // ── Copy to file… button ──────────────────────────────────────────
     // Lets the user copy this chart's spec into another CSVFile's canvas.
     // The picker fetches accessible files lazily and posts to

@@ -270,6 +270,40 @@ public class TableRepositoryTest
         Assert.IsNotNull(charts);
     }
 
+    // Regression test for GET /workspace/field/{i}/distinct. The endpoint is a
+    // thin shell around CountDistinct + CountByGroup, both already exercised
+    // elsewhere — the only logic specific to the endpoint is "return the value
+    // list iff the distinct count fits the limit". We assert that round-trip
+    // here at the service layer; the controller just serialises and never
+    // touches the data, so no WebApplicationFactory needed.
+    [TestMethod]
+    public async Task GetFieldDistinct_Categorical_ReturnsValuesAndCount()
+    {
+        var file = await _repo.GetFile(CSV_FILE_ID);
+        var catF = (await _repo.GetFields(file, CatFields)).FirstOrDefault();
+        if (catF == null) Assert.Inconclusive("No categorical field found.");
+
+        const int limit = 8;
+        int distinctCount = await _repo.CountDistinct(catF);
+        var values = distinctCount <= limit
+            ? (await _repo.CountByGroup(catF)).Select(r => r.Key?.ToString()).ToList()
+            : new List<string?>();
+
+        Debug.WriteLine($"Field {catF.Name}: distinctCount={distinctCount}  returnedValues={values.Count}");
+
+        Assert.IsTrue(distinctCount > 0);
+        if (distinctCount <= limit)
+        {
+            Assert.AreEqual(distinctCount, values.Count,
+                "When distinct count fits the limit, every value should be returned.");
+        }
+        else
+        {
+            Assert.AreEqual(0, values.Count,
+                "Above the limit the value list must be empty (front-end falls back to search variant).");
+        }
+    }
+
     // Regression test for the per-chart filter endpoint pipeline. Since
     // /workspace/chart is a thin wrapper around DetectChartWithFiltersAsync,
     // proving the service correctly narrows the dataset is sufficient

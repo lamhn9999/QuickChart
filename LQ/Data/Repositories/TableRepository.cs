@@ -464,9 +464,7 @@ public class TableRepository : TableRepositoryAbstract
 
             aggregate = aggregate == null
                 ? check
-                : isPartial
-                    ? Expression.OrElse(aggregate, check)
-                    : Expression.AndAlso(aggregate, check);
+                : Expression.OrElse(aggregate, check);
         }
 
         if (aggregate == null) return v => false;

@@ -28,7 +28,16 @@
 /** @type {Map<string, (event: Event, matched: Element) => void>} */
 const registry = new Map();
 
-const EVENT_TYPES = /** @type {const} */ (['click', 'keydown', 'input', 'dragstart', 'dragend']);
+// `mouseover` / `mouseout` bubble (their `mouseenter`/`mouseleave` counterparts
+// don't), so they're the right delegation primitives for "hover a row inside
+// this list" patterns — used by the per-chart filter right-panel chart
+// picker. `change` rounds out the form-element triad alongside `click` and
+// `input` so checkboxes/selects can dispatch their final-state event without
+// piggybacking on `click` (clicking a label, keyboard toggle, etc.).
+const EVENT_TYPES = /** @type {const} */ ([
+  'click', 'keydown', 'input', 'change', 'mouseover', 'mouseout',
+  'dragstart', 'dragend',
+]);
 
 /**
  * Register a handler for a named action. Idempotent — a re-register replaces the previous

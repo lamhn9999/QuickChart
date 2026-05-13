@@ -39,6 +39,8 @@ dotnet test --filter "<TestMethodName>"       # single test
 - **`TableRepositoryAbstract`** is an abstract class (suffix `Abstract`, not `I` prefix).
 - **`Field.TypeName`** stores `Type.AssemblyQualifiedName`; `Field.Type` is a `[NotMapped]` getter via `Type.GetType()`.
 - **DTOs** are immutable `record` types in `Models/DTOs/`.
+- **Per-chart filters** (`ValueFilterDTO`) are independent of session-scoped table filters. Filter logic (OR for multiple values) must match in both `TableRepository.ApplyFilter()` and inline requests to `/workspace/chart`.
+- **Filter variant selection** (buttons vs search) based on cardinality: buttons if ≤ limit, search otherwise. Limit threshold: `NUMERIC_BUTTONS_LIMIT` in frontend (currently 999999 = unlimited).
 
 ## JS module architecture
 
@@ -46,10 +48,24 @@ dotnet test --filter "<TestMethodName>"       # single test
   - `js/editor/index.js` — Notion-like block editor (workspace right pane)
   - `js/workspace/index.js` — table panel + actions + DOM wiring
   - `js/canvas-persist/index.js` — canvas load/save
+- **Per-chart filter modules** (sub-system):
+  - `js/per-chart-filter/{api,convert,events,render,selection,state,toolbar}.js` — independent inline filters on canvas
+  - Filters are canvas blocks (like charts/text), persisted in Canvas.Document JSON
+  - Filter scope (which charts it applies to) is persisted; selected values are NOT
+  - Endpoint: POST `/workspace/chart` accepts `PerChartRequestDTO` with inline `ValueFilterDTO[]`
 - **Chart.js is a UMD global** (`window.Chart`) loaded via `<script src="...chart.umd.min.js">`, never imported from npm.
 - **`chartArray` index must match `ChartType` enum integer** — off-by-one breaks chart rendering.
+- **`chart-refresh/index.js`** handles in-place chart updates when filters change (preserves dataset properties like `fill`, `stack`, `tension`).
 - TypeScript via **JSDoc + `// @ts-check`** only (no `.ts` files). Config at `LQ/wwwroot/jsconfig.json`.
 - Typecheck should be **0 errors under `strict: true`**.
+
+## Per-chart filter gotchas
+
+- **`selectedValues` NOT persisted** — only filter field + scope (`appliedTo`) persist across reload. Selected pills/chips reset.
+- **Filter variant logic** — buttons if cardinality ≤ threshold, search otherwise. Threshold in `per-chart-filter/convert.js` (`NUMERIC_BUTTONS_LIMIT = 999999`).
+- **Chart refresh on filter** — `chart-refresh/index.js:applySampleToInstance()` patches Chart.js in-place. Must preserve dataset properties (`fill`, `stack`, `tension`, `type`) by copying from template. New datasets inherit from first dataset's config.
+- **Scatter/bubble colors** — explicitly set `borderColor` to palette color (not transparent) so Chart.js doesn't apply grey default. Keep `borderWidth: 1`.
+- **Filter scope updates chart immediately** — toggle in right panel fires `replayFiltersFor()` without requiring "Apply" button.
 
 ## Tailwind v4 quirks
 
@@ -87,5 +103,5 @@ dotnet test --filter "<TestMethodName>"       # single test
 |---|---|
 | `CLAUDE.md` | Full project overview (comprehensive, keep as reference) |
 | `.claude/commands/autochart.md` | Chart system deep-dive (detectors, data contract, chartArray) |
-| `wwwroot/SMOKE_TEST.md` | 37-scenario smoke test checklist for JS refactors |
+| `SMOKE_TEST.md` | 11-section smoke test checklist covering per-chart filters, chart types, data integrity, persistence |
 | `AGENTS.md` | This file — compact, agent-specific gotchas |

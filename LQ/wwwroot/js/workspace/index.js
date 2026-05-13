@@ -47,6 +47,18 @@ import {
 } from '../filter/index.js';
 import { initFilterReactor } from '../filter/reactor.js';
 
+import {
+  initPerChartFilter,
+  onPillClick,
+  onSearchEnter,
+  onChipRemove,
+  onClear,
+  onApplyToHover,
+  onApplyToUnhover,
+  onApplyToToggle,
+  onUseAsFilter,
+} from '../per-chart-filter/index.js';
+
 // ── Action registrations ──────────────────────────────────────────────────────
 // `data-action="header:click"` etc. dispatch into these. The matched element is the one
 // carrying the attribute; handlers read extra args from sibling `data-*` attributes.
@@ -125,6 +137,32 @@ registerActions({
     setCanvasBg(v);
   },
   'zoom:close': () => closeZoom(),
+
+  // ── per-chart filter ─────────────────────────────────────────────────
+  // Chart-card toolbar entry point. Converting tears down the chart group
+  // and rebuilds the same card as a filter card scoped to its single field.
+  'filter:use-as-filter': (e, btn) =>
+    onUseAsFilter(/** @type {MouseEvent} */ (e), /** @type {HTMLElement} */ (btn)),
+  // Buttons-variant pill: plain click = single select, Ctrl/Cmd-click = toggle.
+  'filter:pill': (e, btn) =>
+    onPillClick(/** @type {MouseEvent} */ (e), /** @type {HTMLElement} */ (btn)),
+  // Search-variant input: Enter to add a chip.
+  'filter:search-enter': (e, input) =>
+    onSearchEnter(/** @type {KeyboardEvent} */ (e), /** @type {HTMLInputElement} */ (input)),
+  'filter:chip-remove': (e, btn) =>
+    onChipRemove(/** @type {MouseEvent} */ (e), /** @type {HTMLElement} */ (btn)),
+  'filter:clear': (e, btn) =>
+    onClear(/** @type {MouseEvent} */ (e), /** @type {HTMLElement} */ (btn)),
+
+  // Right-panel chart picker (visible when a filter card is selected).
+  // Hover a row → pulse the corresponding chart on the canvas.
+  'filter-rp:hover': (e, list) =>
+    onApplyToHover(e, /** @type {HTMLElement} */ (list)),
+  'filter-rp:unhover': (e, list) =>
+    onApplyToUnhover(e, /** @type {HTMLElement} */ (list)),
+  // Checkbox toggle: add/remove this chart from the filter's appliedTo set.
+  'filter-rp:toggle': (e, input) =>
+    onApplyToToggle(e, /** @type {HTMLInputElement} */ (input)),
 });
 
 wireDelegatedActions();
@@ -138,6 +176,7 @@ initFilterReactor();
 
 document.addEventListener('DOMContentLoaded', () => {
   initSparklines();
+  initPerChartFilter();
 
   const resizer = /** @type {HTMLElement | null} */ (document.getElementById('drag'));
   const left = /** @type {HTMLElement | null} */ (document.getElementById('tablePanel'));

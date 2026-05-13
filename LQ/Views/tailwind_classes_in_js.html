@@ -167,7 +167,22 @@
     });
 </script>
 
-<!-- Tailwind safelist: classes dynamically applied in chart.js — never remove -->
+<!-- Tailwind safelist: classes dynamically applied in JS — never remove -->
+<!-- per-chart filter button on chart-card toolbar (builder.js useAsFilter btn). -->
+<div class="hidden
+  hover:text-[#2383E2] hover:border-[#2383E2]/30 hover:bg-[#2383E2]/5
+  disabled:opacity-30 disabled:cursor-not-allowed
+  disabled:hover:text-zinc-500 disabled:hover:border-zinc-200 disabled:hover:bg-white
+"></div>
+<!-- per-chart filter card external left toolbar (per-chart-filter/toolbar.js):
+     drag-handle wrapper + remove btn + copy-to-file dropdown rows. The
+     hover:bg-[#2383E2]/10 utility is unique to the copy-panel rows; the
+     accent-blue hover utilities and rounded-l-xl don't appear elsewhere in
+     compiled JS. -->
+<div class="hidden
+  rounded-l-xl
+  hover:bg-[#2383E2]/10
+"></div>
 <div class="hidden
   grid grid-cols-4
   gap-[5px] gap-[7px] gap-1 gap-0.5 gap-1.5 gap-2

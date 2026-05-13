@@ -668,6 +668,10 @@
     border-top-left-radius: var(--radius-md);
     border-bottom-left-radius: var(--radius-md);
   }
+  .rounded-l-xl {
+    border-top-left-radius: var(--radius-xl);
+    border-bottom-left-radius: var(--radius-xl);
+  }
   .border {
     border-style: var(--tw-border-style);
     border-width: 1px;
@@ -1485,10 +1489,31 @@
       }
     }
   }
+  .hover\:border-\[\#2383E2\]\/30 {
+    &:hover {
+      @media (hover: hover) {
+        border-color: color-mix(in oklab, #2383E2 30%, transparent);
+      }
+    }
+  }
   .hover\:border-zinc-300 {
     &:hover {
       @media (hover: hover) {
         border-color: var(--color-zinc-300);
+      }
+    }
+  }
+  .hover\:bg-\[\#2383E2\]\/5 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: color-mix(in oklab, #2383E2 5%, transparent);
+      }
+    }
+  }
+  .hover\:bg-\[\#2383E2\]\/10 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: color-mix(in oklab, #2383E2 10%, transparent);
       }
     }
   }
@@ -1534,6 +1559,13 @@
     &:hover {
       @media (hover: hover) {
         background-color: var(--color-zinc-200);
+      }
+    }
+  }
+  .hover\:text-\[\#2383E2\] {
+    &:hover {
+      @media (hover: hover) {
+        color: #2383E2;
       }
     }
   }
@@ -1637,6 +1669,43 @@
   .active\:bg-\[\#d0705a\] {
     &:active {
       background-color: #d0705a;
+    }
+  }
+  .disabled\:cursor-not-allowed {
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+  .disabled\:opacity-30 {
+    &:disabled {
+      opacity: 30%;
+    }
+  }
+  .disabled\:hover\:border-zinc-200 {
+    &:disabled {
+      &:hover {
+        @media (hover: hover) {
+          border-color: var(--color-zinc-200);
+        }
+      }
+    }
+  }
+  .disabled\:hover\:bg-white {
+    &:disabled {
+      &:hover {
+        @media (hover: hover) {
+          background-color: var(--color-white);
+        }
+      }
+    }
+  }
+  .disabled\:hover\:text-zinc-500 {
+    &:disabled {
+      &:hover {
+        @media (hover: hover) {
+          color: var(--color-zinc-500);
+        }
+      }
     }
   }
   .has-\[\.filterPopup\:not\(\.hidden\)\]\:z-\[101\] {

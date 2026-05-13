@@ -119,6 +119,181 @@
         }
         .rp-hex-input:focus { border-color: #2383E2; }
 
+        /* ── Right panel mode switch (canvas options ↔ filter options) ──
+           The two .rp-mode children cross-fade with a slight translate-y so
+           the panel reads as one surface changing its mind, not two panels
+           swapping in/out. */
+        #right-panel { position: relative; }
+        .rp-mode {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(4px);
+            transition: opacity 120ms ease, transform 120ms ease, visibility 0ms linear 120ms;
+            position: absolute; inset: 0;
+            overflow-y: auto;
+        }
+        #right-panel[data-mode="canvas"] .rp-mode-canvas,
+        #right-panel[data-mode="filter"] .rp-mode-filter {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            transition: opacity 120ms ease, transform 120ms ease, visibility 0ms;
+            position: relative; inset: auto;
+        }
+        .rp-header-name {
+            font-family: 'Syne', sans-serif;
+            font-weight: 600;
+            color: #18181B;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .rp-chart-list { display: flex; flex-direction: column; gap: 2px; }
+        .rp-chart-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 8px; border-radius: 6px;
+            font-size: 12px; color: #374151;
+            cursor: pointer; user-select: none;
+            transition: background 90ms ease;
+        }
+        .rp-chart-item:hover { background: rgba(35,131,226,0.06); }
+        .rp-chart-item input[type="checkbox"] {
+            accent-color: #2383E2; cursor: pointer;
+            margin: 0;
+        }
+        .rp-chart-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rp-empty {
+            font-size: 11px; color: #a1a1aa; padding: 8px;
+            font-style: italic; text-align: center;
+        }
+        .rp-help {
+            font-size: 11px; color: #71717a; line-height: 1.5;
+        }
+        .rp-help kbd {
+            background: #F4F4F5; border: 1px solid #e4e4e7; border-bottom-width: 2px;
+            border-radius: 4px; padding: 0 4px;
+            font-family: 'SFMono-Regular', monospace; font-size: 10px;
+            color: #374151;
+        }
+
+        /* ── Filter card (per-chart filter UI on the canvas) ─────────────
+           Visually distinct from chart cards: tighter padding, no big
+           shadow, accent-blue affordances. Uses Syne for the field name
+           to mark this as a control surface, not content. */
+        .canvas-card.filter-card-host {
+            background: #fff;
+            border: 1px solid #e4e4e7;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+            min-width: 220px;
+            overflow: visible;
+            transition: box-shadow 140ms ease, border-color 140ms ease;
+        }
+        .canvas-card.filter-card-host:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .canvas-card.filter-card-host.filter-selected {
+            border-color: #2383E2;
+            box-shadow: 0 0 0 4px rgba(35,131,226,0.12), 0 4px 16px rgba(35,131,226,0.10);
+        }
+        .filter-card { display: flex; flex-direction: column; height: 100%; }
+        .filter-card-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 12px 8px;
+            border-bottom: 1px solid #F4F4F5;
+        }
+        .filter-card-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px;
+            background: rgba(35,131,226,0.10); color: #2383E2;
+            border-radius: 5px;
+        }
+        .filter-card-name {
+            font-family: 'Syne', sans-serif; font-weight: 600;
+            font-size: 13px; color: #18181B;
+            flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            letter-spacing: -0.005em;
+        }
+        .filter-card-mode {
+            font-family: 'DM Sans', sans-serif; font-size: 10px;
+            color: #2383E2; text-transform: uppercase; letter-spacing: 0.06em;
+        }
+        .filter-card-body { flex: 1; padding: 8px 10px; min-height: 36px; }
+        .filter-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+        .filter-pill {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 12px; font-weight: 500;
+            padding: 4px 11px; border-radius: 999px;
+            border: 1.5px solid #e4e4e7; background: #fff; color: #374151;
+            cursor: pointer;
+            transition: border-color 110ms ease, color 110ms ease,
+                        background 110ms ease, transform 110ms ease,
+                        box-shadow 110ms ease;
+            user-select: none;
+        }
+        .filter-pill:hover {
+            border-color: rgba(35,131,226,0.5); color: #2383E2;
+            transform: translateY(-1px);
+        }
+        .filter-pill.active {
+            background: #2383E2; color: #fff; border-color: #2383E2;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.12),
+                        0 1px 3px rgba(35,131,226,0.28);
+        }
+        .filter-pill.active:hover { transform: none; }
+        .filter-search { display: flex; flex-direction: column; gap: 6px; }
+        .filter-search-row {
+            display: flex; align-items: center; gap: 6px;
+            border: 1px solid #e4e4e7; border-radius: 7px;
+            padding: 4px 8px;
+            transition: border-color 110ms ease;
+        }
+        .filter-search-row:focus-within { border-color: #2383E2; }
+        .filter-search-icon { color: #a1a1aa; display: inline-flex; }
+        .filter-search-input {
+            flex: 1; border: 0; outline: none;
+            font-family: 'DM Sans', sans-serif; font-size: 12px; color: #18181B;
+            background: transparent; padding: 2px 0;
+        }
+        .filter-search-input::placeholder { color: #C4C4CC; }
+        .filter-search-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+        .filter-chip-text { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .filter-chip-x {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 16px; height: 16px; border-radius: 50%;
+            border: 0; background: transparent; color: rgba(35,131,226,0.7);
+            cursor: pointer; padding: 0;
+            transition: background 90ms ease, color 90ms ease;
+        }
+        .filter-chip-x:hover { background: rgba(35,131,226,0.18); color: #2383E2; }
+        .filter-card-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 12px 9px;
+            font-size: 11px; color: #a1a1aa;
+            border-top: 1px solid #F4F4F5;
+        }
+        .filter-card-applied { font-family: 'DM Sans', sans-serif; }
+        .filter-card-clear {
+            border: 0; background: transparent;
+            color: #71717a; font-size: 11px;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer; padding: 2px 6px; border-radius: 4px;
+            transition: background 90ms ease, color 90ms ease;
+        }
+        .filter-card-clear:hover { background: #F4F4F5; color: #18181B; }
+
+        /* ── Canvas-card hover highlight (driven from right panel) ────── */
+        .canvas-card--highlight {
+            box-shadow: 0 0 0 3px rgba(35,131,226,0.50),
+                        0 8px 24px rgba(35,131,226,0.18) !important;
+            animation: pulse-ring 1.3s ease-in-out infinite;
+        }
+        @@keyframes pulse-ring {
+            0%, 100% { box-shadow: 0 0 0 3px rgba(35,131,226,0.50),
+                                   0 8px 24px rgba(35,131,226,0.18); }
+            50%      { box-shadow: 0 0 0 6px rgba(35,131,226,0.20),
+                                   0 10px 28px rgba(35,131,226,0.22); }
+        }
+
         /* ── Drop target: column header onto existing card ───────────────── */
         .canvas-card-panels > .flex.flex-col.chart-drop-target {
             outline: 2px solid rgba(35,131,226,0.7);
@@ -864,21 +1039,38 @@
             </div>
         </div>
 
-        <!-- ── Right properties panel ────────────────────────────────── -->
-        <div id="right-panel">
-            <div class="rp-header">Canvas</div>
-            <div class="rp-section">
-                <div class="rp-label">Size</div>
-                <div class="rp-btn-row">
-                    <button class="rp-size-btn active" id="btn-size-wide" data-action="canvas:set-size" data-size="wide">16:9</button>
-                    <button class="rp-size-btn" id="btn-size-a4" data-action="canvas:set-size" data-size="a4">A4</button>
+        <!-- ── Right properties panel ──────────────────────────────────
+             Two modes, switched via data-mode on the panel root. The
+             `.rp-mode` siblings cross-fade — see the CSS up top. -->
+        <div id="right-panel" data-mode="canvas">
+            <div class="rp-mode rp-mode-canvas">
+                <div class="rp-header">Canvas</div>
+                <div class="rp-section">
+                    <div class="rp-label">Size</div>
+                    <div class="rp-btn-row">
+                        <button class="rp-size-btn active" id="btn-size-wide" data-action="canvas:set-size" data-size="wide">16:9</button>
+                        <button class="rp-size-btn" id="btn-size-a4" data-action="canvas:set-size" data-size="a4">A4</button>
+                    </div>
+                </div>
+                <div class="rp-section">
+                    <div class="rp-label">Background</div>
+                    <div class="rp-color-row">
+                        <div class="rp-swatch" id="canvas-bg-swatch"></div>
+                        <input id="canvas-bg-input" type="text" class="rp-hex-input" value="#ffffff" data-on-input="canvas:set-bg">
+                    </div>
                 </div>
             </div>
-            <div class="rp-section">
-                <div class="rp-label">Background</div>
-                <div class="rp-color-row">
-                    <div class="rp-swatch" id="canvas-bg-swatch"></div>
-                    <input id="canvas-bg-input" type="text" class="rp-hex-input" value="#ffffff" data-on-input="canvas:set-bg">
+            <div class="rp-mode rp-mode-filter">
+                <div class="rp-header">Filter <span class="rp-header-name">· <span data-rp-filter-name></span></span></div>
+                <div class="rp-section">
+                    <div class="rp-label">Apply to</div>
+                    <div class="rp-chart-list"
+                         data-rp-chart-list
+                         data-on-mouseover="filter-rp:hover"
+                         data-on-mouseout="filter-rp:unhover"></div>
+                </div>
+                <div class="rp-section rp-help">
+                    Click a value to filter. Hold <kbd>Ctrl</kbd> for multi-select.
                 </div>
             </div>
         </div>

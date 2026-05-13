@@ -115,11 +115,17 @@ async function refreshGroup(groupId, fieldIndexes) {
 /**
  * Apply new data from a backend sample to a live Chart.js instance.
  * Preserves all config (type, scales, plugins, colors) — only swaps data arrays.
+ *
+ * Exported because the per-chart-filter module (per-chart-filter/api.js) needs
+ * the exact same patching contract — dataset-count sync + box-plot skip — when
+ * it patches a chart from the inline-filter endpoint response. Hoisting it
+ * keeps that contract in one place rather than copy-pasted across two callers.
+ *
  * @param {any} chart
  * @param {{ chartType: number, title?: string, x: any[], y: { label: string, data: any[] }[], z: any[] }} sample
  * note: sample.z is always an array in the server response (may be empty)
  */
-function applySampleToInstance(chart, sample) {
+export function applySampleToInstance(chart, sample) {
   const typeName = chart.config?.type;
 
   // Box plot check: if datasets have more than 4 entries and dataset[2] is 'Median',
@@ -154,7 +160,18 @@ function applySampleToInstance(chart, sample) {
   }
   // Add missing datasets (e.g. a player that was previously filtered-out)
   while (chart.data.datasets.length < expectedTotal) {
-    chart.data.datasets.push({ data: [], label: '' });
+    // Use first dataset as template to preserve chart-type-specific properties
+    // (fill, stack, tension for area; type for mixed; borderRadius for bar; etc.)
+    const template = chart.data.datasets[0] || {};
+    const newDs = { data: [], label: '' };
+    // Skip data, label, and color properties (borderColor, backgroundColor, borderWidth)
+    const skipKeys = ['data', 'label', 'borderColor', 'backgroundColor', 'borderWidth'];
+    Object.keys(template).forEach((key) => {
+      if (!skipKeys.includes(key)) {
+        newDs[key] = template[key];
+      }
+    });
+    chart.data.datasets.push(newDs);
     _assignDatasetColor(chart, chart.data.datasets.length - 1, typeName);
   }
 
@@ -209,25 +226,30 @@ function _rgba(color, alpha) {
 /**
  * Assign borderColor / backgroundColor to a dataset that was dynamically added.
  * Mirrors the logic Chart.js's built-in colors plugin uses.
+ * Only sets properties that the first dataset already has (to avoid adding properties
+ * that shouldn't persist when filtering is removed).
  * @param {any} chart
  * @param {number} dsIndex
  * @param {string} typeName  chart.config.type
  */
 function _assignDatasetColor(chart, dsIndex, typeName) {
   const ds = chart.data.datasets[dsIndex];
-  if (!ds) return;
+  const template = chart.data.datasets[0];
+  if (!ds || !template) return;
   const color = _PALETTE[dsIndex % _PALETTE.length];
 
   if (typeName === 'line' || typeName === 'radar') {
-    ds.borderColor = color;
-    ds.backgroundColor = _rgba(color, 0.5);
+    if ('borderColor' in template) ds.borderColor = color;
+    if ('backgroundColor' in template) ds.backgroundColor = _rgba(color, 0.5);
   } else if (typeName === 'bar') {
-    ds.backgroundColor = color;
-    ds.borderColor = color;
+    if ('backgroundColor' in template) ds.backgroundColor = color;
+    if ('borderColor' in template) ds.borderColor = color;
   } else if (typeName === 'pie' || typeName === 'doughnut' || typeName === 'polarArea') {
-    ds.backgroundColor = color;
+    if ('backgroundColor' in template) ds.backgroundColor = color;
   } else if (typeName === 'scatter' || typeName === 'bubble') {
     ds.backgroundColor = _rgba(color, 0.5);
+    ds.borderColor = color;
+    ds.borderWidth = 1;
   }
   // matrix: dataset has its own colour logic from buildMatrixDataset — skip
 }

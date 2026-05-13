@@ -13,6 +13,8 @@
  */
 
 import { createChartGroup, createTextCard } from '../chart.js';
+import { recreateFilterCard } from '../per-chart-filter/index.js';
+import { getFilter } from '../per-chart-filter/state.js';
 
 /**
  * @typedef {Object} BlockKind
@@ -82,10 +84,47 @@ export const KINDS = [
     hydrate: () => makeDividerBlock(),
   },
   {
+    // Per-chart filter cards are absolutely-positioned canvas cards just
+    // like chart and textCard. They must be matched BEFORE the chart kind
+    // because they share `.canvas-card` (the filter-card-host class is
+    // additive). No `[data-field-indexes]` lives inside a filter card, so
+    // the chart matcher would still fall through correctly, but ordering
+    // here is defence-in-depth.
+    name: 'filter',
+    match: (el) => el.classList.contains('canvas-card')
+      && el.classList.contains('filter-card-host'),
+    serialize: (el) => {
+      const card = /** @type {HTMLElement} */ (el);
+      const groupId = Number(card.dataset.groupId);
+      const rec = Number.isFinite(groupId) ? getFilter(groupId) : null;
+      if (!rec) return {};
+      /** @type {Record<string, any>} */
+      const out = {
+        fieldIndex: rec.fieldIndex,
+        appliedTo: [...rec.appliedTo],
+        x: parseFloat(card.style.left) || 0,
+        y: parseFloat(card.style.top) || 0,
+        width: card.offsetWidth,
+        height: card.offsetHeight,
+      };
+      // Same compactness rule as the chart kind: emit csvFileToken only when
+      // the filter's source differs from this canvas's owner. Pre-existing
+      // filter blocks (saved before this field existed) just default to the
+      // owner on hydrate, matching their old behaviour.
+      if (rec.csvFileToken && rec.csvFileToken !== getOwnerFileToken()) {
+        out.csvFileToken = rec.csvFileToken;
+      }
+      return out;
+    },
+    hydrate: (spec) => recreateFilterCard(spec),
+    attachesItself: true,
+  },
+  {
     name: 'chart',
     match: (el) =>
       el.classList.contains('canvas-card') &&
       !el.classList.contains('text-card') &&
+      !el.classList.contains('filter-card-host') &&
       el.querySelector('[data-field-indexes]') !== null,
     serialize: (el) => {
       const card = /** @type {HTMLElement} */ (el);
@@ -161,7 +200,9 @@ export const KINDS = [
   },
   {
     name: 'textCard',
-    match: (el) => el.classList.contains('canvas-card') && el.classList.contains('text-card'),
+    match: (el) => el.classList.contains('canvas-card')
+      && el.classList.contains('text-card')
+      && !el.classList.contains('filter-card-host'),
     serialize: (el) => {
       const card = /** @type {HTMLElement} */ (el);
       const c = /** @type {HTMLElement | null} */ (card.querySelector('.tc-content'));
