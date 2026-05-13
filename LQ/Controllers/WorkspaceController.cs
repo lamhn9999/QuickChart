@@ -244,6 +244,53 @@ public class WorkspaceController : Controller
         }
     }
 
+    // Per-chart filter endpoint. Mirrors AutoChart() but takes its filter list
+    // inline from the request body instead of reading the session-scoped
+    // ListValueFilterDTO. This lets a single chart card refresh against a
+    // request-scoped filter without disturbing the table-wide filter state or
+    // any other chart on the canvas. The whole-table filter is intentionally
+    // NOT merged in here — per-chart filters are independent.
+    [HttpPost("chart")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> ChartWithInlineFilters([FromBody] PerChartRequestDTO body)
+    {
+        if (body is null || body.FieldIndexes is null) return BadRequest();
+
+        int sourceFileId;
+        if (body.CsvFileToken is Guid token)
+        {
+            var resolved = await ResolveAccessibleFileId(token);
+            if (resolved is null) return Forbid();
+            sourceFileId = resolved.Value;
+        }
+        else
+        {
+            if (CurrentCSVFileDTO is null || CurrentTableDTO is null) return NotFound();
+            sourceFileId = CurrentCSVFileDTO.currentFileID;
+        }
+
+        var filters = body.InlineFilters;
+
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            var charts = filters is { Count: > 0 }
+                ? await _autoChartService.DetectChartWithFiltersAsync(sourceFileId, body.FieldIndexes, filters)
+                : await _autoChartService.DetectChartAsync(sourceFileId, body.FieldIndexes);
+            sw.Stop();
+            _logger.LogInformation(
+                "PerChartFilter elapsed={Elapsed}ms fields={Fields} filters={FilterCount}",
+                sw.ElapsedMilliseconds, JsonSerializer.Serialize(body.FieldIndexes), filters?.Count ?? 0);
+            return Json(charts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogInformation(ex.Message, ex.StackTrace);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                "Our server is having a hard time dealing with your request!");
+        }
+    }
+
     [HttpPost("filter")]
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> FilterTable([FromBody] List<ValueFilterDTO> filters)
