@@ -28,6 +28,7 @@ import { appendChart } from './builder.js';
  * @param {number | null} [groupId]
  * @param {number[] | null} [fieldIndexes]
  * @param {string | null} [csvFileToken]
+ * @param {any[] | null} [savedSeriesState]
  */
 export function buildPanel(
   panelSamples,
@@ -35,7 +36,8 @@ export function buildPanel(
   gridContainer,
   groupId = null,
   fieldIndexes = null,
-  csvFileToken = null
+  csvFileToken = null,
+  savedSeriesState = null
 ) {
   const panelDiv = document.createElement('div');
   panelDiv.classList.add('flex', 'flex-col');
@@ -386,6 +388,27 @@ export function buildPanel(
     // @ts-ignore — Chart is a runtime global
     const chartInstance = new Chart(ctx, cfg);
     chartInstances.push(chartInstance);
+
+    // Initialize series state for zoom panel visibility toggles. When loaded from persistence,
+    // apply the saved visibility state.
+    chartInstance._lqSeriesState = chartInstance.data.datasets.map((/** @type {any} */ ds) => ({
+      dataset: ds,
+      visible: true,
+    }));
+    if (savedSeriesState && Array.isArray(savedSeriesState) && sIdx === 0) {
+      // Apply saved visibility state by matching dataset labels
+      chartInstance._lqSeriesState.forEach((state) => {
+        const saved = savedSeriesState.find((s) => s.label === state.dataset.label);
+        if (saved !== undefined) {
+          state.visible = saved.visible;
+        }
+      });
+      // Sync the chart to reflect the saved state
+      chartInstance.data.datasets = chartInstance._lqSeriesState
+        .filter((s) => s.visible)
+        .map((s) => s.dataset);
+      chartInstance.update('none');
+    }
   });
 
   appendChart(

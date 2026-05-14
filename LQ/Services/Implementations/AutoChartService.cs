@@ -580,7 +580,6 @@ public class AutoChartService : IAutoChartService
         var buckets = await _repo.CountByTimeBucketAndCategory(dateField, catField, gran, rowFilter);
         if (buckets.Count < 2) return null;
         var cats = buckets.Values.SelectMany(d => d.Keys).Distinct().OrderBy(c => c).ToList();
-        if (cats.Count > 20) return null;
         var c = new Chart { ChartType = ChartType.Line, Title = $"{catField.Name} by {dateField.Name} ({gran.ToString().ToLower()})" };
         c.X = buckets.Keys.Select(d => (object)FmtDate(d, gran)).ToList();
         foreach (var cat in cats)
@@ -594,7 +593,6 @@ public class AutoChartService : IAutoChartService
         var buckets = await _repo.AverageByTimeBucketAndCategory(numericField, dateField, catField, gran, rowFilter);
         if (buckets.Count < 2) return null;
         var cats = buckets.Values.SelectMany(d => d.Keys).Distinct().OrderBy(c => c).ToList();
-        if (cats.Count > 20) return null;
         var c = new Chart { ChartType = ChartType.Line, Title = $"Avg {numericField.Name} by {catField.Name} over time ({gran.ToString().ToLower()})" };
         c.X = buckets.Keys.Select(d => (object)FmtDate(d, gran)).ToList();
         foreach (var cat in cats)

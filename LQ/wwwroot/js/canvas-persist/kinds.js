@@ -158,6 +158,19 @@ export const KINDS = [
       if (visibleEl?.dataset.chartType != null) {
         out.chartType = Number(visibleEl.dataset.chartType);
       }
+      // Persist series visibility state (which datasets are hidden/shown).
+      // The series state is stored on the active chart instance.
+      const activeCanvas = visibleEl?.querySelector('canvas');
+      if (activeCanvas) {
+        // @ts-ignore — Chart is a runtime global
+        const inst = typeof Chart !== 'undefined' ? Chart.getChart(activeCanvas) : null;
+        if (inst && inst._lqSeriesState) {
+          out.seriesState = inst._lqSeriesState.map((/** @type {any} */ s) => ({
+            label: s.dataset.label,
+            visible: s.visible,
+          }));
+        }
+      }
       return out;
     },
     hydrate: async (spec) => {
@@ -171,6 +184,7 @@ export const KINDS = [
         csvFileToken: spec.csvFileToken ?? null,
         width: spec.width,
         height: spec.height,
+        seriesState: spec.seriesState ?? null,
       });
       if (groupId == null) return null;
       const card = /** @type {HTMLElement | null} */ (

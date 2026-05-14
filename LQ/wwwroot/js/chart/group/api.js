@@ -28,12 +28,13 @@ import { buildUnavailableCard } from './unavailable.js';
 
 /**
  * @param {number[] | Iterable<number>} fieldIndexes
- * @param {{ x?: number, y?: number, width?: number, height?: number, csvFileToken?: string | null } | null} [opts]
+ * @param {{ x?: number, y?: number, width?: number, height?: number, csvFileToken?: string | null, seriesState?: any[] | null } | null} [opts]
  */
 export async function createChartGroup(fieldIndexes, opts = null) {
   const groupId = nextGroupId();
   const dropPos = opts ?? null;
   const csvFileToken = (opts && opts.csvFileToken) || null;
+  const seriesState = (opts && opts.seriesState) || null;
 
   const selPlot = document.getElementById('selPlot');
   const noPlot = document.getElementById('noPlot');
@@ -115,7 +116,8 @@ export async function createChartGroup(fieldIndexes, opts = null) {
           panelsRow,
           groupId,
           /** @type {number[]} */ (Array.isArray(fieldIndexes) ? fieldIndexes : [...fieldIndexes]),
-          csvFileToken
+          csvFileToken,
+          seriesState
         );
       });
 
@@ -245,6 +247,7 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
           /** @type {number[]} */ (
             Array.isArray(newFieldIndexes) ? newFieldIndexes : [...newFieldIndexes]
           ),
+          null,
           null
         );
       });
