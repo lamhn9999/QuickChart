@@ -23,19 +23,15 @@
         /* Grab cursor on every header cell */
         th[data-index] { cursor: grab; user-select: none; }
         th[data-index]:active { cursor: grabbing; }
+        th[data-index]:hover { background: rgba(128, 128, 128, 0.08); transition: background-color 0.15s ease; }
 
-        /* Pending (selected) — normal table view */
-        th[data-index].header-pending > div {
-            outline: 2px solid rgba(233,150,122,0.65);
-            outline-offset: -2px;
-            border-radius: 6px;
-            background-color: rgba(233,150,122,0.05) !important;
+        /* Pending (selected) — both normal and collapsed view */
+        th[data-index].header-pending {
+            background-color: rgba(128, 128, 128, 0.06) !important;
+            transition: background-color 0.12s ease;
         }
-        /* Pending — collapsed card view */
-        #mainWrapper.is-collapsed th[data-index].header-pending {
-            border-color: rgba(233,150,122,0.55) !important;
-            background-color: rgba(233,150,122,0.06) !important;
-            box-shadow: 0 0 0 3px rgba(233,150,122,0.1) !important;
+        th[data-index].header-pending:hover {
+            background-color: rgba(128, 128, 128, 0.10) !important;
         }
         /* Header actively being dragged */
         th[data-index].header-dragging { opacity: 0.4; transition: opacity 0.12s ease; }
@@ -736,7 +732,7 @@
     <nav class="bg-white/85 border-b border-zinc-100 backdrop-blur-md px-6 py-3.5 flex justify-between items-center sticky top-0 z-50 shadow-sm">
         <a href="/" class="flex items-center gap-2 no-underline hover:opacity-80 transition-opacity" style="font-family:'Syne',sans-serif">
             <img src="/01384a5a5e3c1ea5887b428641e12121.gif" alt="" style="width:18px;height:auto;">
-            <span class="text-[0.95rem] font-bold tracking-tight text-[#18181B]">ACPTDA<span class="text-[#E9967A]">.</span></span>
+            <span class="text-[0.95rem] font-bold tracking-tight text-[#18181B]">ACPTDA</span>
         </a>
         <div class="flex items-center gap-4">
             @if (ViewBag.Username != null)
@@ -800,7 +796,7 @@
                     @{
                         foreach (var f in Model.Fields)
                         {
-                            <th data-action="header:click" draggable="true" data-on-dragstart="header:dragstart" data-on-dragend="header:dragend" class="relative align-top p-2 bg-[#FAFAFA] border-b border-b-zinc-200 border-r border-r-zinc-200 last:border-r-0 has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-white group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-100 group-[.is-collapsed]:rounded-xl group-[.is-collapsed]:hover:border-[#E9967A]/40 group-[.is-collapsed]:hover:bg-[#E9967A]/[0.03] transition-colors" data-index="@f.Index">
+                            <th data-action="header:click" draggable="true" data-on-dragstart="header:dragstart" data-on-dragend="header:dragend" class="relative align-top p-2 bg-[#FAFAFA] border-b border-b-zinc-200 border-r border-r-zinc-200 last:border-r-0 has-[.gearPopup:not(.hidden)]:z-[100] group-[.is-collapsed]:flex group-[.is-collapsed]:flex-col group-[.is-collapsed]:w-full group-[.is-collapsed]:box-border group-[.is-collapsed]:text-left group-[.is-collapsed]:p-3 group-[.is-collapsed]:bg-white group-[.is-collapsed]:border group-[.is-collapsed]:border-zinc-100 group-[.is-collapsed]:rounded-xl group-[.is-collapsed]:hover:border-zinc-300 group-[.is-collapsed]:hover:bg-zinc-50 transition-colors" data-index="@f.Index">
                                 <div class="flex flex-col w-full">
                                     @{
                                         string typeSvg = f.TypeName switch {
@@ -985,7 +981,7 @@
                 <tbody class="group-[.is-collapsed]:hidden">
                 @foreach (var row in Model.Values)
                 {
-                    <tr class="even:bg-zinc-50/70 hover:bg-[#E9967A]/5 transition-colors duration-75 group/row cursor-default">
+                    <tr class="even:bg-zinc-50/70 hover:bg-zinc-100 transition-colors duration-75 group/row cursor-default">
                         @for (int ci = 0; ci < row.Length; ci++)
                         {
                             var fieldType = Model.Fields[ci].TypeName;

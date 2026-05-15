@@ -139,7 +139,7 @@
             cursor: pointer; transition: background 0.14s;
         }
         .file-row:last-child { border-bottom: none; }
-        .file-row:hover { background: rgba(233,150,122,0.06); }
+        .file-row:hover { background: rgba(128,128,128,0.1); }
 
         .file-main {
             flex: 1; padding: 0.85rem 1.25rem;
@@ -147,7 +147,7 @@
         }
         .file-icon {
             width: 34px; height: 34px; border-radius: 0.55rem; flex-shrink: 0;
-            background: rgba(233,150,122,0.10); color: var(--accent);
+            color: var(--accent);
             display: flex; align-items: center; justify-content: center;
         }
         .file-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
@@ -464,7 +464,7 @@
 <nav class="topnav">
     <a href="/" class="nav-brand">
         <img src="01384a5a5e3c1ea5887b428641e12121.gif" alt="" style="width:18px; height:auto;">
-        ACPTDA<span class="dot">.</span>
+        ACPTDA
     </a>
     <div class="nav-right">
         @if (ViewBag.Username != null)
