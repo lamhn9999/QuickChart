@@ -25,6 +25,7 @@ import { nextGroupId, getGroup, setGroup, deleteGroup, forEachGroup } from './st
 import { buildPanel } from './build-panel.js';
 import { setRemoveGroupFn } from './builder.js';
 import { buildUnavailableCard } from './unavailable.js';
+import { ownerFileToken } from './owner.js';
 
 /**
  * @param {number[] | Iterable<number>} fieldIndexes
@@ -33,7 +34,7 @@ import { buildUnavailableCard } from './unavailable.js';
 export async function createChartGroup(fieldIndexes, opts = null) {
   const groupId = nextGroupId();
   const dropPos = opts ?? null;
-  const csvFileToken = (opts && opts.csvFileToken) || null;
+  const csvFileToken = (opts && opts.csvFileToken) || ownerFileToken();
   const seriesState = (opts && opts.seriesState) || null;
 
   const selPlot = document.getElementById('selPlot');
@@ -204,7 +205,7 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        csvFileToken: null,
+        csvFileToken: ownerFileToken(),
         fieldIndexes: [...newFieldIndexes].map(Number),
       }),
       signal: appState.controller.signal,
@@ -230,6 +231,7 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
     const groupId = nextGroupId();
     card.dataset.groupId = String(groupId);
 
+    const ownerFileTk = ownerFileToken();
     const domsBefore = chartInstances.length;
     /** @type {Record<number, any[]>} */
     const grouped = result.reduce((/** @type {any} */ acc, /** @type {any} */ s) => {
@@ -247,7 +249,7 @@ export async function replaceChartGroup(oldGroupId, newFieldIndexes) {
           /** @type {number[]} */ (
             Array.isArray(newFieldIndexes) ? newFieldIndexes : [...newFieldIndexes]
           ),
-          null,
+          ownerFileTk,
           null
         );
       });

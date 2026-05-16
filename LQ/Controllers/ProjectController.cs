@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LQ.Data.Repositories;
 using LQ.Models.DTOs;
 using LQ.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -10,11 +11,13 @@ public class ProjectController : Controller
 {
     private readonly IProjectService _projects;
     private readonly IAnalystService _analystService;
+    private readonly TableRepositoryAbstract _repo;
 
-    public ProjectController(IProjectService projects, IAnalystService analystService)
+    public ProjectController(IProjectService projects, IAnalystService analystService, TableRepositoryAbstract repo)
     {
         _projects = projects;
         _analystService = analystService;
+        _repo = repo;
     }
 
     private AnalystDTO? CurrentAnalyst
@@ -166,5 +169,38 @@ public class ProjectController : Controller
     {
         var (analystId, guestToken) = OwnerIdentity();
         return await _projects.DeleteCanvas(canvasToken, analystId, guestToken) ? Ok() : NotFound();
+    }
+
+    // ─── CSV rename / delete inside a project ─────────────────────────────────
+
+    [HttpPut("csv/{fileToken:guid}")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> RenameCSV(Guid fileToken, [FromBody] RenameCSVRequestDTO body)
+    {
+        var (analystId, guestToken) = OwnerIdentity();
+        return await _projects.RenameCSVFile(fileToken, body?.Name ?? "", analystId, guestToken)
+            ? Ok() : NotFound();
+    }
+
+    [HttpDelete("csv/{fileToken:guid}")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> DeleteCSV(Guid fileToken)
+    {
+        var (analystId, guestToken) = OwnerIdentity();
+        return await _projects.DeleteCSVFile(fileToken, analystId, guestToken) ? Ok() : NotFound();
+    }
+
+    // ─── Canvas snapshot serve ────────────────────────────────────────────────
+
+    // Returns the canvas's stored PNG snapshot. Public-token routed for the
+    // project detail card <img>; cache for 5 minutes since the URL already
+    // carries `?v={UpdatedAt.Ticks}` for cache busting on re-save.
+    [HttpGet("canvas/{canvasToken:guid}/preview.png")]
+    public async Task<IActionResult> CanvasPreviewPng(Guid canvasToken)
+    {
+        var bytes = await _repo.GetCanvasPreviewPng(canvasToken);
+        if (bytes is null || bytes.Length == 0) return NotFound();
+        Response.Headers.CacheControl = "private, max-age=300";
+        return File(bytes, "image/png");
     }
 }

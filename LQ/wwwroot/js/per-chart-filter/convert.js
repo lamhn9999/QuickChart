@@ -20,6 +20,7 @@ import { fetchFieldDistinct, refreshChartWithFilters, buildInlineFilter } from '
 import { renderButtonsBody, renderSearchBody } from './render.js';
 import { setFilter, getFilter, deleteFilter, fieldTypeFromTypeName, listFilters } from './state.js';
 import { buildFilterToolbar } from './toolbar.js';
+import { ownerFileToken } from '../chart/group/owner.js';
 
 /** Resize floor — small enough for a few pills, large enough that pills don't truncate. */
 const FILTER_MIN_W = 240;
@@ -57,7 +58,7 @@ export async function convertChartToFilter(card) {
   // The host chart may itself be a copied chart (panel carries a foreign
   // csv-file-token). The filter inherits that token so its fieldIndex stays
   // bound to the same schema. Null means "this canvas's owner file".
-  const csvFileToken = panel.dataset.csvFileToken || null;
+  const csvFileToken = panel.dataset.csvFileToken || ownerFileToken();
 
   const distinct = await fetchFieldDistinct(fieldIndex, NUMERIC_BUTTONS_LIMIT + 1, csvFileToken);
   if (!distinct) return;
@@ -139,9 +140,7 @@ export async function convertChartToFilter(card) {
  */
 export async function recreateFilterCard(spec) {
   if (typeof spec.fieldIndex !== 'number') return null;
-  // Null/undefined csvFileToken means "native to this canvas" — the distinct
-  // endpoint falls back to the session's current file in that case.
-  const csvFileToken = spec.csvFileToken ?? null;
+  const csvFileToken = spec.csvFileToken ?? ownerFileToken();
   const distinct = await fetchFieldDistinct(spec.fieldIndex, NUMERIC_BUTTONS_LIMIT + 1, csvFileToken);
   if (!distinct) return null;
 

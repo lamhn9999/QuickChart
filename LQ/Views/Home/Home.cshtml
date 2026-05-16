@@ -637,55 +637,12 @@
             const res = await fetch('/guest-upload', { method: 'POST', body: fd });
             const r = await res.json();
             if (r.received) {
-                location.reload();
+                // Guest uploads land in the guest's default project; jump straight
+                // into the projects view so they can pick a canvas and start charting.
+                window.location.href = '/projects';
             } else {
                 alert(`"${r.badcsv || file.name}" is not a valid CSV, or a file with that name already exists.`);
             }
-        }
-
-        // Per-card status polling: while any guest file is still Processing,
-        // poll /pending-uploads and remove the loading bar from cards whose
-        // status has flipped (Ready, AwaitingListConfirmation, Failed).
-        let _statusPollTimer = null;
-        async function refreshCardStatuses() {
-            const bars = document.querySelectorAll('.guest-file-loading-bar');
-            if (bars.length === 0) {
-                if (_statusPollTimer) { clearInterval(_statusPollTimer); _statusPollTimer = null; }
-                return;
-            }
-            try {
-                const res = await fetch('/pending-uploads');
-                if (!res.ok) return;
-                const items = await res.json();
-                const stillProcessing = new Set(
-                    items.filter(i => i.status === 'Processing').map(i => i.token)
-                );
-                bars.forEach(bar => {
-                    const card = bar.closest('[data-token]');
-                    if (card && !stillProcessing.has(card.dataset.token)) bar.remove();
-                });
-            } catch (_) { /* best-effort */ }
-        }
-        document.addEventListener('DOMContentLoaded', () => {
-            if (document.querySelector('.guest-file-loading-bar')) {
-                _statusPollTimer = setInterval(refreshCardStatuses, 4000);
-            }
-        });
-
-        async function removeGuestFile(filename, containerId, e) {
-            e.stopPropagation();
-            if (!confirm(`Delete "${filename}"? This cannot be undone.`)) return;
-            const res = await fetch('/guest-remove?' + new URLSearchParams({ filename }), { method: 'DELETE' });
-            if (await res.json() === 'OK') document.getElementById(containerId).remove();
-        }
-
-        async function selectGuestFile(filename) {
-            const res = await fetch('/table', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `filename=${encodeURIComponent(filename)}`
-            });
-            if (res.ok) window.location.href = '/workspace';
         }
 
         // Star canvas
@@ -822,7 +779,7 @@
                         </span>
                     </div>
                     <button class="workspace-btn" id="workspaceButton"
-                            onclick="window.location.href='/workspace'">
+                            onclick="window.location.href='/projects'">
                         Open Workspace &rarr;
                     </button>
                 </div>

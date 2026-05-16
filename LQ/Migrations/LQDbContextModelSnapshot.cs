@@ -149,8 +149,8 @@ namespace LQ.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("PreviewJson")
-                        .HasColumnType("jsonb");
+                    b.Property<byte[]>("PreviewPng")
+                        .HasColumnType("bytea");
 
                     b.Property<int>("ProjectID")
                         .HasColumnType("integer");

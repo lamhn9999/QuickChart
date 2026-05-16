@@ -509,11 +509,7 @@ export function appendChart(
   if (groupId !== null) {
     panelDivCopy.dataset.groupId = String(groupId);
     panelDivCopy.dataset.fieldIndexes = JSON.stringify(fieldIndexes ? [...fieldIndexes] : []);
-    // Foreign-file charts carry their source token; native charts (drawn
-    // from the active workspace) leave the attribute unset so the
-    // serializer treats them as implicit/native.
     if (csvFileToken) panelDivCopy.dataset.csvFileToken = csvFileToken;
-    else delete panelDivCopy.dataset.csvFileToken;
   }
 
   // ── Drop zone: another column header dragged onto this panel ─────────

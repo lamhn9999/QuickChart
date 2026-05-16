@@ -28,10 +28,14 @@ public record ProjectChildDTO(
     int? RowCount,
     int? FieldCount,
     string? Status,
-    // Canvas-only metadata
-    string? PreviewSvg);
+    // CSV-only — first up-to-5 rows × up-to-4 cols of real data for the card preview
+    List<string>? PreviewHeaders,
+    List<List<string>>? PreviewRows,
+    // Canvas-only — true if a snapshot PNG is stored (served via /projects/canvas/{token}/preview.png)
+    bool HasPreview);
 
 public record CreateProjectRequestDTO(string Name);
 public record RenameProjectRequestDTO(string Name);
 public record RenameCanvasRequestDTO(string Name);
 public record CreateCanvasRequestDTO(string? Name);
+public record RenameCSVRequestDTO(string Name);

@@ -723,9 +723,13 @@
     </style>
     <script id="saved-canvas" type="application/json">@Html.Raw(string.IsNullOrEmpty(Model.SavedCanvasJson) ? "null" : Model.SavedCanvasJson)</script>
     <script id="canvas-owner-file-token" type="application/json">"@ViewBag.FileToken"</script>
+    <script id="canvas-token" type="application/json">"@(Model.CanvasToken?.ToString() ?? "")"</script>
+    <!-- DOM-to-PNG for canvas thumbnails shown in the project grid. Loaded as a regular
+         (non-module) script so the global `htmlToImage` lookup in autosave.js resolves. -->
+    <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.min.js"></script>
     <script type="module" src="~/js/editor/index.js?v=4"></script>
     <script type="module" src="~/js/workspace/index.js?v=4"></script>
-    <script type="module" src="~/js/canvas-persist/index.js?v=4"></script>
+    <script type="module" src="~/js/canvas-persist/index.js?v=9"></script>
 </head>
 <body class="bg-[#FAFAFA] text-[#18181B]">
 <div class="flex flex-col h-screen max-h-screen">
@@ -789,6 +793,49 @@
         <div
             id="tablePanel"
             class="overflow-auto w-full md:w-1/2 md:min-w-1/5 group-[.is-collapsed]:md:!w-80 group-[.is-collapsed]:md:!min-w-[20rem] group-[.is-collapsed]:md:!max-w-[20rem] group-[.is-collapsed]:md:!flex-none relative z-20">
+
+            @if (Model.CanvasToken is not null)
+            {
+                <div class="sticky top-0 z-30 flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur border-b border-zinc-100 group-[.is-collapsed]:px-4">
+                    @{ var projTok = ViewBag.ProjectToken as Guid?; }
+                    @if (projTok is not null)
+                    {
+                        <a href="/projects/@projTok"
+                           class="text-[11px] text-zinc-400 hover:text-[#18181B] no-underline transition-colors"
+                           title="Back to project">←</a>
+                    }
+                    @if (Model.Siblings.Count > 0)
+                    {
+                        <select id="csvPicker"
+                                class="flex-1 text-xs font-medium text-[#18181B] bg-zinc-50 border border-zinc-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#E9967A]"
+                                data-canvas-token="@Model.CanvasToken">
+                            @foreach (var s in Model.Siblings)
+                            {
+                                <option value="@s.Token" selected="@(s.Token == Model.ActiveCSVToken)">@s.Name</option>
+                            }
+                        </select>
+                        <!-- Handler lives in js/workspace/csv-picker.js (delegated, survives panel swaps) -->
+                    }
+                    else
+                    {
+                        <span class="flex-1 text-xs text-zinc-400 italic">No CSV in this project yet.</span>
+                        @if (projTok is not null)
+                        {
+                            <a href="/projects/@projTok"
+                               class="text-[11px] font-medium text-[#E9967A] hover:underline no-underline">Upload one →</a>
+                        }
+                    }
+                </div>
+            }
+
+            @if (Model.Fields.Count == 0)
+            {
+                <div class="flex flex-col items-center justify-center h-full min-h-[200px] px-6 py-12 text-center">
+                    <p class="text-sm text-zinc-400 max-w-xs leading-relaxed">
+                        This canvas has no data source yet. Upload a CSV from the project page to start charting.
+                    </p>
+                </div>
+            }
 
             <table id="dataTable" class="w-full border-separate border-spacing-0 group-[.is-collapsed]:block">
                 <thead class="sticky top-0 shadow-[0_2px_8px_0_rgba(0,0,0,0.06)] group-[.is-collapsed]:block group-[.is-collapsed]:static group-[.is-collapsed]:shadow-none">
@@ -1227,6 +1274,8 @@
 
 <script>
 // ── Header sparklines ─────────────────────────────────────────────────────────
+// Exposed as window.loadAllSparklines so csv-picker.js can re-trigger after an
+// AJAX file switch.  The IIFE pattern is kept to avoid leaking helpers.
 (function () {
     const [SR, SG, SB] = [233, 150, 122];
     const ac = a => `rgba(${SR},${SG},${SB},${a})`;
@@ -1363,6 +1412,8 @@
             setTimeout(() => { tp.style.transition = ''; }, 500);
         }
     }
+
+    window.loadAllSparklines = loadAll;
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadAll);
     else loadAll();

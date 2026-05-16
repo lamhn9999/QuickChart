@@ -277,6 +277,49 @@ public class CanvasPersistenceTest
         Assert.IsNull(got);
     }
 
+    [TestMethod]
+    public async Task UpsertCanvasDocumentById_UpdatesDocument_WithoutCreatingRow()
+    {
+        // Phase 4: token-keyed save path. Writes Document + UpdatedAt to a
+        // known canvas row without going through the legacy CSVFile-keyed
+        // lookup. Verifies the row stays singular and Document is overwritten.
+        var file = await SeedFile();
+        await _repo.UpsertCanvasDocument(file.ID, """{"title":"v1","blocks":[]}""");
+        var canvasId = await _db.Canvases.AsNoTracking()
+            .Where(c => c.LastUsedCSVFileID == file.ID)
+            .Select(c => c.ID)
+            .SingleAsync();
+
+        await _repo.UpsertCanvasDocumentById(canvasId, """{"title":"v2","blocks":[{"kind":"divider"}]}""");
+
+        var canvas = await _db.Canvases.AsNoTracking().SingleAsync(c => c.ID == canvasId);
+        AssertJsonEqual("""{"title":"v2","blocks":[{"kind":"divider"}]}""", canvas.Document);
+        var rowCount = await _db.Canvases.AsNoTracking().CountAsync(c => c.ID == canvasId);
+        Assert.AreEqual(1, rowCount);
+    }
+
+    [TestMethod]
+    public async Task SetCanvasLastUsedFileAsync_UpdatesPointer_RoundTripsNull()
+    {
+        // Phase 4: the CSV picker stores its selection on Canvas.LastUsedCSVFileID
+        // so the next visit defaults back to the same file. Both a real id and
+        // null (cleared) must persist.
+        var file = await SeedFile();
+        await _repo.UpsertCanvasDocument(file.ID, """{"title":"x","blocks":[]}""");
+        var canvasId = await _db.Canvases.AsNoTracking()
+            .Where(c => c.LastUsedCSVFileID == file.ID)
+            .Select(c => c.ID)
+            .SingleAsync();
+
+        await _repo.SetCanvasLastUsedFileAsync(canvasId, null);
+        var afterNull = await _db.Canvases.AsNoTracking().SingleAsync(c => c.ID == canvasId);
+        Assert.IsNull(afterNull.LastUsedCSVFileID);
+
+        await _repo.SetCanvasLastUsedFileAsync(canvasId, file.ID);
+        var afterSet = await _db.Canvases.AsNoTracking().SingleAsync(c => c.ID == canvasId);
+        Assert.AreEqual(file.ID, afterSet.LastUsedCSVFileID);
+    }
+
     private static void AssertJsonEqual(string expected, string actual)
     {
         using var e = JsonDocument.Parse(expected);

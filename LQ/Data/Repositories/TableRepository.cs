@@ -1415,11 +1415,77 @@ public class TableRepository : TableRepositoryAbstract
             .ExecuteDeleteAsync();
     }
 
-    public override async Task UpdateCanvasPreview(int canvasId, string? previewJson)
+    public override async Task UpdateCanvasPreviewPng(int canvasId, byte[]? previewPng)
     {
         await _lqDbContext.Canvases
             .Where(c => c.ID == canvasId)
-            .ExecuteUpdateAsync(s => s.SetProperty(c => c.PreviewJson, previewJson));
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.PreviewPng, previewPng));
+    }
+
+    public override async Task<byte[]?> GetCanvasPreviewPng(Guid canvasToken)
+    {
+        return await _lqDbContext.Canvases
+            .AsNoTracking()
+            .Where(c => c.PublicToken == canvasToken)
+            .Select(c => c.PreviewPng)
+            .SingleOrDefaultAsync();
+    }
+
+    public override async Task<(List<string> Headers, List<List<string>> Rows)> GetCardPreview(
+        int csvFileId, int rowLimit, int colLimit)
+    {
+        var fields = await _lqDbContext.Fields
+            .AsNoTracking()
+            .Where(f => f.CSVFile.ID == csvFileId)
+            .OrderBy(f => f.Index)
+            .Take(colLimit)
+            .Select(f => new { f.ID, f.Name })
+            .ToListAsync();
+
+        if (fields.Count == 0)
+            return (new List<string>(), new List<List<string>>());
+
+        var headers = fields.Select(f => f.Name ?? "").ToList();
+        var fieldIds = fields.Select(f => f.ID).ToList();
+        var fieldIndexById = fieldIds
+            .Select((id, i) => (id, i))
+            .ToDictionary(t => t.id, t => t.i);
+
+        var cells = await _lqDbContext.Values
+            .AsNoTracking()
+            .Where(v => fieldIds.Contains(v.FieldID) && v.RowIndex < rowLimit)
+            .Select(v => new { v.FieldID, v.RowIndex, v.ValueStringFormatted })
+            .ToListAsync();
+
+        var rows = Enumerable.Range(0, rowLimit)
+            .Select(_ => Enumerable.Repeat("", fields.Count).ToList())
+            .ToList();
+        int maxRow = -1;
+        foreach (var c in cells)
+        {
+            if (!fieldIndexById.TryGetValue(c.FieldID, out var col)) continue;
+            rows[c.RowIndex][col] = c.ValueStringFormatted ?? "";
+            if (c.RowIndex > maxRow) maxRow = c.RowIndex;
+        }
+        // Trim any trailing all-empty rows (file might have fewer than rowLimit rows).
+        if (maxRow + 1 < rows.Count) rows = rows.GetRange(0, maxRow + 1);
+        return (headers, rows);
+    }
+
+    public override async Task UpsertCanvasDocumentById(int canvasId, string documentJson)
+    {
+        await _lqDbContext.Canvases
+            .Where(c => c.ID == canvasId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.Document, documentJson)
+                .SetProperty(c => c.UpdatedAt, DateTime.UtcNow));
+    }
+
+    public override async Task SetCanvasLastUsedFileAsync(int canvasId, int? lastUsedCsvFileId)
+    {
+        await _lqDbContext.Canvases
+            .Where(c => c.ID == canvasId)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.LastUsedCSVFileID, lastUsedCsvFileId));
     }
 
     public override async Task<string?> GetSparklineJsonAsync(int csvFileId, int fieldIndex)

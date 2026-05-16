@@ -107,11 +107,7 @@ export const KINDS = [
         width: card.offsetWidth,
         height: card.offsetHeight,
       };
-      // Same compactness rule as the chart kind: emit csvFileToken only when
-      // the filter's source differs from this canvas's owner. Pre-existing
-      // filter blocks (saved before this field existed) just default to the
-      // owner on hydrate, matching their old behaviour.
-      if (rec.csvFileToken && rec.csvFileToken !== getOwnerFileToken()) {
+      if (rec.csvFileToken) {
         out.csvFileToken = rec.csvFileToken;
       }
       return out;
@@ -145,11 +141,8 @@ export const KINDS = [
         width: card.offsetWidth,
         height: card.offsetHeight,
       };
-      // Emit csvFileToken only when the chart's source differs from this canvas's owner —
-      // keeps the common (native) case compact and backward-compatible with rows persisted
-      // before cross-file charts.
       const panelToken = panel.dataset.csvFileToken;
-      if (panelToken && panelToken !== getOwnerFileToken()) out.csvFileToken = panelToken;
+      if (panelToken) out.csvFileToken = panelToken;
       const wrappers = [...panel.querySelectorAll('[data-chart-type]')];
       const visible =
         wrappers.find((w) => /** @type {HTMLElement} */ (w).style.display !== 'none') ??

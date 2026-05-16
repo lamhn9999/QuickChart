@@ -18,7 +18,10 @@ public interface IProjectService
     Task<bool> RenameCanvas(Guid canvasToken, string newName, string? analystId, string? guestToken);
     Task<bool> DeleteCanvas(Guid canvasToken, string? analystId, string? guestToken);
 
-    // Regenerates the SVG silhouette from the canvas's current Document JSON
-    // and stores it on the row. Called by SaveCanvas after each write.
-    Task RegenerateCanvasPreview(Guid canvasToken);
+    Task<bool> RenameCSVFile(Guid fileToken, string newName, string? analystId, string? guestToken);
+    Task<bool> DeleteCSVFile(Guid fileToken, string? analystId, string? guestToken);
+
+    // Stores a client-rendered PNG snapshot of the canvas's current visual state.
+    // Called by POST /workspace/canvas/{token}/snapshot after the document save settles.
+    Task<bool> SetCanvasPreviewPng(Guid canvasToken, byte[] png, string? analystId, string? guestToken);
 }

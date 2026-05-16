@@ -80,7 +80,7 @@ public class LQDbContext : DbContext
             eb.Property(c => c.PublicToken).HasDefaultValueSql("gen_random_uuid()");
             eb.HasIndex(c => c.PublicToken).IsUnique();
             eb.Property(c => c.Document).HasColumnType("jsonb").IsRequired();
-            eb.Property(c => c.PreviewJson).HasColumnType("jsonb").IsRequired(false);
+            eb.Property(c => c.PreviewPng).HasColumnType("bytea").IsRequired(false);
             eb.HasOne(c => c.Project)
                 .WithMany(p => p.Canvases)
                 .HasForeignKey(c => c.ProjectID)

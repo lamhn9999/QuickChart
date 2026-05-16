@@ -178,7 +178,7 @@
             display: flex; flex-direction: column;
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 0.8rem; overflow: hidden;
+            border-radius: 0.8rem;
             text-decoration: none; color: inherit;
             transition: border-color 0.12s;
             opacity: 0; transform: translateY(8px);
@@ -197,14 +197,77 @@
             display: flex; align-items: center; justify-content: center;
         }
         .item-preview svg { width: 100%; height: 100%; display: block; }
+        .item-preview img.canvas-snapshot {
+            width: 100%; height: 100%;
+            /* The PNG is top-cropped to the card's 4:3 aspect at capture time
+               AND rendered at 2× DPR, so cover just fills the frame without
+               any further crop or upscaling in the common case. */
+            object-fit: cover; object-position: top center;
+            display: block; background: var(--preview-bg);
+            /* Hint the rasterizer to prefer crisper pixels over smoothing for
+               the chart strokes / text that dominate canvas snapshots. */
+            image-rendering: -webkit-optimize-contrast;
+        }
+        .canvas-empty {
+            font-family: 'Syne', sans-serif; font-weight: 300; font-size: 1.6rem;
+            color: var(--silhouette); letter-spacing: -0.02em;
+        }
+
+        /* Real-data CSV mini-table */
+        .csv-mini {
+            position: absolute; inset: 0;
+            padding: 1.05rem 1.1rem 1.4rem;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+        .csv-mini-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.62rem;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+        }
+        .csv-mini-table th {
+            font-weight: 700; text-align: left;
+            color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.08em;
+            font-size: 0.54rem;
+            padding: 0.25rem 0.4rem 0.3rem 0;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 4.5rem;
+        }
+        .csv-mini-table td {
+            padding: 0.22rem 0.4rem 0.22rem 0;
+            border-bottom: 1px solid var(--border-row);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 4.5rem;
+        }
+        .csv-mini-fade-right {
+            position: absolute; top: 0; right: 0; bottom: 0; width: 2.4rem;
+            background: linear-gradient(to right, rgba(251,251,253,0), var(--preview-bg));
+            pointer-events: none;
+        }
+        .csv-mini-fade-bottom {
+            position: absolute; left: 0; right: 0; bottom: 0; height: 2.2rem;
+            background: linear-gradient(to top, var(--preview-bg), rgba(251,251,253,0));
+            pointer-events: none;
+        }
+        .csv-mini-empty {
+            display: flex; align-items: center; justify-content: center;
+            color: var(--silhouette);
+            font-family: 'Syne', sans-serif; font-weight: 300;
+            font-size: 1.4rem;
+            position: absolute; inset: 0;
+        }
 
         .badge {
-            position: absolute; top: 0.65rem; left: 0.7rem;
             font-family: 'DM Sans', sans-serif;
             font-size: 0.62rem; font-weight: 700;
             letter-spacing: 0.14em; text-transform: uppercase;
             color: var(--badge-csv);
             transition: color 0.12s;
+            flex-shrink: 0;
         }
         .badge.canvas { color: var(--text-muted); }
         .item-card:hover .badge { color: var(--text); }
@@ -219,7 +282,8 @@
             padding: 0.85rem 1rem 0.95rem;
             display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
         }
-        .item-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+        .item-info { display: flex; align-items: flex-start; gap: 0.65rem; min-width: 0; flex: 1; }
+        .item-info-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
         .item-name {
             font-family: 'Syne', sans-serif; font-weight: 600;
             font-size: 0.92rem; color: var(--text); letter-spacing: -0.015em;
@@ -242,8 +306,9 @@
             background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 0.55rem; min-width: 9rem;
             box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-            overflow: hidden; z-index: 20;
+            overflow: hidden; z-index: 60;
         }
+        .item-card.menu-open { z-index: 70; }
         .menu-list.hidden { display: none; }
         .menu-item {
             width: 100%; text-align: left;
@@ -416,9 +481,8 @@
             {
                 bool isCsv = item.Kind == LQ.Models.DTOs.ProjectChildKind.CSV;
                 bool isProcessing = isCsv && item.Status == "Processing";
-                string itemHref = isCsv
-                    ? "#"   // Phase 4 will wire CSV cards into a workspace route
-                    : $"/workspace/{item.Token}"; // canvas routes land here once Phase 4 ships
+                // CSV cards are inert (no native landing route); canvas cards open the workspace.
+                string itemHref = isCsv ? "#" : $"/workspace/{item.Token}";
                 <div class="item-card"
                      data-token="@item.Token"
                      data-kind="@(isCsv ? "csv" : "canvas")"
@@ -427,61 +491,66 @@
                      onclick="cardClicked(event, this, '@itemHref')"
                      style="animation-delay: @(cardIdx * 30)ms">
                     <div class="item-preview">
-                        <span class="badge @(isCsv ? "" : "canvas")">@(isCsv ? "CSV" : "Canvas")</span>
                         @if (isCsv)
                         {
-                            <!-- CSV silhouette: rows × cols hint. Real cell preview lands in a later phase. -->
-                            <svg viewBox="0 0 320 240" preserveAspectRatio="xMidYMid meet">
-                                <rect x="20" y="34" width="280" height="172" fill="#fff" stroke="rgba(24,24,27,0.12)"/>
-                                <line x1="20" y1="58" x2="300" y2="58" stroke="rgba(24,24,27,0.12)"/>
-                                @for (int c = 1; c < 5; c++)
-                                {
-                                    <line x1="@(20 + c * 56)" y1="34" x2="@(20 + c * 56)" y2="206" stroke="rgba(24,24,27,0.08)" />
-                                }
-                                @for (int r = 0; r < 7; r++)
-                                {
-                                    <line x1="20" y1="@(78 + r * 18)" x2="300" y2="@(78 + r * 18)" stroke="rgba(24,24,27,0.06)" />
-                                }
-                                @for (int c = 0; c < 5; c++)
-                                {
-                                    <rect x="@(28 + c * 56)" y="42" width="40" height="8" fill="rgba(24,24,27,0.22)" rx="1.5"/>
-                                }
-                                @for (int r = 0; r < 7; r++)
-                                {
-                                    for (int c = 0; c < 5; c++)
-                                    {
-                                        int wPx = 22 + ((r * 31 + c * 17) % 22);
-                                        <rect x="@(28 + c * 56)" y="@(64 + r * 18)" width="@wPx" height="6" fill="rgba(24,24,27,0.14)" rx="1.5"/>
-                                    }
-                                }
-                                <!-- right + bottom fade hints there's more behind -->
-                                <rect x="240" y="34" width="60" height="172" fill="url(#fadeR)"/>
-                                <rect x="20" y="170" width="280" height="36" fill="url(#fadeB)"/>
-                                <defs>
-                                    <linearGradient id="fadeR" x1="0" x2="1" y1="0" y2="0">
-                                        <stop offset="0%" stop-color="#FBFBFD" stop-opacity="0"/>
-                                        <stop offset="100%" stop-color="#FBFBFD" stop-opacity="1"/>
-                                    </linearGradient>
-                                    <linearGradient id="fadeB" x1="0" x2="0" y1="0" y2="1">
-                                        <stop offset="0%" stop-color="#FBFBFD" stop-opacity="0"/>
-                                        <stop offset="100%" stop-color="#FBFBFD" stop-opacity="1"/>
-                                    </linearGradient>
-                                </defs>
-                            </svg>
+                            if (item.PreviewHeaders is { Count: > 0 } && item.PreviewRows is { Count: > 0 })
+                            {
+                                <div class="csv-mini">
+                                    <table class="csv-mini-table">
+                                        <thead>
+                                            <tr>
+                                                @foreach (var h in item.PreviewHeaders)
+                                                {
+                                                    <th title="@h">@h</th>
+                                                }
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var r in item.PreviewRows)
+                                            {
+                                                <tr>
+                                                    @foreach (var cell in r)
+                                                    {
+                                                        <td title="@cell">@cell</td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="csv-mini-fade-right"></div>
+                                <div class="csv-mini-fade-bottom"></div>
+                            }
+                            else
+                            {
+                                <div class="csv-mini-empty">—</div>
+                            }
                             <span class="preview-stats">
                                 @(item.FieldCount ?? 0) cols · @(item.RowCount ?? 0) rows
                             </span>
                         }
                         else
                         {
-                            @Html.Raw(item.PreviewSvg ?? "")
+                            if (item.HasPreview)
+                            {
+                                <img class="canvas-snapshot"
+                                     src="/projects/canvas/@item.Token/preview.png?v=@item.ModifiedTime.Ticks"
+                                     alt="@item.Name preview" loading="lazy"/>
+                            }
+                            else
+                            {
+                                <span class="canvas-empty">—</span>
+                            }
                         }
                         @if (isProcessing) { <div class="processing-bar" aria-label="Processing"></div> }
                     </div>
                     <div class="item-body">
                         <div class="item-info">
-                            <span class="item-name">@item.Name</span>
-                            <span class="item-edit">Edited @item.ModifiedTime.ToString("MMM dd, yyyy")</span>
+                            <span class="badge @(isCsv ? "" : "canvas")">@(isCsv ? "CSV" : "Canvas")</span>
+                            <div class="item-info-text">
+                                <span class="item-name">@item.Name</span>
+                                <span class="item-edit">Edited @item.ModifiedTime.ToString("MMM dd, yyyy")</span>
+                            </div>
                         </div>
                         <div class="item-menu" onclick="event.stopPropagation()">
                             <button class="menu-btn" onclick="toggleMenu(this, event)" title="More">
@@ -490,16 +559,8 @@
                                 </svg>
                             </button>
                             <div class="menu-list hidden">
-                                @if (!isCsv)
-                                {
-                                    <button class="menu-item" onclick="renameCard(this, event)">Rename</button>
-                                    <button class="menu-item danger" onclick="deleteCard(this, event)">Delete</button>
-                                }
-                                else
-                                {
-                                    <button class="menu-item" disabled style="opacity:0.5;cursor:not-allowed">Rename (soon)</button>
-                                    <button class="menu-item" disabled style="opacity:0.5;cursor:not-allowed">Delete (soon)</button>
-                                }
+                                <button class="menu-item" onclick="renameCard(this, event)">Rename</button>
+                                <button class="menu-item danger" onclick="deleteCard(this, event)">Delete</button>
                             </div>
                         </div>
                     </div>
@@ -567,16 +628,25 @@
         const list = btn.nextElementSibling;
         const wasHidden = list.classList.contains('hidden');
         document.querySelectorAll('.menu-list').forEach(l => l.classList.add('hidden'));
-        if (wasHidden) list.classList.remove('hidden');
+        document.querySelectorAll('.item-card.menu-open').forEach(c => c.classList.remove('menu-open'));
+        if (wasHidden) {
+            list.classList.remove('hidden');
+            list.closest('.item-card').classList.add('menu-open');
+        }
     }
     document.addEventListener('click', () => {
         document.querySelectorAll('.menu-list').forEach(l => l.classList.add('hidden'));
     });
 
-    // ── Rename canvas inline ──────────────────────────────────────────────────
+    // ── Rename card (canvas or CSV) inline ───────────────────────────────────
     function renameCard(menuItem, event) {
         event.stopPropagation();
         const card = menuItem.closest('.item-card');
+        const kind = card.dataset.kind;
+        const endpoint = kind === 'csv'
+            ? '/projects/csv/' + card.dataset.token
+            : '/projects/canvases/' + card.dataset.token;
+
         const nameEl = card.querySelector('.item-name');
         const oldName = nameEl.textContent.trim();
         const input = document.createElement('input');
@@ -596,7 +666,7 @@
             span.textContent = newName || oldName;
             input.replaceWith(span);
             if (!newName || newName === oldName) return;
-            const res = await fetch('/projects/canvases/' + card.dataset.token, {
+            const res = await fetch(endpoint, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: newName })
@@ -615,12 +685,19 @@
         input.addEventListener('blur', finish);
     }
 
-    // ── Delete canvas ─────────────────────────────────────────────────────────
+    // ── Delete card (canvas or CSV) ──────────────────────────────────────────
     async function deleteCard(menuItem, event) {
         event.stopPropagation();
         const card = menuItem.closest('.item-card');
-        if (!confirm(`Delete "${card.dataset.name}"? This cannot be undone.`)) return;
-        const res = await fetch('/projects/canvases/' + card.dataset.token, { method: 'DELETE' });
+        const kind = card.dataset.kind;
+        const endpoint = kind === 'csv'
+            ? '/projects/csv/' + card.dataset.token
+            : '/projects/canvases/' + card.dataset.token;
+        const label = kind === 'csv'
+            ? `Delete "${card.dataset.name}"? Charts and filters that reference this CSV will stop working.`
+            : `Delete "${card.dataset.name}"? This cannot be undone.`;
+        if (!confirm(label)) return;
+        const res = await fetch(endpoint, { method: 'DELETE' });
         if (res.ok) card.remove(); else alert('Delete failed');
     }
 

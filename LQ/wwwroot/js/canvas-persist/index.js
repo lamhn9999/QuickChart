@@ -22,7 +22,7 @@
 
 import { setHydrating } from './state.js';
 import { hydrateCanvas } from './hydrate.js';
-import { startAutoSave } from './autosave.js';
+import { startAutoSave, scheduleSnapshot } from './autosave.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const tag = document.getElementById('saved-canvas');
@@ -46,4 +46,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   startAutoSave();
+
+  // Existing canvases — opened but not edited — would never trigger an autosave,
+  // so their thumbnail would stay blank forever. Fire one snapshot a moment
+  // after hydration paints (long enough for Chart.js animations to finish),
+  // but only if the canvas actually has content worth capturing.
+  const canvas = document.getElementById('doc-canvas');
+  const hasContent = (doc?.blocks?.length ?? 0) > 0
+    || !!(canvas && canvas.querySelector('.doc-chart-section, .doc-text, .doc-divider'));
+  if (hasContent) scheduleSnapshot(900);
 });

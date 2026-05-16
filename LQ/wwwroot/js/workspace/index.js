@@ -31,6 +31,7 @@ import { fieldClicked, headerDragStart, headerDragEnd } from './header-drag.js';
 import { wirePlotPanelDropZone, installChartDropOnCard } from './drop-zones.js';
 import { wirePanelResizer } from './resizer.js';
 import { wireColumnHighlight } from './table.js';
+import { initCsvPicker } from './csv-picker.js';
 import { gearBtnClicked, toggleFieldTypeMenu, changeFieldType } from './field-types.js';
 import { toggleCategoriesMenu, toggleCategory } from './categories.js';
 
@@ -177,6 +178,7 @@ initFilterReactor();
 document.addEventListener('DOMContentLoaded', () => {
   initSparklines();
   initPerChartFilter();
+  initCsvPicker();
 
   const resizer = /** @type {HTMLElement | null} */ (document.getElementById('drag'));
   const left = /** @type {HTMLElement | null} */ (document.getElementById('tablePanel'));

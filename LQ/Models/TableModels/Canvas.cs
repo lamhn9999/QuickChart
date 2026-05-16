@@ -12,7 +12,7 @@ public class Canvas
     public int? LastUsedCSVFileID { get; set; }
     public CSVFile? LastUsedCSVFile { get; private set; }
     public required string Document { get; set; }
-    public string? PreviewJson { get; set; }
+    public byte[]? PreviewPng { get; set; }
     public required DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     protected Canvas() {} // For EF-Core

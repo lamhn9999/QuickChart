@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
-using LQ.Models.AnalystModels;
 using LQ.Models.DTOs;
-using LQ.Models.TableModels;
 using LQ.Services.Interfaces;
 
 namespace LQ.Controllers;
@@ -11,12 +9,10 @@ namespace LQ.Controllers;
 public class HomeController : Controller
 {
     private readonly ICSVService _csvService;
-    private readonly IAnalystService _analystService;
 
-    public HomeController(ICSVService csvService, IAnalystService analystService)
+    public HomeController(ICSVService csvService)
     {
         _csvService = csvService;
-        _analystService = analystService;
     }
 
     private AnalystDTO? CurrentAnalyst
@@ -25,15 +21,6 @@ public class HomeController : Controller
         {
             var json = HttpContext.Session.GetString("AnalystDTO");
             return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<AnalystDTO>(json);
-        }
-    }
-
-    private CSVFileDTO? CurrentFile
-    {
-        get
-        {
-            var json = HttpContext.Session.GetString("CSVFileDTO");
-            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CSVFileDTO>(json);
         }
     }
 
@@ -73,87 +60,6 @@ public class HomeController : Controller
         return View("Home", new List<LQ.Models.TableModels.CSVFile>());
     }
 
-    [HttpDelete("remove")]
-    [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> Remove(string filename)
-    {
-        var analystdto = CurrentAnalyst;
-        if (analystdto is null) return Json("NG");
-        var analyst = await _analystService.FindById(analystdto.ID);
-
-        try
-        {
-            await _csvService.RemoveFile(analyst!, filename);
-            return Json("OK");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            return Json("NG");
-        }
-    }
-
-    [HttpPut("renamefile")]
-    [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> RenameFile(string oldFileName, string newFileName)
-    {
-        var analystdto = CurrentAnalyst;
-        if (analystdto is null) return Json("Cannot perform action: analyst not signed in");
-        var analyst = await _analystService.FindById(analystdto.ID);
-        
-        try
-        {
-            await _csvService.RenameFile(analyst!, oldFileName, newFileName);
-            return Json("OK");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            return Json("NG");
-        }
-    }
-
-    [HttpPost("table")]
-    [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> Select(string filename)
-    {
-        CSVFile selectedFile;
-        var analystdto = CurrentAnalyst;
-        if (analystdto is not null)
-        {
-            var analyst = await _analystService.FindById(analystdto.ID);
-            if (analyst is null) return NotFound();
-            selectedFile = await _csvService.GetFile(analyst, filename);
-        }
-        else
-        {
-            var token = GuestToken;
-            if (token is null) return Unauthorized();
-            selectedFile = await _csvService.GetFileGuest(token, filename);
-        }
-        if (selectedFile is null) return NotFound();
-
-        HttpContext.Session.SetString("CSVFileDTO", JsonSerializer.Serialize(new CSVFileDTO { currentFileID = selectedFile.ID }));
-        HttpContext.Session.Remove("ListValueFilterDTO");
-        return Ok();
-    }
-
-    [HttpPost]
-    [IgnoreAntiforgeryToken]
-    [RequestSizeLimit(209715200)]
-    public async Task<IActionResult> Upload(IFormFile file)
-    {
-        var analystdto = CurrentAnalyst;
-        if (analystdto is null) return Unauthorized(new { error = "Sign in required to upload files" });
-
-        Analyst? analyst = await _analystService.FindById(analystdto.ID);
-        if (analyst is null) return NotFound(new { error = "Analyst not found" });
-
-        var result = await _csvService.ProcessUploaded(analyst, file);
-        if (result is null) return Json(new { badcsv = file.FileName });
-        return Json(new { received = result.FileName, token = result.Token, suspicious = result.SuspiciousLists });
-    }
-
     [HttpPost("guest-upload")]
     [IgnoreAntiforgeryToken]
     [RequestSizeLimit(209715200)]
@@ -180,23 +86,5 @@ public class HomeController : Controller
     {
         var pending = await _csvService.GetPendingUploads(CurrentAnalyst?.ID, GuestToken);
         return Json(pending);
-    }
-
-    [HttpDelete("guest-remove")]
-    [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> GuestRemove(string filename)
-    {
-        var token = GuestToken;
-        if (token is null) return Unauthorized();
-        try
-        {
-            await _csvService.RemoveFileGuest(token, filename);
-            return Json("OK");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            return Json("NG");
-        }
     }
 }

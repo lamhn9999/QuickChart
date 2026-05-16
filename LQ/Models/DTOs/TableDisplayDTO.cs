@@ -18,4 +18,13 @@ public record TableDisplayDTO
     public required string[][] Values { get; init; }
     public int RowCount => Values.Length;
     public string? SavedCanvasJson { get; init; }
+
+    // Phase 4 — populated when the workspace is entered via /workspace/{canvasToken}.
+    // Null on the legacy session-keyed entry so the existing view path is unaffected.
+    public Guid? CanvasToken { get; init; }
+    public string? CanvasName { get; init; }
+    public Guid? ActiveCSVToken { get; init; }
+    public IReadOnlyList<WorkspaceSiblingDTO> Siblings { get; init; } = Array.Empty<WorkspaceSiblingDTO>();
 }
+
+public record WorkspaceSiblingDTO(Guid Token, string Name);

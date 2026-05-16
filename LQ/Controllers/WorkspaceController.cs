@@ -17,17 +17,19 @@ public class WorkspaceController : Controller
     private readonly ICSVService _csvService;
     private readonly IAnalystService _analystService;
     private readonly IAutoChartService _autoChartService;
+    private readonly IProjectService _projectService;
     private readonly TableRepositoryAbstract _repo;
     private readonly SparklineCancelService _sparklineCancel;
     private readonly ILogger<WorkspaceController> _logger;
     private readonly Stopwatch _stopwatch = new Stopwatch();
     private static readonly JsonSerializerOptions _camelCaseJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, TableRepositoryAbstract repo, SparklineCancelService sparklineCancel, ILogger<WorkspaceController> logger)
+    public WorkspaceController(ICSVService csvService, IAnalystService analystService, IAutoChartService autoChartService, IProjectService projectService, TableRepositoryAbstract repo, SparklineCancelService sparklineCancel, ILogger<WorkspaceController> logger)
     {
         _csvService = csvService;
         _analystService = analystService;
         _autoChartService = autoChartService;
+        _projectService = projectService;
         _repo = repo;
         _sparklineCancel = sparklineCancel;
         _logger = logger;
@@ -96,74 +98,148 @@ public class WorkspaceController : Controller
         return null;
     }
 
-    [HttpGet]
-    public async Task<IActionResult> EnterWorkspace()
+    [HttpGet("{canvasToken:guid}")]
+    public async Task<IActionResult> EnterCanvas(Guid canvasToken, [FromQuery] Guid? file = null)
     {
-        if (CurrentCSVFileDTO is null) return NotFound();
-        var currentFile = await _csvService.GetFile(CurrentCSVFileDTO.currentFileID);
-        var tableDisplay = await _csvService.GetTableDisplayLimited(currentFile, 200);
+        var canvas = await _repo.GetCanvasByToken(canvasToken);
+        if (canvas is null) return NotFound();
+
+        // Ownership check: load the canvas's project and verify the current
+        // analyst (or guest cookie) owns it. We re-use the project list lookup
+        // to avoid another DbContext dep on the controller.
+        var owned = await GetProjectsForOwner();
+        var project = owned.FirstOrDefault(p => p.ID == canvas.ProjectID);
+        if (project is null) return NotFound();
+
+        var siblings = await _repo.GetProjectCSVFiles(project.ID);
+
+        // Pick the active CSV in priority order: query param → previously-used →
+        // first sibling. All candidates must belong to the same project so the
+        // picker can't be used to point at a foreign file via URL crafting.
+        CSVFile? active = null;
+        if (file is Guid requested)
+            active = siblings.FirstOrDefault(f => f.PublicToken == requested);
+        if (active is null && canvas.LastUsedCSVFileID is int lastId)
+            active = siblings.FirstOrDefault(f => f.ID == lastId);
+        active ??= siblings.FirstOrDefault();
+
+        // Persist the picker choice so the next visit defaults to the same CSV.
+        if (active is not null && canvas.LastUsedCSVFileID != active.ID)
+            await _repo.SetCanvasLastUsedFileAsync(canvas.ID, active.ID);
+
+        ViewBag.Username = CurrentAnalystDTO?.Name;
+        ViewBag.CanvasToken = canvas.PublicToken;
+        ViewBag.ProjectToken = project.PublicToken;
+        ViewBag.AwaitingListConfirmation = false;
+        ViewBag.SuspiciousJson = null;
+
+        var siblingDtos = siblings
+            .Select(s => new WorkspaceSiblingDTO(s.PublicToken, s.Name))
+            .ToList();
+
+        if (active is null)
+        {
+            // Empty-CSV project: the canvas can still be viewed, but charting
+            // needs a data source. The view falls back to an empty-state in the
+            // table panel; the doc-canvas still hydrates from the saved doc.
+            HttpContext.Session.Remove("CSVFileDTO");
+            HttpContext.Session.Remove("TableDTO");
+            HttpContext.Session.Remove("ListValueFilterDTO");
+            ViewBag.FileToken = "";
+            return View("Workspace", new TableDisplayDTO
+            {
+                FileName = canvas.Name,
+                Fields = new List<TableFieldDTO>(),
+                Values = Array.Empty<string[]>(),
+                SavedCanvasJson = canvas.Document,
+                CanvasToken = canvas.PublicToken,
+                CanvasName = canvas.Name,
+                ActiveCSVToken = null,
+                Siblings = siblingDtos,
+            });
+        }
+
+        // Set session CSVFileDTO so the existing endpoints (filter, sparkline,
+        // changeFieldType, autochart) continue to use the active CSV without
+        // needing to be rewritten in this phase.
+        HttpContext.Session.SetString("CSVFileDTO",
+            JsonSerializer.Serialize(new CSVFileDTO { currentFileID = active.ID }));
+        HttpContext.Session.Remove("ListValueFilterDTO");
+
+        var tableDisplay = await _csvService.GetTableDisplayLimited(active, 200);
         HttpContext.Session.SetString("TableDTO", JsonSerializer.Serialize(new TableDTO
         {
             RowCount = tableDisplay.RowCount,
             FieldCount = tableDisplay.Fields.Count,
         }));
-        HttpContext.Session.Remove("ListValueFilterDTO");
-        ViewBag.Username = CurrentAnalystDTO?.Name;
-        bool awaiting = currentFile.Status == UploadStatus.AwaitingListConfirmation;
-        ViewBag.AwaitingListConfirmation = awaiting;
-        ViewBag.FileToken = currentFile.PublicToken;
-        // Re-serialize the stored payload in camelCase so the @Html.Raw bootstrap
-        // produces the same key shape the JS expects (fieldName, samples, etc.).
-        // CaseInsensitive on the deserialize side accepts any pre-existing PascalCase rows.
-        string? suspiciousJson = null;
-        if (awaiting && !string.IsNullOrEmpty(currentFile.ProcessingPayload))
-        {
-            try
-            {
-                var list = JsonSerializer.Deserialize<List<SuspiciousListDTO>>(
-                    currentFile.ProcessingPayload, CSVService.PayloadJson);
-                if (list != null)
-                    suspiciousJson = JsonSerializer.Serialize(list, CSVService.PayloadJson);
-            }
-            catch (JsonException) { /* malformed — leave null, modal won't pop */ }
-        }
-        ViewBag.SuspiciousJson = suspiciousJson;
+        ViewBag.FileToken = active.PublicToken;
 
-        var savedCanvas = await _repo.GetCanvasDocument(currentFile.ID);
-        var hydrated = tableDisplay with { SavedCanvasJson = savedCanvas };
+        var hydrated = tableDisplay with
+        {
+            SavedCanvasJson = canvas.Document,
+            CanvasToken = canvas.PublicToken,
+            CanvasName = canvas.Name,
+            ActiveCSVToken = active.PublicToken,
+            Siblings = siblingDtos,
+        };
         return View("Workspace", hydrated);
     }
 
-    [HttpGet("canvas")]
-    public async Task<IActionResult> GetCanvas()
-    {
-        if (CurrentCSVFileDTO is null) return NotFound();
-        var doc = await _repo.GetCanvasDocument(CurrentCSVFileDTO.currentFileID);
-        return Content(doc ?? "null", "application/json");
-    }
+    // Returns the projects owned by the current analyst (or guest cookie).
+    // Centralised so EnterCanvas and SaveCanvasByToken can share the lookup.
+    private Task<List<Project>> GetProjectsForOwner()
+        => _repo.GetProjects(CurrentAnalystDTO?.ID, GuestToken);
 
-    [HttpPost("canvas")]
+    [HttpPost("canvas/{canvasToken:guid}")]
     [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> SaveCanvas([FromBody] CanvasDTO body)
+    public async Task<IActionResult> SaveCanvasByToken(Guid canvasToken, [FromBody] CanvasDTO body)
     {
-        if (CurrentCSVFileDTO is null) return NotFound();
         if (string.IsNullOrWhiteSpace(body.Document)) return BadRequest("empty document");
 
-        // Reject saves that embed chart blocks pointing at CSVFiles the current
-        // user can't access. This is the server-side gate for cross-file charts:
-        // any csvFileToken in the document must resolve to an accessible file.
+        var canvas = await _repo.GetCanvasByToken(canvasToken);
+        if (canvas is null) return NotFound();
+        var owned = await GetProjectsForOwner();
+        if (!owned.Any(p => p.ID == canvas.ProjectID)) return NotFound();
+
         if (!await ChartTokensAreAccessible(body.Document)) return Forbid();
 
         try
         {
-            await _repo.UpsertCanvasDocument(CurrentCSVFileDTO.currentFileID, body.Document);
+            await _repo.UpsertCanvasDocumentById(canvas.ID, body.Document);
             return Ok();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "canvas save failed");
+            _logger.LogWarning(ex, "canvas save (token) failed");
             return StatusCode(StatusCodes.Status500InternalServerError, "save failed");
         }
+    }
+
+    public record SnapshotDTO(string PngBase64);
+
+    // Stores a client-rendered PNG snapshot of the canvas's current visual state.
+    // Called by the autosave path right after a successful document save. The
+    // body is `{ "pngBase64": "<base64 payload, NO data: prefix>" }`; we reject
+    // any data-URI prefix so the column is always the raw bytes.
+    // Size cap: 2 MB encoded — anything larger is almost certainly the result
+    // of a misbehaving renderer (charts at full resolution, etc.).
+    [HttpPost("canvas/{canvasToken:guid}/snapshot")]
+    [IgnoreAntiforgeryToken]
+    [RequestSizeLimit(4_000_000)]
+    public async Task<IActionResult> SaveCanvasSnapshot(Guid canvasToken, [FromBody] SnapshotDTO body)
+    {
+        if (string.IsNullOrWhiteSpace(body?.PngBase64)) return BadRequest("empty snapshot");
+        if (body.PngBase64.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return BadRequest("strip the data: prefix");
+
+        byte[] png;
+        try { png = Convert.FromBase64String(body.PngBase64); }
+        catch (FormatException) { return BadRequest("not base64"); }
+        if (png.Length == 0 || png.Length > 2_000_000) return BadRequest("snapshot out of range");
+
+        var ok = await _projectService.SetCanvasPreviewPng(
+            canvasToken, png, CurrentAnalystDTO?.ID, GuestToken);
+        return ok ? Ok() : NotFound();
     }
 
     // Walks the canvas JSON and returns false if any chart block carries a

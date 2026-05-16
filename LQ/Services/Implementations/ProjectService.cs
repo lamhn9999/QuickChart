@@ -14,20 +14,17 @@ public class ProjectService : TableRepository, IProjectService
 {
     private readonly ICSVService _csvService;
     private readonly IAnalystService _analystService;
-    private readonly CanvasPreviewService _previewService;
     private readonly ILogger<ProjectService>? _logger;
 
     public ProjectService(
         LQDbContext lqDbContext,
         ICSVService csvService,
         IAnalystService analystService,
-        CanvasPreviewService previewService,
         ILogger<ProjectService>? logger = null)
         : base(lqDbContext)
     {
         _csvService = csvService;
         _analystService = analystService;
-        _previewService = previewService;
         _logger = logger;
     }
 
@@ -100,17 +97,34 @@ public class ProjectService : TableRepository, IProjectService
                 .ToDictionaryAsync(x => x.FileId, x => (x.MaxRow ?? -1) + 1);
         }
 
-        var csvDtos = csvFiles.Select(f => new ProjectChildDTO(
-            ProjectChildKind.CSV, f.PublicToken, f.Name, f.ModifiedTime,
-            rowCounts.GetValueOrDefault(f.ID),
-            fieldCounts.GetValueOrDefault(f.ID),
-            f.Status.ToString(),
-            PreviewSvg: null)).ToList();
+        // Per-card 5×4 cell preview. Skip Processing files (Fields aren't stable yet);
+        // empty files just get empty arrays.
+        var csvDtos = new List<ProjectChildDTO>();
+        foreach (var f in csvFiles)
+        {
+            List<string>? headers = null;
+            List<List<string>>? rows = null;
+            if (f.Status == UploadStatus.Ready)
+            {
+                var (h, r) = await GetCardPreview(f.ID, rowLimit: 5, colLimit: 4);
+                headers = h;
+                rows = r;
+            }
+            csvDtos.Add(new ProjectChildDTO(
+                ProjectChildKind.CSV, f.PublicToken, f.Name, f.ModifiedTime,
+                rowCounts.GetValueOrDefault(f.ID),
+                fieldCounts.GetValueOrDefault(f.ID),
+                f.Status.ToString(),
+                PreviewHeaders: headers,
+                PreviewRows: rows,
+                HasPreview: false));
+        }
 
         var canvasDtos = canvases.Select(c => new ProjectChildDTO(
             ProjectChildKind.Canvas, c.PublicToken, c.Name, c.UpdatedAt,
             RowCount: null, FieldCount: null, Status: null,
-            PreviewSvg: c.PreviewJson ?? _previewService.BuildSvg(c.Document))).ToList();
+            PreviewHeaders: null, PreviewRows: null,
+            HasPreview: c.PreviewPng is { Length: > 0 })).ToList();
 
         return new ProjectDetailDTO(
             project.PublicToken, project.Name, project.CreatedTime, project.ModifiedTime,
@@ -174,7 +188,8 @@ public class ProjectService : TableRepository, IProjectService
         return new ProjectChildDTO(
             ProjectChildKind.Canvas, canvas.PublicToken, canvas.Name, canvas.UpdatedAt,
             RowCount: null, FieldCount: null, Status: null,
-            PreviewSvg: _previewService.BuildSvg(emptyDoc));
+            PreviewHeaders: null, PreviewRows: null,
+            HasPreview: false);
     }
 
     public async Task<bool> RenameCanvas(Guid canvasToken, string newName, string? analystId, string? guestToken)
@@ -197,6 +212,35 @@ public class ProjectService : TableRepository, IProjectService
         return true;
     }
 
+    public async Task<bool> RenameCSVFile(Guid fileToken, string newName, string? analystId, string? guestToken)
+    {
+        var clean = (newName ?? "").Trim();
+        if (clean.Length == 0) return false;
+        var file = await GetFileByPublicToken(fileToken);
+        if (file is null) return false;
+        if (!CsvOwnedBy(file, analystId, guestToken)) return false;
+        await base.RenameFile(file, clean);
+        return true;
+    }
+
+    public async Task<bool> DeleteCSVFile(Guid fileToken, string? analystId, string? guestToken)
+    {
+        var file = await GetFileByPublicToken(fileToken);
+        if (file is null) return false;
+        if (!CsvOwnedBy(file, analystId, guestToken)) return false;
+        await base.RemoveFile(file);
+        return true;
+    }
+
+    public async Task<bool> SetCanvasPreviewPng(Guid canvasToken, byte[] png, string? analystId, string? guestToken)
+    {
+        var canvas = await GetCanvasByToken(canvasToken);
+        if (canvas is null) return false;
+        if (!await CanvasOwnedBy(canvas, analystId, guestToken)) return false;
+        await UpdateCanvasPreviewPng(canvas.ID, png);
+        return true;
+    }
+
     private async Task<bool> CanvasOwnedBy(Canvas canvas, string? analystId, string? guestToken)
     {
         var project = await _lqDbContext.Projects
@@ -205,12 +249,12 @@ public class ProjectService : TableRepository, IProjectService
         return project is not null && OwnedBy(project, analystId, guestToken);
     }
 
-    public async Task RegenerateCanvasPreview(Guid canvasToken)
+    // CSVFile ownership uses its own AnalystID/GuestToken pair (it predates Project).
+    private static bool CsvOwnedBy(CSVFile file, string? analystId, string? guestToken)
     {
-        var canvas = await GetCanvasByToken(canvasToken);
-        if (canvas is null) return;
-        var svg = _previewService.BuildSvg(canvas.Document);
-        await UpdateCanvasPreview(canvas.ID, svg);
+        if (analystId is not null) return file.AnalystID == analystId;
+        if (guestToken is not null) return file.GuestToken == guestToken;
+        return false;
     }
 
     // Centralised ownership check — guards every mutation. We reject if the

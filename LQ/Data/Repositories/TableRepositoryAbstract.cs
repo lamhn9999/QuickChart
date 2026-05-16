@@ -47,6 +47,12 @@ public abstract class TableRepositoryAbstract
     /// <summary>Inserts or updates the canvas document for a CSVFile. Caller is responsible for ownership checks.</summary>
     public abstract Task UpsertCanvasDocument(int csvFileId, string documentJson);
 
+    /// <summary>Writes Document + UpdatedAt directly to a known canvas row. Phase 4 token-keyed save path.</summary>
+    public abstract Task UpsertCanvasDocumentById(int canvasId, string documentJson);
+
+    /// <summary>Persists which CSVFile the canvas was last viewed against. Drives the picker default on next visit.</summary>
+    public abstract Task SetCanvasLastUsedFileAsync(int canvasId, int? lastUsedCsvFileId);
+
     // ─── Project + Canvas CRUD (Phase 2) ──────────────────────────────────────
 
     public abstract Task<List<Project>> GetProjects(string? analystId, string? guestToken);
@@ -63,7 +69,14 @@ public abstract class TableRepositoryAbstract
     public abstract Task<Canvas> InsertCanvas(Canvas canvas);
     public abstract Task RenameCanvas(int canvasId, string newName);
     public abstract Task DeleteCanvas(int canvasId);
-    public abstract Task UpdateCanvasPreview(int canvasId, string? previewJson);
+    public abstract Task UpdateCanvasPreviewPng(int canvasId, byte[]? previewPng);
+    public abstract Task<byte[]?> GetCanvasPreviewPng(Guid canvasToken);
+
+    /// <summary>Returns the first <paramref name="colLimit"/> field names and a
+    /// <paramref name="rowLimit"/>-row × <paramref name="colLimit"/>-col matrix of
+    /// formatted values for the CSV card preview. Empty lists if the file has no fields.</summary>
+    public abstract Task<(List<string> Headers, List<List<string>> Rows)> GetCardPreview(
+        int csvFileId, int rowLimit, int colLimit);
 
     /// <summary>
     /// Returns cached sparkline JSON if it was computed for the field's current type.
