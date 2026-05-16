@@ -11,6 +11,7 @@ public class LQDbContext : DbContext
     public DbSet<Field> Fields { get; set; }
     public DbSet<Value> Values { get; set; }
     public DbSet<Canvas> Canvases { get; set; }
+    public DbSet<Project> Projects { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,20 @@ public class LQDbContext : DbContext
     // Schema: app
     private static void ConfigureSchemaApp(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Project>(eb =>
+        {
+            eb.ToTable("Project", "app");
+            eb.Property(p => p.PublicToken).HasDefaultValueSql("gen_random_uuid()");
+            eb.HasIndex(p => p.PublicToken).IsUnique();
+            eb.HasOne(p => p.Analyst)
+                .WithMany()
+                .HasForeignKey(p => p.AnalystID)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
+            eb.Property(p => p.GuestToken).IsRequired(false);
+            eb.HasIndex(p => p.GuestToken);
+            eb.HasIndex(p => p.AnalystID);
+        });
         modelBuilder.Entity<CSVFile>(eb =>
         {
             eb.ToTable("CSVFile", "app");
@@ -45,6 +60,11 @@ public class LQDbContext : DbContext
                 .IsRequired(false);
             eb.HasIndex(f => new { f.AnalystID, f.Status });
             eb.HasIndex(f => new { f.GuestToken, f.Status });
+            eb.HasOne(f => f.Project)
+                .WithMany(p => p.CSVFiles)
+                .HasForeignKey(f => f.ProjectID)
+                .OnDelete(DeleteBehavior.Cascade);
+            eb.HasIndex(f => f.ProjectID);
         });
         modelBuilder.Entity<Field>().ToTable("Field", "app");
         modelBuilder.Entity<Value>(eb =>
@@ -56,13 +76,21 @@ public class LQDbContext : DbContext
         modelBuilder.Entity<Canvas>(eb =>
         {
             eb.ToTable("Canvas", "app");
-            eb.HasKey(c => c.CSVFileID);
-            eb.Property(c => c.CSVFileID).ValueGeneratedNever();
-            eb.HasOne(c => c.CSVFile)
-                .WithOne()
-                .HasForeignKey<Canvas>(c => c.CSVFileID)
-                .OnDelete(DeleteBehavior.Cascade);
+            eb.HasKey(c => c.ID);
+            eb.Property(c => c.PublicToken).HasDefaultValueSql("gen_random_uuid()");
+            eb.HasIndex(c => c.PublicToken).IsUnique();
             eb.Property(c => c.Document).HasColumnType("jsonb").IsRequired();
+            eb.Property(c => c.PreviewJson).HasColumnType("jsonb").IsRequired(false);
+            eb.HasOne(c => c.Project)
+                .WithMany(p => p.Canvases)
+                .HasForeignKey(c => c.ProjectID)
+                .OnDelete(DeleteBehavior.Cascade);
+            eb.HasIndex(c => c.ProjectID);
+            eb.HasOne(c => c.LastUsedCSVFile)
+                .WithMany()
+                .HasForeignKey(c => c.LastUsedCSVFileID)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
     

@@ -101,6 +101,9 @@ namespace LQ.Migrations
                     b.Property<string>("ProcessingPayload")
                         .HasColumnType("jsonb");
 
+                    b.Property<int>("ProjectID")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("PublicToken")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
@@ -115,6 +118,8 @@ namespace LQ.Migrations
 
                     b.HasIndex("GuestToken");
 
+                    b.HasIndex("ProjectID");
+
                     b.HasIndex("PublicToken")
                         .IsUnique();
 
@@ -127,17 +132,45 @@ namespace LQ.Migrations
 
             modelBuilder.Entity("LQ.Models.TableModels.Canvas", b =>
                 {
-                    b.Property<int>("CSVFileID")
+                    b.Property<int>("ID")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ID"));
 
                     b.Property<string>("Document")
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<int?>("LastUsedCSVFileID")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreviewJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("ProjectID")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicToken")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("CSVFileID");
+                    b.HasKey("ID");
+
+                    b.HasIndex("LastUsedCSVFileID");
+
+                    b.HasIndex("ProjectID");
+
+                    b.HasIndex("PublicToken")
+                        .IsUnique();
 
                     b.ToTable("Canvas", "app");
                 });
@@ -179,6 +212,47 @@ namespace LQ.Migrations
                     b.ToTable("Field", "app");
                 });
 
+            modelBuilder.Entity("LQ.Models.TableModels.Project", b =>
+                {
+                    b.Property<int>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ID"));
+
+                    b.Property<string>("AnalystID")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GuestToken")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ModifiedTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PublicToken")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("AnalystID");
+
+                    b.HasIndex("GuestToken");
+
+                    b.HasIndex("PublicToken")
+                        .IsUnique();
+
+                    b.ToTable("Project", "app");
+                });
+
             modelBuilder.Entity("LQ.Models.TableModels.Value", b =>
                 {
                     b.Property<int>("FieldID")
@@ -210,18 +284,33 @@ namespace LQ.Migrations
                         .HasForeignKey("AnalystID")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("LQ.Models.TableModels.Project", "Project")
+                        .WithMany("CSVFiles")
+                        .HasForeignKey("ProjectID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Analyst");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("LQ.Models.TableModels.Canvas", b =>
                 {
-                    b.HasOne("LQ.Models.TableModels.CSVFile", "CSVFile")
-                        .WithOne()
-                        .HasForeignKey("LQ.Models.TableModels.Canvas", "CSVFileID")
+                    b.HasOne("LQ.Models.TableModels.CSVFile", "LastUsedCSVFile")
+                        .WithMany()
+                        .HasForeignKey("LastUsedCSVFileID")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LQ.Models.TableModels.Project", "Project")
+                        .WithMany("Canvases")
+                        .HasForeignKey("ProjectID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CSVFile");
+                    b.Navigation("LastUsedCSVFile");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("LQ.Models.TableModels.Field", b =>
@@ -233,6 +322,16 @@ namespace LQ.Migrations
                         .IsRequired();
 
                     b.Navigation("CSVFile");
+                });
+
+            modelBuilder.Entity("LQ.Models.TableModels.Project", b =>
+                {
+                    b.HasOne("LQ.Models.AnalystModels.Analyst", "Analyst")
+                        .WithMany()
+                        .HasForeignKey("AnalystID")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Analyst");
                 });
 
             modelBuilder.Entity("LQ.Models.TableModels.Value", b =>
@@ -249,6 +348,13 @@ namespace LQ.Migrations
             modelBuilder.Entity("LQ.Models.AnalystModels.Analyst", b =>
                 {
                     b.Navigation("CSVFiles");
+                });
+
+            modelBuilder.Entity("LQ.Models.TableModels.Project", b =>
+                {
+                    b.Navigation("CSVFiles");
+
+                    b.Navigation("Canvases");
                 });
 #pragma warning restore 612, 618
         }

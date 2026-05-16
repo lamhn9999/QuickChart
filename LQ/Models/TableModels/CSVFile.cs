@@ -14,6 +14,8 @@ public class CSVFile
     public string? GuestToken { get; private set; }
     public UploadStatus Status { get; set; } = UploadStatus.Processing;
     public string? ProcessingPayload { get; set; }
+    public int ProjectID { get; set; }
+    public Project? Project { get; private set; }
     protected CSVFile() {} // For EF-Core
 
     [SetsRequiredMembers]

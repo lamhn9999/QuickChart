@@ -1273,19 +1273,39 @@ public class TableRepository : TableRepositoryAbstract
 
     public override async Task<string?> GetCanvasDocument(int csvFileId)
     {
+        // Legacy lookup: prior to the Project decoupling, each CSVFile owned
+        // exactly one Canvas. The migration carried that mapping forward by
+        // setting Canvas.LastUsedCSVFileID = previous CSVFileID, so this query
+        // still resolves the same row. New canvases (post-Phase 4) reach the
+        // workspace via canvas token; this path stays for the legacy session
+        // route until Phase 4 retires it.
         return await _lqDbContext.Canvases
             .AsNoTracking()
-            .Where(c => c.CSVFileID == csvFileId)
+            .Where(c => c.LastUsedCSVFileID == csvFileId)
+            .OrderByDescending(c => c.UpdatedAt)
             .Select(c => c.Document)
-            .SingleOrDefaultAsync();
+            .FirstOrDefaultAsync();
     }
 
     public override async Task UpsertCanvasDocument(int csvFileId, string documentJson)
     {
-        var existing = await _lqDbContext.Canvases.FindAsync(csvFileId);
+        var existing = await _lqDbContext.Canvases
+            .Where(c => c.LastUsedCSVFileID == csvFileId)
+            .OrderByDescending(c => c.UpdatedAt)
+            .FirstOrDefaultAsync();
         if (existing is null)
         {
-            _lqDbContext.Canvases.Add(new Canvas(csvFileId, documentJson));
+            var csvFile = await _lqDbContext.CSVFiles
+                .AsNoTracking()
+                .Where(f => f.ID == csvFileId)
+                .Select(f => new { f.ProjectID, f.Name })
+                .FirstOrDefaultAsync();
+            if (csvFile is null) return;
+            var canvas = new Canvas(csvFile.ProjectID, csvFile.Name + " — canvas", documentJson)
+            {
+                LastUsedCSVFileID = csvFileId
+            };
+            _lqDbContext.Canvases.Add(canvas);
         }
         else
         {
