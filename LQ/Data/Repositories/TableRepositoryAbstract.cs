@@ -47,6 +47,24 @@ public abstract class TableRepositoryAbstract
     /// <summary>Inserts or updates the canvas document for a CSVFile. Caller is responsible for ownership checks.</summary>
     public abstract Task UpsertCanvasDocument(int csvFileId, string documentJson);
 
+    // ─── Project + Canvas CRUD (Phase 2) ──────────────────────────────────────
+
+    public abstract Task<List<Project>> GetProjects(string? analystId, string? guestToken);
+    public abstract Task<Project?> GetProjectByToken(Guid token);
+    public abstract Task<Project?> EnsureDefaultProject(string? analystId, string? guestToken);
+    public abstract Task<Project> InsertProject(Project project);
+    public abstract Task RenameProject(int projectId, string newName);
+    public abstract Task DeleteProject(int projectId);
+
+    public abstract Task<List<CSVFile>> GetProjectCSVFiles(int projectId);
+    public abstract Task<List<Canvas>> GetProjectCanvases(int projectId);
+
+    public abstract Task<Canvas?> GetCanvasByToken(Guid token);
+    public abstract Task<Canvas> InsertCanvas(Canvas canvas);
+    public abstract Task RenameCanvas(int canvasId, string newName);
+    public abstract Task DeleteCanvas(int canvasId);
+    public abstract Task UpdateCanvasPreview(int canvasId, string? previewJson);
+
     /// <summary>
     /// Returns cached sparkline JSON if it was computed for the field's current type.
     /// Returns null on cache miss or TypeName mismatch.

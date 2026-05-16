@@ -1315,6 +1315,113 @@ public class TableRepository : TableRepositoryAbstract
         await _lqDbContext.SaveChangesAsync();
     }
 
+    // ─── Project + Canvas CRUD (Phase 2) ──────────────────────────────────────
+
+    public override async Task<List<Project>> GetProjects(string? analystId, string? guestToken)
+    {
+        IQueryable<Project> q = _lqDbContext.Projects.AsNoTracking();
+        q = analystId is not null
+            ? q.Where(p => p.AnalystID == analystId)
+            : guestToken is not null
+                ? q.Where(p => p.GuestToken == guestToken)
+                : q.Where(_ => false);
+        return await q.OrderByDescending(p => p.ModifiedTime).ToListAsync();
+    }
+
+    public override async Task<Project?> GetProjectByToken(Guid token)
+        => await _lqDbContext.Projects.SingleOrDefaultAsync(p => p.PublicToken == token);
+
+    public override async Task<Project?> EnsureDefaultProject(string? analystId, string? guestToken)
+    {
+        if (analystId is null && guestToken is null) return null;
+        var existing = analystId is not null
+            ? await _lqDbContext.Projects
+                .Where(p => p.AnalystID == analystId)
+                .OrderBy(p => p.CreatedTime)
+                .FirstOrDefaultAsync()
+            : await _lqDbContext.Projects
+                .Where(p => p.GuestToken == guestToken)
+                .OrderBy(p => p.CreatedTime)
+                .FirstOrDefaultAsync();
+        if (existing is not null) return existing;
+        var fresh = analystId is not null
+            ? new Project(analystId, "My Workspace")
+            : new Project(guestToken!, "My Workspace", isGuest: true);
+        _lqDbContext.Projects.Add(fresh);
+        await _lqDbContext.SaveChangesAsync();
+        return fresh;
+    }
+
+    public override async Task<Project> InsertProject(Project project)
+    {
+        _lqDbContext.Projects.Add(project);
+        await _lqDbContext.SaveChangesAsync();
+        return project;
+    }
+
+    public override async Task RenameProject(int projectId, string newName)
+    {
+        await _lqDbContext.Projects
+            .Where(p => p.ID == projectId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.Name, newName)
+                .SetProperty(p => p.ModifiedTime, DateTime.UtcNow));
+    }
+
+    public override async Task DeleteProject(int projectId)
+    {
+        await _lqDbContext.Projects
+            .Where(p => p.ID == projectId)
+            .ExecuteDeleteAsync();
+    }
+
+    public override async Task<List<CSVFile>> GetProjectCSVFiles(int projectId)
+        => await _lqDbContext.CSVFiles
+            .AsNoTracking()
+            .Where(f => f.ProjectID == projectId)
+            .OrderByDescending(f => f.ModifiedTime)
+            .ToListAsync();
+
+    public override async Task<List<Canvas>> GetProjectCanvases(int projectId)
+        => await _lqDbContext.Canvases
+            .AsNoTracking()
+            .Where(c => c.ProjectID == projectId)
+            .OrderByDescending(c => c.UpdatedAt)
+            .ToListAsync();
+
+    public override async Task<Canvas?> GetCanvasByToken(Guid token)
+        => await _lqDbContext.Canvases.SingleOrDefaultAsync(c => c.PublicToken == token);
+
+    public override async Task<Canvas> InsertCanvas(Canvas canvas)
+    {
+        _lqDbContext.Canvases.Add(canvas);
+        await _lqDbContext.SaveChangesAsync();
+        return canvas;
+    }
+
+    public override async Task RenameCanvas(int canvasId, string newName)
+    {
+        await _lqDbContext.Canvases
+            .Where(c => c.ID == canvasId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.Name, newName)
+                .SetProperty(c => c.UpdatedAt, DateTime.UtcNow));
+    }
+
+    public override async Task DeleteCanvas(int canvasId)
+    {
+        await _lqDbContext.Canvases
+            .Where(c => c.ID == canvasId)
+            .ExecuteDeleteAsync();
+    }
+
+    public override async Task UpdateCanvasPreview(int canvasId, string? previewJson)
+    {
+        await _lqDbContext.Canvases
+            .Where(c => c.ID == canvasId)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.PreviewJson, previewJson));
+    }
+
     public override async Task<string?> GetSparklineJsonAsync(int csvFileId, int fieldIndex)
     {
         return await _lqDbContext.Fields

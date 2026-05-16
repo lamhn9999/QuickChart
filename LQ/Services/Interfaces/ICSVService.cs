@@ -7,10 +7,10 @@ public interface ICSVService
 {
     public Task<bool> Validate(Analyst analyst, string path);
     public Task<bool> Validate(Analyst analyst, IFormFile file);
-    public Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, string path);
-    public Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, IFormFile file);
+    public Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, string path, int? projectId = null);
+    public Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, IFormFile file, int? projectId = null);
 
-    Task<UploadResultDTO?> ProcessUploadedGuest(string guestToken, IFormFile file);
+    Task<UploadResultDTO?> ProcessUploadedGuest(string guestToken, IFormFile file, int? projectId = null);
     // Background continuation invoked from a fresh DI scope after the kickoff
     // has persisted the CSVFile placeholder and returned to the user.
     Task ContinueProcessAsync(Guid token, byte[] fileBytes, bool useSinglePass);

@@ -70,10 +70,15 @@ public class ChangeFieldTypeContainerTest
         Type initialType, string columnName, IEnumerable<string?> formattedValues)
     {
         var token = Guid.NewGuid().ToString();
+        var project = new Project(token, "test-project", isGuest: true);
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync();
+
         var file = new CSVFile(token, $"test_{token}.csv", isGuest: true)
         {
             CreatedTime = DateTime.UtcNow,
-            ModifiedTime = DateTime.UtcNow
+            ModifiedTime = DateTime.UtcNow,
+            ProjectID = project.ID
         };
         _db.CSVFiles.Add(file);
         await _db.SaveChangesAsync();

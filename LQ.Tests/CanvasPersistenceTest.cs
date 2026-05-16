@@ -67,11 +67,19 @@ public class CanvasPersistenceTest
 
     private async Task<CSVFile> SeedFile()
     {
+        // Phase 1 made ProjectID required on CSVFile, so every seeded file
+        // needs a project to land in. Each test gets its own throwaway project
+        // to avoid cross-test interference.
         var token = Guid.NewGuid().ToString();
+        var project = new Project(token, "test-project", isGuest: true);
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync();
+
         var file = new CSVFile(token, $"test_{token}.csv", isGuest: true)
         {
             CreatedTime = DateTime.UtcNow,
-            ModifiedTime = DateTime.UtcNow
+            ModifiedTime = DateTime.UtcNow,
+            ProjectID = project.ID
         };
         _db.CSVFiles.Add(file);
         await _db.SaveChangesAsync();
@@ -106,7 +114,7 @@ public class CanvasPersistenceTest
         AssertJsonEqual(second, got!);
 
         var rowCount = await _db.Canvases.AsNoTracking()
-            .CountAsync(c => c.CSVFileID == file.ID);
+            .CountAsync(c => c.LastUsedCSVFileID == file.ID);
         Assert.AreEqual(1, rowCount, "upsert must not create a second row");
     }
 
@@ -119,17 +127,25 @@ public class CanvasPersistenceTest
     }
 
     [TestMethod]
-    public async Task DeleteCSVFile_CascadeDeletesCanvas()
+    public async Task DeleteCSVFile_NullsCanvasLastUsedFile()
     {
+        // Post Phase 1: Canvas is owned by Project (cascade), not CSVFile.
+        // CSVFile is referenced only via LastUsedCSVFileID with SetNull. A
+        // canvas should survive deletion of its associated CSV; the pointer
+        // just gets cleared.
         var file = await SeedFile();
         await _repo.UpsertCanvasDocument(file.ID, """{"title":"x","blocks":[]}""");
 
-        Assert.IsTrue(await _db.Canvases.AsNoTracking().AnyAsync(c => c.CSVFileID == file.ID));
+        var canvasId = await _db.Canvases.AsNoTracking()
+            .Where(c => c.LastUsedCSVFileID == file.ID)
+            .Select(c => c.ID)
+            .SingleAsync();
 
         await _db.CSVFiles.Where(f => f.ID == file.ID).ExecuteDeleteAsync();
 
-        var stillThere = await _db.Canvases.AsNoTracking().AnyAsync(c => c.CSVFileID == file.ID);
-        Assert.IsFalse(stillThere, "Canvas should be cascade-deleted with its parent CSVFile");
+        var canvas = await _db.Canvases.AsNoTracking().SingleOrDefaultAsync(c => c.ID == canvasId);
+        Assert.IsNotNull(canvas, "Canvas should outlive its associated CSVFile");
+        Assert.IsNull(canvas!.LastUsedCSVFileID, "LastUsedCSVFileID should be nulled on file delete");
     }
 
     [TestMethod]

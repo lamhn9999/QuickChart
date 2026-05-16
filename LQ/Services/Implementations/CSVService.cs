@@ -622,10 +622,11 @@ public class CSVService : TableRepository, ICSVService
         return (newTable, suspicious);
     }
 
-    public async Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, string path)
+    public async Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, string path, int? projectId = null)
     {
         if (!await Validate(analyst, path)) return null;
         CSVFile newFile = new CSVFile(analyst.Id, Path.GetFileName(path));
+        newFile.ProjectID = await ResolveProjectIdAsync(analyst.Id, null, projectId);
         var result = Interpret(newFile, new StreamReader(path));
         if (result is null) return null;
         var (newTable, suspicious) = result.Value;
@@ -635,7 +636,7 @@ public class CSVService : TableRepository, ICSVService
         return new UploadResultDTO(Path.GetFileName(path), newFile.PublicToken, suspicious);
     }
 
-    public async Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, IFormFile file)
+    public async Task<UploadResultDTO?> ProcessUploaded(Analyst analyst, IFormFile file, int? projectId = null)
     {
         if (!await Validate(analyst, file)) return null;
 
@@ -647,6 +648,7 @@ public class CSVService : TableRepository, ICSVService
         // Persist the placeholder so the home page can render a Processing card
         // immediately on reload; the heavy work runs in the background.
         var newFile = new CSVFile(analyst.Id, file.FileName);
+        newFile.ProjectID = await ResolveProjectIdAsync(analyst.Id, null, projectId);
         await InsertFile(newFile);
 
         var token = newFile.PublicToken;
@@ -654,6 +656,17 @@ public class CSVService : TableRepository, ICSVService
         _ = Task.Run(() => RunInScope(token, bytes, useSinglePass: false));
 
         return new UploadResultDTO(fileName, token, new List<SuspiciousListDTO>());
+    }
+
+    // Anchors every CSVFile to a Project before insert. An explicit projectId
+    // (from the /projects/{token}/upload endpoint) wins; otherwise we use the
+    // owner's earliest-created "My Workspace" — created on demand if missing.
+    private async Task<int> ResolveProjectIdAsync(string? analystId, string? guestToken, int? explicitProjectId)
+    {
+        if (explicitProjectId is int id) return id;
+        var defaultProject = await EnsureDefaultProject(analystId, guestToken)
+            ?? throw new InvalidOperationException("Upload requires analyst or guest context.");
+        return defaultProject.ID;
     }
 
     private async Task FinalizeUploadStatus(CSVFile file, List<SuspiciousListDTO> suspicious)
@@ -711,7 +724,7 @@ public class CSVService : TableRepository, ICSVService
         return (newTable, suspiciousBag.OrderBy(s => s.FieldIndex).ToList());
     }
 
-    public async Task<UploadResultDTO?> ProcessUploadedGuest(string guestToken, IFormFile file)
+    public async Task<UploadResultDTO?> ProcessUploadedGuest(string guestToken, IFormFile file, int? projectId = null)
     {
         if (await FileExists(guestToken, file.FileName)) return null;
 
@@ -720,6 +733,7 @@ public class CSVService : TableRepository, ICSVService
         var bytes = ms.ToArray();
 
         var newFile = new CSVFile(guestToken, file.FileName, true);
+        newFile.ProjectID = await ResolveProjectIdAsync(null, guestToken, projectId);
         await InsertFile(newFile);
 
         var token = newFile.PublicToken;

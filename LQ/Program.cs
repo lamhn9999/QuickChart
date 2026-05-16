@@ -56,6 +56,8 @@ builder.Services.AddScoped<IAnalystService, AnalystService>();
 builder.Services.AddScoped<ICSVService, CSVService>();
 builder.Services.AddScoped<TableRepositoryAbstract, TableRepository>();
 builder.Services.AddScoped<IAutoChartService, AutoChartService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<CanvasPreviewService>();
 builder.Services.AddSingleton<SparklineCancelService>();
 builder.Services.AddHostedService<GuestCleanupService>();
 // AddSession
