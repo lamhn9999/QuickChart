@@ -1,0 +1,352 @@
+@model List<LQ.Models.DTOs.ProjectListItemDTO>
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <title>ACPTDA — Projects</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="~/style_tw.css"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="icon" href="01384a5a5e3c1ea5887b428641e12121.gif" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #F7F7FA;
+            --bg-card: #FFFFFF;
+            --nav-bg: rgba(255,255,255,0.88);
+            --text: #18181B;
+            --text-muted: #71717A;
+            --text-light: #A1A1AA;
+            --accent: #E9967A;
+            --accent-light: rgba(233,150,122,0.09);
+            --accent-hover: #D4836A;
+            --border: rgba(0,0,0,0.07);
+            --border-row: rgba(0,0,0,0.055);
+            --preview-bg: #FBFBFD;
+            --silhouette: rgba(24,24,27,0.18);
+            --badge-csv: #B66A4A;
+            --badge-canvas: #18181B;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            background-image: radial-gradient(rgba(0,0,0,0.05) 1px, transparent 0);
+            background-size: 28px 28px;
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── TOP NAV ── */
+        .topnav {
+            position: sticky; top: 0; z-index: 50;
+            background: var(--nav-bg);
+            backdrop-filter: blur(18px) saturate(150%);
+            -webkit-backdrop-filter: blur(18px) saturate(150%);
+            border-bottom: 1px solid rgba(0,0,0,0.07);
+            padding: 0.7rem 2rem;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .nav-brand {
+            display: flex; align-items: center; gap: 0.5rem;
+            font-family: 'Syne', sans-serif; font-weight: 700;
+            font-size: 0.95rem; color: var(--text); text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .nav-brand .dot { color: var(--accent); }
+        .nav-right { display: flex; align-items: center; gap: 1rem; }
+        .nav-user {
+            font-size: 0.82rem; font-weight: 500; color: var(--text-muted);
+            padding-right: 1rem; border-right: 1px solid var(--border);
+        }
+        .nav-user .username { color: var(--accent); font-weight: 600; }
+        .signout-btn {
+            display: flex; align-items: center; gap: 0.4rem;
+            font-size: 0.82rem; font-weight: 500; color: var(--text-muted);
+            background: none; border: none; cursor: pointer;
+            transition: color 0.18s; padding: 0.35rem 0.6rem;
+            border-radius: 0.45rem;
+        }
+        .signout-btn:hover { color: var(--text); background: rgba(0,0,0,0.04); }
+
+        /* ── MAIN ── */
+        .main-content { max-width: 1180px; margin: 0 auto; padding: 3rem 2rem 5rem; }
+
+        /* ── PAGE HEADER ── */
+        .page-header {
+            display: flex; align-items: flex-end; justify-content: space-between;
+            padding-bottom: 1.75rem; border-bottom: 1px solid var(--border);
+            margin-bottom: 2.25rem; gap: 1rem;
+        }
+        .page-header h1 {
+            font-family: 'Syne', sans-serif; font-weight: 800;
+            font-size: 2.25rem; color: var(--text); letter-spacing: -0.035em;
+            margin-bottom: 0.35rem;
+        }
+        .page-header p { font-size: 0.85rem; color: var(--text-muted); }
+
+        .header-actions { display: flex; align-items: center; gap: 0.6rem; }
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.45rem;
+            background: var(--accent); color: #fff;
+            border: 1px solid var(--accent); border-radius: 0.55rem;
+            padding: 0.55rem 1.1rem;
+            font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .btn-outline {
+            display: inline-flex; align-items: center; gap: 0.45rem;
+            background: transparent; color: var(--text);
+            border: 1px solid var(--border); border-radius: 0.55rem;
+            padding: 0.55rem 1.1rem;
+            font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: border-color 0.15s, color 0.15s;
+        }
+        .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ── GRID ── */
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 1.5rem;
+        }
+        @@media (max-width: 960px) { .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @@media (max-width: 600px) { .project-grid { grid-template-columns: 1fr; } }
+
+        .project-card {
+            position: relative; display: flex; flex-direction: column;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.85rem; overflow: hidden;
+            text-decoration: none; color: inherit;
+            transition: border-color 0.12s;
+            opacity: 0; transform: translateY(8px);
+            animation: cardFadeIn 240ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+        .project-card:hover { border-color: var(--accent); }
+        @@keyframes cardFadeIn { to { opacity: 1; transform: none; } }
+
+        .preview-strip {
+            display: grid; grid-template-columns: 1fr 1fr;
+            background: var(--preview-bg);
+            border-bottom: 1px solid var(--border);
+            aspect-ratio: 16 / 7;
+        }
+        .preview-tile {
+            display: flex; align-items: center; justify-content: center;
+            border-right: 1px solid var(--border);
+            padding: 0.85rem;
+            color: var(--silhouette);
+            font-family: 'Syne', sans-serif; font-weight: 600;
+            font-size: 0.75rem; letter-spacing: 0.16em; text-transform: uppercase;
+        }
+        .preview-tile:last-child { border-right: none; }
+        .preview-tile .count { color: var(--text); font-size: 1.65rem; letter-spacing: -0.02em; }
+        .preview-tile .label { display: block; margin-top: 0.15rem; color: var(--text-muted); font-size: 0.6rem; }
+
+        .card-body { padding: 1.1rem 1.2rem 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+        .card-title {
+            font-family: 'Syne', sans-serif; font-weight: 600;
+            font-size: 1.05rem; color: var(--text); letter-spacing: -0.015em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .card-meta {
+            font-size: 0.75rem; color: var(--text-muted);
+            display: flex; align-items: center; gap: 0.6rem;
+        }
+        .card-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-light); }
+
+        /* ── NEW PROJECT CARD ── */
+        .new-project-card {
+            display: flex; align-items: center; justify-content: center;
+            background: transparent; border: 1px dashed rgba(0,0,0,0.18);
+            border-radius: 0.85rem; min-height: 220px;
+            color: var(--text-muted); font-size: 0.85rem;
+            cursor: pointer; transition: border-color 0.15s, color 0.15s;
+            font-family: 'DM Sans', sans-serif; font-weight: 500;
+            gap: 0.5rem;
+        }
+        .new-project-card:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ── EMPTY ── */
+        .empty {
+            text-align: center; padding: 4rem 2rem;
+            border: 1px dashed var(--border); border-radius: 1rem;
+            background: var(--bg-card);
+        }
+        .empty h3 {
+            font-family: 'Syne', sans-serif; font-weight: 700;
+            font-size: 1.15rem; margin-bottom: 0.4rem;
+        }
+        .empty p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem; }
+
+        /* ── MODAL ── */
+        .modal-shade {
+            position: fixed; inset: 0;
+            background: rgba(24,24,27,0.35);
+            backdrop-filter: blur(2px);
+            display: none; align-items: center; justify-content: center;
+            z-index: 90;
+        }
+        .modal-shade.open { display: flex; }
+        .modal {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.9rem; width: 26rem; max-width: 92vw;
+            padding: 1.5rem 1.5rem 1.25rem;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.18);
+        }
+        .modal h3 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.05rem; margin-bottom: 0.85rem; }
+        .modal input[type="text"] {
+            width: 100%; font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem; padding: 0.55rem 0.75rem;
+            border: 1px solid var(--border); border-radius: 0.55rem;
+            outline: none; background: #FAFAFB;
+            transition: border-color 0.15s;
+        }
+        .modal input[type="text"]:focus { border-color: var(--accent); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.55rem; margin-top: 1.1rem; }
+    </style>
+</head>
+<body>
+
+<nav class="topnav">
+    <a href="/projects" class="nav-brand">
+        <img src="01384a5a5e3c1ea5887b428641e12121.gif" alt="" style="width:18px; height:auto;">
+        ACPTDA
+    </a>
+    <div class="nav-right">
+        @if (ViewBag.Username != null)
+        {
+            <span class="nav-user">Hello, <span class="username">@ViewBag.Username</span></span>
+        }
+        <button id="signoutbutton" class="signout-btn" onclick="signOut()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+        </button>
+    </div>
+</nav>
+
+<main class="main-content">
+
+    <header class="page-header">
+        <div>
+            <h1>Projects</h1>
+            <p>Each project is a folder for related CSVs and canvases. Pick one to dive in.</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn-primary" onclick="openNewProject()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New project
+            </button>
+        </div>
+    </header>
+
+    @if (Model.Count == 0)
+    {
+        <div class="empty">
+            <h3>No projects yet</h3>
+            <p>Start by creating one — uploads and canvases live inside.</p>
+            <button class="btn-primary" onclick="openNewProject()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New project
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="project-grid">
+            @{ int idx = 0; }
+            @foreach (var p in Model)
+            {
+                <a class="project-card" href="/projects/@p.Token" style="animation-delay: @(idx * 30)ms">
+                    <div class="preview-strip">
+                        <div class="preview-tile">
+                            <div style="text-align:center">
+                                <div class="count">@p.CSVCount</div>
+                                <span class="label">CSV</span>
+                            </div>
+                        </div>
+                        <div class="preview-tile">
+                            <div style="text-align:center">
+                                <div class="count">@p.CanvasCount</div>
+                                <span class="label">Canvas</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <span class="card-title">@p.Name</span>
+                        <span class="card-meta">
+                            <span>Edited @p.ModifiedTime.ToString("MMM dd, yyyy")</span>
+                        </span>
+                    </div>
+                </a>
+                idx++;
+            }
+            <button class="new-project-card" onclick="openNewProject()" style="animation: cardFadeIn 240ms cubic-bezier(0.2,0.8,0.2,1) forwards; animation-delay: @(idx * 30)ms; opacity:0;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New project
+            </button>
+        </div>
+    }
+</main>
+
+<!-- New-project modal -->
+<div class="modal-shade" id="newProjectShade" onclick="if (event.target === this) closeNewProject()">
+    <div class="modal">
+        <h3>New project</h3>
+        <input type="text" id="newProjectName" placeholder="Untitled project" autocomplete="off"/>
+        <div class="modal-actions">
+            <button class="btn-outline" onclick="closeNewProject()">Cancel</button>
+            <button class="btn-primary" onclick="submitNewProject()">Create</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openNewProject() {
+        document.getElementById('newProjectShade').classList.add('open');
+        setTimeout(() => document.getElementById('newProjectName').focus(), 30);
+    }
+    function closeNewProject() {
+        document.getElementById('newProjectShade').classList.remove('open');
+        document.getElementById('newProjectName').value = '';
+    }
+    async function submitNewProject() {
+        const name = document.getElementById('newProjectName').value.trim() || 'Untitled project';
+        const res = await fetch('/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        if (!res.ok) { alert('Failed to create project'); return; }
+        const dto = await res.json();
+        window.location.href = '/projects/' + dto.token;
+    }
+    document.getElementById('newProjectName').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitNewProject();
+        if (e.key === 'Escape') closeNewProject();
+    });
+
+    async function signOut() {
+        const res = await fetch('/auth/out', { method: 'POST' });
+        const result = await res.json();
+        if (result.redirect) window.location.href = result.redirect;
+    }
+</script>
+</body>
+</html>

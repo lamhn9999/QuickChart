@@ -60,21 +60,17 @@ public class HomeController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Show()
+    public IActionResult Show()
     {
+        // Signed-in users skip the marketing page and go straight to their
+        // projects (the new home — Phase 3). Anonymous visitors still need
+        // somewhere to land that exposes Sign In / Register, so we render the
+        // existing public landing view for them. The empty model lets us
+        // skip seeding a guest cookie just by visiting "/".
         HttpContext.Session.Remove("TableDTO");
         HttpContext.Session.Remove("ListValueFilterDTO");
-
-        var analystdto = CurrentAnalyst;
-        if (analystdto != null)
-        {
-            var analyst = await _analystService.FindById(analystdto.ID);
-            ViewBag.Username = analystdto.Name;
-            return View("NewHomeSpecific", await _csvService.GetAllFiles(analyst!));
-        }
-
-        var token = EnsureGuestToken();
-        return View("Home", await _csvService.GetAllFilesGuest(token));
+        if (CurrentAnalyst is not null) return Redirect("/projects");
+        return View("Home", new List<LQ.Models.TableModels.CSVFile>());
     }
 
     [HttpDelete("remove")]

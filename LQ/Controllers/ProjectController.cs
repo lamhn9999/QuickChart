@@ -26,7 +26,9 @@ public class ProjectController : Controller
         }
     }
 
-    private const string GuestCookieName = "our_guest";
+    // Must match HomeController so a single guest stays the same identity
+    // across the home redirect and the project pages.
+    private const string GuestCookieName = "lq_guest";
 
     private string? GuestToken =>
         Request.Cookies.TryGetValue(GuestCookieName, out var raw) && Guid.TryParse(raw, out _)

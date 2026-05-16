@@ -1,0 +1,695 @@
+@model LQ.Models.DTOs.ProjectDetailDTO
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <title>@Model.Name — ACPTDA</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="~/style_tw.css"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="icon" href="01384a5a5e3c1ea5887b428641e12121.gif" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #F7F7FA;
+            --bg-card: #FFFFFF;
+            --nav-bg: rgba(255,255,255,0.88);
+            --text: #18181B;
+            --text-muted: #71717A;
+            --text-light: #A1A1AA;
+            --accent: #E9967A;
+            --accent-light: rgba(233,150,122,0.09);
+            --accent-hover: #D4836A;
+            --border: rgba(0,0,0,0.07);
+            --border-row: rgba(0,0,0,0.055);
+            --preview-bg: #FBFBFD;
+            --silhouette: rgba(24,24,27,0.18);
+            --badge-csv: #B66A4A;
+            --badge-canvas: #18181B;
+            --danger: #DC2626;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            background-image: radial-gradient(rgba(0,0,0,0.05) 1px, transparent 0);
+            background-size: 28px 28px;
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── NAV ── */
+        .topnav {
+            position: sticky; top: 0; z-index: 50;
+            background: var(--nav-bg);
+            backdrop-filter: blur(18px) saturate(150%);
+            -webkit-backdrop-filter: blur(18px) saturate(150%);
+            border-bottom: 1px solid rgba(0,0,0,0.07);
+            padding: 0.7rem 2rem;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .nav-brand {
+            display: flex; align-items: center; gap: 0.5rem;
+            font-family: 'Syne', sans-serif; font-weight: 700;
+            font-size: 0.95rem; color: var(--text); text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .nav-right { display: flex; align-items: center; gap: 1rem; }
+        .nav-user {
+            font-size: 0.82rem; font-weight: 500; color: var(--text-muted);
+            padding-right: 1rem; border-right: 1px solid var(--border);
+        }
+        .nav-user .username { color: var(--accent); font-weight: 600; }
+        .signout-btn {
+            display: flex; align-items: center; gap: 0.4rem;
+            font-size: 0.82rem; font-weight: 500; color: var(--text-muted);
+            background: none; border: none; cursor: pointer;
+            transition: color 0.18s; padding: 0.35rem 0.6rem;
+            border-radius: 0.45rem;
+        }
+        .signout-btn:hover { color: var(--text); background: rgba(0,0,0,0.04); }
+
+        /* ── MAIN ── */
+        .main-content { max-width: 1240px; margin: 0 auto; padding: 2.25rem 2rem 5rem; }
+
+        .breadcrumb {
+            font-size: 0.78rem; color: var(--text-muted);
+            margin-bottom: 0.45rem; letter-spacing: 0.01em;
+        }
+        .breadcrumb a { color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+        .breadcrumb a:hover { color: var(--accent); }
+
+        /* ── HEADER ── */
+        .project-header {
+            display: flex; align-items: flex-end; justify-content: space-between;
+            gap: 1rem; padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 2rem;
+        }
+        .project-title-row {
+            display: flex; align-items: center; gap: 0.55rem;
+            margin-bottom: 0.25rem;
+        }
+        .project-title {
+            font-family: 'Syne', sans-serif; font-weight: 700;
+            font-size: 2rem; color: var(--text); letter-spacing: -0.035em;
+            background: none; border: none; outline: none; padding: 0;
+            font-family: 'Syne', sans-serif; cursor: text;
+            min-width: 4ch;
+        }
+        .project-title:focus { color: var(--accent); }
+        .project-meta { font-size: 0.78rem; color: var(--text-muted); }
+
+        .header-actions { display: flex; align-items: center; gap: 0.55rem; }
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.45rem;
+            background: var(--accent); color: #fff;
+            border: 1px solid var(--accent); border-radius: 0.55rem;
+            padding: 0.55rem 1.1rem;
+            font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .btn-outline {
+            display: inline-flex; align-items: center; gap: 0.45rem;
+            background: transparent; color: var(--text);
+            border: 1px solid var(--border); border-radius: 0.55rem;
+            padding: 0.55rem 1.1rem;
+            font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: border-color 0.15s, color 0.15s;
+        }
+        .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-icon {
+            width: 34px; height: 34px;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: transparent; color: var(--text-muted);
+            border: 1px solid var(--border); border-radius: 0.55rem;
+            cursor: pointer; transition: border-color 0.15s, color 0.15s;
+        }
+        .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ── FILTER BAR ── */
+        .filter-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 1.5rem; gap: 1rem;
+        }
+        .segment {
+            display: inline-flex; background: #F2F2F4;
+            border: 1px solid var(--border); border-radius: 0.55rem;
+            padding: 2px; gap: 2px;
+        }
+        .segment button {
+            background: transparent; border: none; cursor: pointer;
+            padding: 0.4rem 0.95rem; border-radius: 0.4rem;
+            font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 500;
+            color: var(--text-muted);
+            transition: background 0.18s, color 0.18s;
+        }
+        .segment button.active { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+        .sort-select {
+            font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 500;
+            color: var(--text); background: #fff;
+            border: 1px solid var(--border); border-radius: 0.55rem;
+            padding: 0.4rem 1.85rem 0.4rem 0.85rem;
+            appearance: none; cursor: pointer;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2371717A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+            background-repeat: no-repeat; background-position: right 0.55rem center;
+            transition: border-color 0.15s;
+        }
+        .sort-select:focus { outline: none; border-color: var(--accent); }
+
+        /* ── GRID ── */
+        .item-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1.25rem;
+        }
+        @@media (max-width: 1100px) { .item-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @@media (max-width: 820px)  { .item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @@media (max-width: 540px)  { .item-grid { grid-template-columns: 1fr; } }
+
+        .item-card {
+            position: relative;
+            display: flex; flex-direction: column;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.8rem; overflow: hidden;
+            text-decoration: none; color: inherit;
+            transition: border-color 0.12s;
+            opacity: 0; transform: translateY(8px);
+            animation: cardFadeIn 240ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            cursor: pointer;
+        }
+        .item-card:hover { border-color: var(--accent); }
+        @@keyframes cardFadeIn { to { opacity: 1; transform: none; } }
+
+        .item-preview {
+            position: relative;
+            aspect-ratio: 4 / 3;
+            background: var(--preview-bg);
+            border-bottom: 1px solid var(--border);
+            overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .item-preview svg { width: 100%; height: 100%; display: block; }
+
+        .badge {
+            position: absolute; top: 0.65rem; left: 0.7rem;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.62rem; font-weight: 700;
+            letter-spacing: 0.14em; text-transform: uppercase;
+            color: var(--badge-csv);
+            transition: color 0.12s;
+        }
+        .badge.canvas { color: var(--text-muted); }
+        .item-card:hover .badge { color: var(--text); }
+
+        .preview-stats {
+            position: absolute; bottom: 0.55rem; right: 0.7rem;
+            font-size: 0.65rem; color: var(--text-light);
+            letter-spacing: 0.02em;
+        }
+
+        .item-body {
+            padding: 0.85rem 1rem 0.95rem;
+            display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+        }
+        .item-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+        .item-name {
+            font-family: 'Syne', sans-serif; font-weight: 600;
+            font-size: 0.92rem; color: var(--text); letter-spacing: -0.015em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .item-edit { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+        /* Card menu */
+        .item-menu { position: relative; opacity: 0; transition: opacity 0.15s; }
+        .item-card:hover .item-menu, .item-menu:focus-within { opacity: 1; }
+        .menu-btn {
+            width: 26px; height: 26px;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: none; border: none; border-radius: 0.35rem; cursor: pointer;
+            color: var(--text-muted); transition: background 0.15s, color 0.15s;
+        }
+        .menu-btn:hover { background: rgba(0,0,0,0.06); color: var(--text); }
+        .menu-list {
+            position: absolute; right: 0; top: calc(100% + 4px);
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.55rem; min-width: 9rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            overflow: hidden; z-index: 20;
+        }
+        .menu-list.hidden { display: none; }
+        .menu-item {
+            width: 100%; text-align: left;
+            background: none; border: none; cursor: pointer;
+            padding: 0.5rem 0.85rem;
+            font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 500;
+            color: var(--text-muted); transition: background 0.12s, color 0.12s;
+        }
+        .menu-item:hover { background: #F4F4F6; color: var(--text); }
+        .menu-item.danger { color: var(--danger); }
+        .menu-item.danger:hover { background: rgba(220,38,38,0.06); color: var(--danger); }
+
+        .item-rename-input {
+            font-family: 'Syne', sans-serif; font-weight: 600; font-size: 0.92rem;
+            background: #F4F4F5; color: var(--text);
+            border: 1.5px solid var(--accent); border-radius: 0.4rem;
+            padding: 0.2rem 0.5rem; outline: none;
+            width: 100%; letter-spacing: -0.015em;
+        }
+
+        /* Processing strip on CSV cards */
+        .processing-bar {
+            position: absolute; left: 0; right: 0; bottom: 0;
+            height: 2px; overflow: hidden;
+            background: rgba(233,150,122,0.15);
+            pointer-events: none;
+        }
+        .processing-bar::before {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent 0%, var(--accent) 35%, var(--accent) 55%, transparent 100%);
+            transform: translateX(-100%);
+            animation: cardBarSlide 1.4s cubic-bezier(.45,.05,.55,.95) infinite;
+        }
+        @@keyframes cardBarSlide { 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
+
+        /* Empty state inside detail */
+        .empty-section {
+            text-align: center; padding: 4rem 2rem;
+            border: 1px dashed var(--border); border-radius: 1rem;
+            background: var(--bg-card);
+        }
+        .empty-section h3 {
+            font-family: 'Syne', sans-serif; font-weight: 700;
+            font-size: 1.1rem; margin-bottom: 0.4rem;
+        }
+        .empty-section p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.2rem; }
+        .empty-section .actions { display: inline-flex; gap: 0.5rem; }
+
+        /* Upload progress floating toast */
+        .toast {
+            position: fixed; bottom: 1.5rem; right: 1.5rem;
+            background: #fff; border: 1px solid var(--border); border-radius: 0.7rem;
+            padding: 0.9rem 1.1rem; min-width: 18rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            display: none; z-index: 80;
+        }
+        .toast.show { display: block; }
+        .toast-name { font-size: 0.82rem; font-weight: 600; color: var(--text); margin-bottom: 0.45rem; }
+        .toast-bar {
+            position: relative; height: 4px; background: rgba(233,150,122,0.15);
+            border-radius: 2px; overflow: hidden;
+        }
+        .toast-bar::before {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent 0%, var(--accent) 35%, var(--accent) 55%, transparent 100%);
+            transform: translateX(-100%);
+            animation: cardBarSlide 1.4s cubic-bezier(.45,.05,.55,.95) infinite;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="topnav">
+    <a href="/projects" class="nav-brand">
+        <img src="/01384a5a5e3c1ea5887b428641e12121.gif" alt="" style="width:18px; height:auto;">
+        ACPTDA
+    </a>
+    <div class="nav-right">
+        @if (ViewBag.Username != null)
+        {
+            <span class="nav-user">Hello, <span class="username">@ViewBag.Username</span></span>
+        }
+        <button class="signout-btn" onclick="signOut()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+        </button>
+    </div>
+</nav>
+
+<main class="main-content" data-token="@Model.Token">
+
+    <div class="breadcrumb"><a href="/projects">Projects</a> &nbsp;/&nbsp; @Model.Name</div>
+
+    <header class="project-header">
+        <div>
+            <div class="project-title-row">
+                <span class="project-title" id="projectTitle"
+                      contenteditable="true" spellcheck="false"
+                      data-original="@Model.Name">@Model.Name</span>
+            </div>
+            <span class="project-meta">
+                @Model.CSVFiles.Count CSV @(Model.CSVFiles.Count == 1 ? "file" : "files") ·
+                @Model.Canvases.Count canvas @(Model.Canvases.Count == 1 ? "" : "es") ·
+                edited @Model.ModifiedTime.ToString("MMM dd, yyyy")
+            </span>
+        </div>
+        <div class="header-actions">
+            <form id="uploadForm" method="post" enctype="multipart/form-data" style="display:none">
+                <input type="file" id="fileInput" name="file" accept=".csv" onchange="upload()"/>
+            </form>
+            <button class="btn-primary" onclick="document.getElementById('fileInput').click()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Upload CSV
+            </button>
+            <button class="btn-outline" onclick="createCanvas()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New canvas
+            </button>
+            <button class="btn-icon" title="Delete project" onclick="deleteProject()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="filter-bar">
+        <div class="segment" id="kindSegment">
+            <button class="active" data-kind="all">All</button>
+            <button data-kind="csv">CSVs</button>
+            <button data-kind="canvas">Canvases</button>
+        </div>
+        <select class="sort-select" id="sortSelect">
+            <option value="modified-desc">Last modified</option>
+            <option value="name-asc">Name (A → Z)</option>
+            <option value="type">Type</option>
+        </select>
+    </div>
+
+    @{
+        var allItems = Model.CSVFiles.Concat(Model.Canvases).ToList();
+    }
+
+    @if (allItems.Count == 0)
+    {
+        <div class="empty-section">
+            <h3>This project is empty</h3>
+            <p>Upload a CSV file, or create a canvas to start arranging your story.</p>
+            <div class="actions">
+                <button class="btn-primary" onclick="document.getElementById('fileInput').click()">Upload CSV</button>
+                <button class="btn-outline" onclick="createCanvas()">New canvas</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="item-grid" id="itemGrid">
+            @{ int cardIdx = 0; }
+            @foreach (var item in allItems)
+            {
+                bool isCsv = item.Kind == LQ.Models.DTOs.ProjectChildKind.CSV;
+                bool isProcessing = isCsv && item.Status == "Processing";
+                string itemHref = isCsv
+                    ? "#"   // Phase 4 will wire CSV cards into a workspace route
+                    : $"/workspace/{item.Token}"; // canvas routes land here once Phase 4 ships
+                <div class="item-card"
+                     data-token="@item.Token"
+                     data-kind="@(isCsv ? "csv" : "canvas")"
+                     data-name="@item.Name"
+                     data-modified="@item.ModifiedTime.ToString("yyyy-MM-ddTHH:mm:ss")"
+                     onclick="cardClicked(event, this, '@itemHref')"
+                     style="animation-delay: @(cardIdx * 30)ms">
+                    <div class="item-preview">
+                        <span class="badge @(isCsv ? "" : "canvas")">@(isCsv ? "CSV" : "Canvas")</span>
+                        @if (isCsv)
+                        {
+                            <!-- CSV silhouette: rows × cols hint. Real cell preview lands in a later phase. -->
+                            <svg viewBox="0 0 320 240" preserveAspectRatio="xMidYMid meet">
+                                <rect x="20" y="34" width="280" height="172" fill="#fff" stroke="rgba(24,24,27,0.12)"/>
+                                <line x1="20" y1="58" x2="300" y2="58" stroke="rgba(24,24,27,0.12)"/>
+                                @for (int c = 1; c < 5; c++)
+                                {
+                                    <line x1="@(20 + c * 56)" y1="34" x2="@(20 + c * 56)" y2="206" stroke="rgba(24,24,27,0.08)" />
+                                }
+                                @for (int r = 0; r < 7; r++)
+                                {
+                                    <line x1="20" y1="@(78 + r * 18)" x2="300" y2="@(78 + r * 18)" stroke="rgba(24,24,27,0.06)" />
+                                }
+                                @for (int c = 0; c < 5; c++)
+                                {
+                                    <rect x="@(28 + c * 56)" y="42" width="40" height="8" fill="rgba(24,24,27,0.22)" rx="1.5"/>
+                                }
+                                @for (int r = 0; r < 7; r++)
+                                {
+                                    for (int c = 0; c < 5; c++)
+                                    {
+                                        int wPx = 22 + ((r * 31 + c * 17) % 22);
+                                        <rect x="@(28 + c * 56)" y="@(64 + r * 18)" width="@wPx" height="6" fill="rgba(24,24,27,0.14)" rx="1.5"/>
+                                    }
+                                }
+                                <!-- right + bottom fade hints there's more behind -->
+                                <rect x="240" y="34" width="60" height="172" fill="url(#fadeR)"/>
+                                <rect x="20" y="170" width="280" height="36" fill="url(#fadeB)"/>
+                                <defs>
+                                    <linearGradient id="fadeR" x1="0" x2="1" y1="0" y2="0">
+                                        <stop offset="0%" stop-color="#FBFBFD" stop-opacity="0"/>
+                                        <stop offset="100%" stop-color="#FBFBFD" stop-opacity="1"/>
+                                    </linearGradient>
+                                    <linearGradient id="fadeB" x1="0" x2="0" y1="0" y2="1">
+                                        <stop offset="0%" stop-color="#FBFBFD" stop-opacity="0"/>
+                                        <stop offset="100%" stop-color="#FBFBFD" stop-opacity="1"/>
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <span class="preview-stats">
+                                @(item.FieldCount ?? 0) cols · @(item.RowCount ?? 0) rows
+                            </span>
+                        }
+                        else
+                        {
+                            @Html.Raw(item.PreviewSvg ?? "")
+                        }
+                        @if (isProcessing) { <div class="processing-bar" aria-label="Processing"></div> }
+                    </div>
+                    <div class="item-body">
+                        <div class="item-info">
+                            <span class="item-name">@item.Name</span>
+                            <span class="item-edit">Edited @item.ModifiedTime.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        <div class="item-menu" onclick="event.stopPropagation()">
+                            <button class="menu-btn" onclick="toggleMenu(this, event)" title="More">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+                                </svg>
+                            </button>
+                            <div class="menu-list hidden">
+                                @if (!isCsv)
+                                {
+                                    <button class="menu-item" onclick="renameCard(this, event)">Rename</button>
+                                    <button class="menu-item danger" onclick="deleteCard(this, event)">Delete</button>
+                                }
+                                else
+                                {
+                                    <button class="menu-item" disabled style="opacity:0.5;cursor:not-allowed">Rename (soon)</button>
+                                    <button class="menu-item" disabled style="opacity:0.5;cursor:not-allowed">Delete (soon)</button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                cardIdx++;
+            }
+        </div>
+    }
+</main>
+
+<div class="toast" id="uploadToast">
+    <div class="toast-name" id="toastName">Uploading…</div>
+    <div class="toast-bar"></div>
+</div>
+
+<script>
+    const projectToken = document.querySelector('main').dataset.token;
+
+    // ── Filter / sort ────────────────────────────────────────────────────────
+    const segment = document.getElementById('kindSegment');
+    const sortSelect = document.getElementById('sortSelect');
+    const grid = document.getElementById('itemGrid');
+
+    if (segment) {
+        segment.addEventListener('click', e => {
+            const btn = e.target.closest('button[data-kind]');
+            if (!btn) return;
+            segment.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            applyFilterSort();
+        });
+    }
+    if (sortSelect) sortSelect.addEventListener('change', applyFilterSort);
+
+    function applyFilterSort() {
+        if (!grid) return;
+        const kind = segment.querySelector('button.active').dataset.kind;
+        const cards = Array.from(grid.querySelectorAll('.item-card'));
+
+        cards.forEach(c => {
+            const show = kind === 'all' || c.dataset.kind === kind;
+            c.style.display = show ? '' : 'none';
+        });
+
+        const mode = sortSelect.value;
+        const visible = cards.filter(c => c.style.display !== 'none');
+        visible.sort((a, b) => {
+            if (mode === 'name-asc') return a.dataset.name.localeCompare(b.dataset.name);
+            if (mode === 'type') return a.dataset.kind.localeCompare(b.dataset.kind);
+            return new Date(b.dataset.modified) - new Date(a.dataset.modified);
+        });
+        visible.forEach(c => grid.appendChild(c));
+    }
+
+    // ── Card click ────────────────────────────────────────────────────────────
+    function cardClicked(event, card, href) {
+        if (event.target.closest('.item-menu')) return;
+        if (card.dataset.kind === 'csv') return;   // CSV cards are inert until Phase 4
+        window.location.href = href;
+    }
+
+    // ── Menu open/close ───────────────────────────────────────────────────────
+    function toggleMenu(btn, event) {
+        event.stopPropagation();
+        const list = btn.nextElementSibling;
+        const wasHidden = list.classList.contains('hidden');
+        document.querySelectorAll('.menu-list').forEach(l => l.classList.add('hidden'));
+        if (wasHidden) list.classList.remove('hidden');
+    }
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.menu-list').forEach(l => l.classList.add('hidden'));
+    });
+
+    // ── Rename canvas inline ──────────────────────────────────────────────────
+    function renameCard(menuItem, event) {
+        event.stopPropagation();
+        const card = menuItem.closest('.item-card');
+        const nameEl = card.querySelector('.item-name');
+        const oldName = nameEl.textContent.trim();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'item-rename-input';
+        input.value = oldName;
+        nameEl.replaceWith(input);
+        input.focus(); input.select();
+
+        document.querySelectorAll('.menu-list').forEach(l => l.classList.add('hidden'));
+        let done = false;
+        const finish = async () => {
+            if (done) return; done = true;
+            const newName = input.value.trim();
+            const span = document.createElement('span');
+            span.className = 'item-name';
+            span.textContent = newName || oldName;
+            input.replaceWith(span);
+            if (!newName || newName === oldName) return;
+            const res = await fetch('/projects/canvases/' + card.dataset.token, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            });
+            if (res.ok) {
+                card.dataset.name = newName;
+            } else {
+                span.textContent = oldName;
+                alert('Rename failed');
+            }
+        };
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') finish();
+            if (e.key === 'Escape') { input.value = oldName; finish(); }
+        });
+        input.addEventListener('blur', finish);
+    }
+
+    // ── Delete canvas ─────────────────────────────────────────────────────────
+    async function deleteCard(menuItem, event) {
+        event.stopPropagation();
+        const card = menuItem.closest('.item-card');
+        if (!confirm(`Delete "${card.dataset.name}"? This cannot be undone.`)) return;
+        const res = await fetch('/projects/canvases/' + card.dataset.token, { method: 'DELETE' });
+        if (res.ok) card.remove(); else alert('Delete failed');
+    }
+
+    // ── New canvas ────────────────────────────────────────────────────────────
+    async function createCanvas() {
+        const res = await fetch('/projects/' + projectToken + '/canvases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Untitled canvas' })
+        });
+        if (!res.ok) { alert('Could not create canvas'); return; }
+        location.reload();
+    }
+
+    // ── Upload CSV ────────────────────────────────────────────────────────────
+    async function upload() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files || !fileInput.files[0]) return;
+        const file = fileInput.files[0];
+        const toast = document.getElementById('uploadToast');
+        document.getElementById('toastName').textContent = 'Uploading ' + file.name + '…';
+        toast.classList.add('show');
+
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/projects/' + projectToken + '/upload', { method: 'POST', body: fd });
+        fileInput.value = '';
+        const body = await res.json().catch(() => null);
+        toast.classList.remove('show');
+        if (body && body.badcsv) { alert('Only .csv files are accepted.'); return; }
+        location.reload();
+    }
+
+    // ── Rename project (contenteditable on title) ─────────────────────────────
+    const titleEl = document.getElementById('projectTitle');
+    titleEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); }
+        if (e.key === 'Escape') { titleEl.textContent = titleEl.dataset.original; titleEl.blur(); }
+    });
+    titleEl.addEventListener('blur', async () => {
+        const newName = titleEl.textContent.trim();
+        const original = titleEl.dataset.original;
+        if (!newName) { titleEl.textContent = original; return; }
+        if (newName === original) return;
+        const res = await fetch('/projects/' + projectToken, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName })
+        });
+        if (res.ok) { titleEl.dataset.original = newName; document.title = newName + ' — ACPTDA'; }
+        else { titleEl.textContent = original; alert('Rename failed'); }
+    });
+
+    // ── Delete project ────────────────────────────────────────────────────────
+    async function deleteProject() {
+        if (!confirm('Delete this project? Every CSV and canvas inside will be removed.')) return;
+        const res = await fetch('/projects/' + projectToken, { method: 'DELETE' });
+        if (res.ok) window.location.href = '/projects'; else alert('Delete failed');
+    }
+
+    // ── Sign out ──────────────────────────────────────────────────────────────
+    async function signOut() {
+        const res = await fetch('/auth/out', { method: 'POST' });
+        const result = await res.json();
+        if (result.redirect) window.location.href = result.redirect;
+    }
+
+    // Apply default sort on load.
+    applyFilterSort();
+</script>
+</body>
+</html>
