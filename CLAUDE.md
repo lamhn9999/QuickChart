@@ -12,12 +12,13 @@ This is a data-storytelling web application that lets users upload CSV files and
 |---|---|---|
 | Runtime | .NET 9 / ASP.NET Core MVC | `net9.0`, nullable enabled, implicit usings |
 | Language | C# 13 | |
-| ORM | EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL` 9.0.4) | Code-first, five applied migrations |
+| ORM | EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL` 9.0.4) | Code-first, seven applied migrations |
 | Bulk insert | `EFCore.BulkExtensions` 9.0.2 | Used for initial CSV value insert and bulk-update list fields |
 | Identity | `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 9.0.11 | `IdentityUser` subclass `Analyst`; session-based, no JWT |
 | API docs | `Swashbuckle.AspNetCore` 10.1.0 | Swagger UI at `/swagger` |
 | Database | PostgreSQL (Npgsql) | Schemas: `analyst`, `app` |
 | CSS | Tailwind CSS v4 CLI build | `@tailwindcss/cli` in `LQ/wwwroot/package.json`; compiled to `wwwroot/style_tw.css` |
+| Canvas snapshots | `html-to-image` (CDN) | Client-side DOM-to-PNG capture via jsdelivr; 4:3 top-crop aspect, 2× DPR, ~480×360 logical |
 | Charting | Chart.js 4.5.1 (local, `node_modules/chart.js/dist/chart.umd.min.js`) | |
 | Matrix chart | `chartjs-chart-matrix` 1.3.0 | Loaded from jsDelivr CDN |
 | Animation | `web-animations-js` 2.3.2 | Local `node_modules` |
@@ -29,56 +30,75 @@ This is a data-storytelling web application that lets users upload CSV files and
 
 ### MVC Request Lifecycle
 
-Three controllers; no `[Authorize]` attributes — all auth checks are manual session lookups:
+Four controllers; no `[Authorize]` attributes — all auth checks are manual session lookups:
 
 | Controller | Route prefix | Domain |
 |---|---|---|
-| `HomeController` | `/` | Home page, CSV upload/delete/rename, file selection, guest support |
-| `WorkspaceController` | `/workspace` | Workspace entry, AutoChart, filter, field-type change, sparkline |
+| `HomeController` | `/` | Legacy: now minimal; redirects `/` → `/projects` |
+| `ProjectController` | `/projects` | Project CRUD, canvas CRUD, CSV upload/rename/delete, card preview endpoints |
+| `WorkspaceController` | `/workspace` | Workspace entry via canvas token, AutoChart, filter, field-type change, sparkline, canvas snapshot save |
 | `AuthController` | `/auth` | Sign-in, register, sign-out |
 
 ### Data Flow
 
 ```
-1. Upload
-   POST /  ← IFormFile
-   HomeController.Upload() → CSVService.ProcessUploaded()
-     → CSVService.Interpret()   — parse CSV, detect types (int/double/DateTime/bool/List<string>/string)
-     → CSVService.DetectType()  — try date formats, numeric, bool, list heuristics
-     → CSVService.DetectCategory() — Categorical / Numeric / Identifier classification
-     → TableRepository.Insert()  — EFCore insert CSVFile+Fields, BulkInsert Values
+1. Project home
+   GET /projects  →  ProjectController.Index()
+     → Lists all projects for analyst or guest (paginated)
+     → Renders project cards with 4-up canvas/CSV thumbnails
 
-2. Open file
-   POST /table?filename=...  →  HomeController.Select()
-     → stores CSVFileDTO in session
+2. Project detail
+   GET /projects/{token}  →  ProjectController.Detail({token})
+     → Loads Project + all CSVFiles + all Canvases
+     → For each CSV card: calls TableRepository.GetCardPreview() for first 5×4 cell data
+     → For each Canvas card: serves <img src="/projects/canvas/{token}/preview.png?v={ticks}">
+     → Renders item-grid with filter/sort controls
 
-3. Enter workspace
-   GET /workspace  →  WorkspaceController.EnterWorkspace()
-     → CSVService.GetTableDisplayLimited(file, 200 rows)
-     → returns TableDisplayDTO → View("WorkspaceSpecific", dto)
-     → View serialises field metadata directly into HTML th[data-index] attributes
+3. Canvas upload to project
+   POST /projects/{token}/upload  →  ProjectController.UploadFile({token})
+     → Validates CSV file, parses, detects types, bulk-inserts
+     → File is assigned ProjectID (no CSVFileID → Canvas mapping yet)
+     → Returns JSON; client reloads /projects/{token}
 
-4. Chart creation (browser side)
-   User clicks/drags column header → JS collects field indexes in pendingIndexes (Set)
-   Drop on canvas → main.js → chart.js:createChartGroup(indexes)
-     → fetch POST /workspace  (body: JSON array of field indexes)
-     → WorkspaceController.AutoChart() → AutoChartService.DetectChartAsync()
-       → SQL aggregates via TableRepository.SqlQueryRaw(...)
-       → returns List<Chart> JSON
-     → chart.js renders Chart.js instances inside #doc-canvas
+4. Canvas creation in project
+   POST /projects/{token}/canvases  →  ProjectController.CreateCanvas({token})
+     → Creates new Canvas with ProjectID, auto-assigned PublicToken
+     → Returns JSON; client reloads
 
-5. Filtering
-   User configures filter popup → filter.js → fetch POST /workspace/filter
-     → WorkspaceController.FilterTable() → stores filters in session
-     → `onFilterApplied` event fires
-     → `filter/reactor.js` debounces call to `refreshAllCharts()`
-     → For each chart group, re-fetches from POST /workspace with same field indexes
-     → Updates Chart.js instances in-place (labels + data), calls `chart.update('none')`
-     → subsequent AutoChart calls also use filters
+5. Enter workspace
+   GET /workspace/{canvasToken}  →  WorkspaceController.EnterWorkspace({canvasToken})
+     → Resolves Canvas + Project via token (no session lookup)
+     → Loads Canvas.Document JSON for hydration
+     → CSVService.GetTableDisplayLimited() for default/last-used CSV
+     → Returns WorkspaceSpecific view with CSV picker dropdown
+     → Left pane: #dataTable with CSV picker at top + field list
+     → Right pane: #doc-canvas with persisted Document JSON hydrated
 
-6. Sparklines
-   On page load each th[data-spark-col] hits GET /workspace/sparkline/{fieldIndex}
-     → returns single-field Chart for mini canvas rendering
+6. Canvas save + snapshot
+   User edits canvas (add/remove blocks, change text)
+     → MutationObserver triggers debounced autosave (1500ms)
+     → fetch POST /workspace/canvas/{canvasToken}  (body: {document: JSON.stringify(...)})
+     → WorkspaceController.SaveCanvasSnapshot({canvasToken})
+       → Stores Canvas.Document JSON
+       → Schedules snapshot capture (250ms delay for chart paint)
+     → Client: fetch POST /workspace/canvas/{canvasToken}/snapshot  (body: {pngBase64: "..."})
+       → WorkspaceController.SaveCanvasSnapshot() stores in Canvas.PreviewPng (bytea)
+     → Next visit to /projects/{token} shows updated PNG in canvas card
+
+7. Chart creation
+   User drags CSV column header → canvas
+     → chart.js:createChartGroup() posts to /workspace/chart (if per-chart filters) or /workspace (if table-wide)
+     → AutoChartService detects chart type, returns JSON with ChartType, X/Y/Z labels
+     → Chart.js renders inside #doc-canvas
+     → Canvas auto-saves (MutationObserver sees new .doc-chart-section)
+
+8. CSV picker in workspace
+   User clicks CSV dropdown in left-pane header
+     → Selects different CSV from project
+     → fetch GET /workspace/{canvasToken}/table?csvToken={token}
+     → WorkspaceController.SwitchTableCsv() updates session LastUsedCSVFileID
+     → Returns new TableDisplayDTO, JS re-populates #dataTable
+     → Chart blocks continue to work (csvFileToken is baked into Document JSON)
 ```
 
 ### Two workspace sections
@@ -129,10 +149,11 @@ Three controllers; no `[Authorize]` attributes — all auth checks are manual se
 
 | Table | Key | Notable columns | Relationships |
 |---|---|---|---|
-| `CSVFile` | `ID` (serial) | `PublicToken` (Guid, unique, external facing ID), `Name`, `CreatedTime`, `ModifiedTime`, `AnalystID` (nullable FK → Analyst), `GuestToken` (nullable, indexed), `Status` (UploadStatus enum: 0=Failed, 1=Completed, 2=Processing), `ProcessingPayload` (jsonb, nullable, error/metadata on fail) | Cascade delete from Analyst; composite indexes on (AnalystID, Status) and (GuestToken, Status) for queries |
-| `Canvas` | `CSVFileID` (serial, PK) | `Document` (jsonb), `UpdatedAt` (timestamp) | FK → CSVFile (cascade delete); one-to-one, stores persisted chart+text blocks |
-| `Field` | `ID` (serial) | `Name`, `Index`, `TypeName` (C# AssemblyQualifiedName), `Categories` (serialised), `SparklineJson` (nullable, camelCase JSON), `SparklineTypeName` (nullable, mirrors `TypeName` at cache-write time) | FK → CSVFile |
-| `Value` | **(FieldID, RowIndex)** composite PK | `ValueString` (raw from CSV), `ValueStringFormatted` (normalised for queries), `Existance` (bool, default true) | FK → Field |
+| `Project` | `ID` (serial) | `PublicToken` (Guid, unique, external), `Name`, `AnalystID` (nullable FK → Analyst), `GuestToken` (nullable, indexed), `CreatedTime`, `ModifiedTime` | Cascade delete from Analyst; indexes on (AnalystID) and (GuestToken). Container for CSVFiles and Canvases. |
+| `CSVFile` | `ID` (serial) | `PublicToken` (Guid, unique), `Name`, `CreatedTime`, `ModifiedTime`, `ProjectID` (FK → Project, required), `AnalystID` (nullable FK → Analyst, denormalized for legacy routes), `GuestToken` (nullable), `Status` (enum), `ProcessingPayload` (jsonb) | FK → Project (cascade delete); composite indexes on (ProjectID, Status) for project-scoped queries. |
+| `Canvas` | `ID` (serial) | `PublicToken` (Guid, unique, external), `Name`, `ProjectID` (FK → Project, required), `Document` (jsonb), `PreviewPng` (bytea, nullable, cached snapshot), `LastUsedCSVFileID` (nullable, hints CSV picker), `UpdatedAt` (timestamp) | FK → Project (cascade delete); token-keyed routes for `/workspace/{token}`, `/projects/canvas/{token}/preview.png`. |
+| `Field` | `ID` (serial) | `Name`, `Index`, `TypeName` (C# AssemblyQualifiedName), `Categories` (serialised), `SparklineJson` (nullable, camelCase JSON), `SparklineTypeName` (nullable) | FK → CSVFile; unchanged from prior schema. |
+| `Value` | **(FieldID, RowIndex)** composite PK | `ValueString`, `ValueStringFormatted`, `Existance` | FK → Field; unchanged from prior schema. |
 
 **Key invariants:**
 - `ValueStringFormatted` is what all SQL aggregates read. It is set during upload type detection. For DateTime fields it is a .NET `DateTime.ToString()` US-culture string (`M/D/YYYY H:MM:SS AM/PM`).
@@ -153,12 +174,21 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 
 ## 5. Implemented Features ✅
 
-- **CSV upload (authenticated)** — Validates CSV (consistent column count, ≥2 rows, ≥1 comma), parses, detects field types, bulk-inserts. Controller: `HomeController.Upload()`, Service: `CSVService.ProcessUploaded()`
-- **CSV upload (guest)** — Same but with cookie-based guest token; uses `InterpretSinglePass()` (parallel type detection). Controller: `HomeController.GuestUpload()`, Service: `CSVService.ProcessUploadedGuest()`
+### Projects (Phase 1-5)
+- **Project CRUD** — Create, read, rename, delete projects. Controller: `ProjectController`, Service: `ProjectService`
+- **Project home** — Lists all projects for analyst or guest with 4-up thumbnail grid. View: `Views/Project/Index.cshtml`
+- **Project detail** — Grid of CSVs and Canvases in a project; filtering/sorting. View: `Views/Project/Detail.cshtml`
+- **CSV card preview** — Server-renders first 5×4 cells with fade-out gradients and row/col counter. Service: `TableRepository.GetCardPreview()`
+- **Canvas card preview** — Client-side PNG snapshots (bytea in DB); displayed with `object-fit: cover`, `object-position: top center`. Storage: `Canvas.PreviewPng`
+- **CSV/Canvas icon badges** — Line-based SVG icons (table grid for CSV, document for Canvas) in item-info metadata section. View: inline `<svg>` in `_render canvas/csv icon`
+
+### Legacy / Deprecated
+- **CSV upload (authenticated)** — Validates CSV (consistent column count, ≥2 rows, ≥1 comma), parses, detects field types, bulk-inserts. Controller: `HomeController.Upload()` [DEPRECATED: use `ProjectController.UploadFile()` now]
+- **CSV upload (guest)** — Same but with cookie-based guest token; uses `InterpretSinglePass()` (parallel type detection). Controller: `HomeController.GuestUpload()` [DEPRECATED]
 - **Guest cleanup** — Background service purges guest CSVFiles older than 7 days every 6 hours. Service: `GuestCleanupService`
-- **File list** — Shows all files for current user or guest token. Controller: `HomeController.Show()`, Views: `Views/Home/NewHomeSpecific.cshtml`, `Views/Home/Home.cshtml`
-- **File rename** — Authenticated only. Controller: `HomeController.RenameFile()`, JS: `Views/Home/NewHomeSpecific.cshtml` inline script
-- **File delete** — Authenticated (`HomeController.Remove()`) and guest (`HomeController.GuestRemove()`), JS: home view inline script
+- **File list (legacy)** — Shows all files for current user or guest token. Controller: `HomeController.Show()` [DEPRECATED: use `ProjectController.Index()` → `/projects`]
+- **File rename (legacy)** — Authenticated only. Controller: `HomeController.RenameFile()` [DEPRECATED: use `ProjectController.RenameCSV()` or `.RenameCanvas()`]
+- **File delete (legacy)** — Authenticated and guest. Controller: `HomeController.Remove()` / `GuestRemove()` [DEPRECATED: use `ProjectController.DeleteCSV()` or `.DeleteCanvas()`]
 - **Field type detection** — auto-detects DateTime (30+ format patterns), int, double, bool, List\<string\>, string. Service: `CSVService.DetectType()`
 - **Category detection** — Categorical / Numeric / Identifier classification by uniqueness ratio. Service: `CSVService.DetectCategory()`
 - **Field type change** — Gear icon → "Change Field Type" submenu. Re-validates existing values, reformats list fields. Controller: `WorkspaceController.ChangeFieldType()`, JS: `workspace.js:changeFieldType()`
@@ -203,7 +233,8 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 - **Usage tracking / analytics** 🔲 — Only request-level `ILogger` calls; no per-user event tracking.
 - **Rate limiting** 🔲 — No middleware; upload limit is a `RequestSizeLimit(209715200)` attribute (200 MB).
 - **Email confirmation** 🔲 — `RequireUniqueEmail = true` in Identity config but no confirmation flow.
-- **Canvas persistence (charts + text blocks)** ✅ — `#doc-canvas` content is serialised to JSON and stored in `app.CanvasDocument` (per-CSVFile). On workspace load the Razor view injects the saved JSON into `<script id="saved-canvas">` and `canvas-persist/index.js` hydrates it. A debounced `MutationObserver` auto-saves changes; `beforeunload` flushes via `sendBeacon`. Endpoints: `GET /workspace/canvas`, `POST /workspace/canvas`, `POST /workspace/canvas/append-chart`. JS modules: `canvas-persist/{index,hydrate,autosave,serialize,kinds,state}.js`.
+- **Canvas persistence (charts + text blocks)** ✅ — `#doc-canvas` content is serialised to JSON and stored in `Canvas.Document` (jsonb). On workspace load the Razor view injects the saved JSON into `<script id="saved-canvas">` and `canvas-persist/index.js` hydrates it. A debounced `MutationObserver` auto-saves changes via `POST /workspace/canvas/{canvasToken}`; `beforeunload` flushes via `sendBeacon`. JS modules: `canvas-persist/{index,hydrate,autosave,serialize,kinds,state}.js`.
+- **Canvas snapshots** ✅ — Client-side PNG rasterization via `html-to-image` CDN after autosave settles (250ms). Captures #doc-canvas at top-cropped 4:3 aspect, 2× DPR (960×720 actual PNG), downscaled to 480×360 logical. Stored as `Canvas.PreviewPng` (bytea). Endpoint: `POST /workspace/canvas/{canvasToken}/snapshot` and `GET /projects/canvas/{canvasToken}/preview.png?v={ticks}`. JS: `canvas-persist/autosave.js:captureAndUploadSnapshot()`.
 
 ---
 
@@ -212,43 +243,65 @@ All aggregate queries in `TableRepository` are hand-written via `_lqDbContext.Da
 ### C\#
 - **LQDbContext**: Only used in TableRepository.cs and AnalystRepository, nowhere else. Only allow inheritance of Repositories from Services.
 - **Naming**: PascalCase everywhere; no `I`-prefixed fields except interfaces (`ICSVService`). Repository abstract is `TableRepositoryAbstract` (suffix, not prefix).
-- **ViewModels / DTOs**: Immutable `record` types in `Models/DTOs/`. Named `*DTO` or `*DisplayDTO`.
-- **Services**: Injected via constructor; `ICSVService` / `IAutoChartService` / `IAnalystService` interfaces; concrete in `Services/Implementations/`. No direct use of LQDbContext, inherit from TableRepository or AnalystRepository to use.
-- **Repository pattern**: `TableRepositoryAbstract` (abstract class, not interface) → `TableRepository` (concrete). `CSVService` inherits `TableRepository` directly.
+- **ViewModels / DTOs**: Immutable `record` types in `Models/DTOs/`. Named `*DTO` or `*DisplayDTO`. New: `ProjectDetailDTO` (Project + CSVFiles + Canvases for detail view).
+- **Services**: Injected via constructor; `ICSVService` / `IAutoChartService` / `IAnalystService` / `IProjectService` interfaces; concrete in `Services/Implementations/`. No direct use of LQDbContext, inherit from TableRepository or AnalystRepository to use. `ProjectService` inherits `TableRepository` for card preview queries.
+- **Repository pattern**: `TableRepositoryAbstract` (abstract class, not interface) → `TableRepository` (concrete). `CSVService` and `ProjectService` inherit `TableRepository` directly. New methods: `UpdateCanvasPreviewPng()`, `GetCanvasPreviewPng()`, `GetCardPreview(csvFileId, rowLimit, colLimit)`.
 - **Error handling**: Most action methods catch `Exception` and return `Json(ex.Message)` or `StatusCode(500)`. No global exception middleware.
 - **Static factory methods**: `Analyst.GiveBirth(name)` pattern for domain validation.
 - **Field type storage**: `Field.TypeName` stores `Type.AssemblyQualifiedName`; `Field.Type` is a computed `[NotMapped]` property that resolves it via `System.Type.GetType()`.
 
 ### Razor Views
 - No `_Layout.cshtml` — each view is a self-contained full HTML page.
-- Model binding: strongly-typed `@model` for all views (`TableDisplayDTO`, `List<CSVFile>`).
+- Model binding: strongly-typed `@model` for all views (`ProjectDetailDTO`, `TableDisplayDTO`, etc.).
 - `ViewBag.Username` is the only ViewBag use.
+- New Phase 5 views:
+  - `Views/Project/Index.cshtml` — Project list (sticky nav, H1 title, "+ New project" button, grid of projects with stagger-fade-in animation).
+  - `Views/Project/Detail.cshtml` — Project detail (project header with title, upload/canvas buttons, filter bar, item-grid with CSV/Canvas cards, menu for rename/delete).
+  - Inline SVG icons: table grid (CSV) and document (Canvas) in item-info as `.badge-icon` with `currentColor` stroke, 18×18px container.
 - Type icons and type labels are generated inline in the view via C# `switch` expressions on `f.TypeName`.
-- `@Html.Raw()` used to inject inline SVG paths from C# variables.
+- `@Html.Raw()` used to inject inline SVG paths from C# variables (now includes CSV/Canvas icons).
 - `Views/tailwind_classes_in_js.html` — a dummy HTML file with all Tailwind classes used by JavaScript-generated DOM (prevents the Tailwind CLI scanner from purging them).
 
 ### JavaScript
 - **Module system**: ES modules (`import`/`export`) for `workspace.js`, `chart.js`, `filter.js`. `editor.js` is a self-executing IIFE (no exports).
 - **`main.js`** is the entry point; it `import`s from other modules and exposes selected functions to `window` for inline HTML handlers (`Object.assign(window, { fieldClicked, ... })`).
+- **Project detail (Detail.cshtml)**: Inline script for filter/sort, card menu toggle, rename/delete, create canvas, project title edit, upload progress toast.
+- **Canvas persistence** (`wwwroot/js/canvas-persist/`):
+  - `index.js`: DOMContentLoaded orchestrator; hydrates saved canvas on load, starts autosave, schedules post-hydration snapshot.
+  - `autosave.js`: Debounced MutationObserver on #doc-canvas (1500ms), auto-saves via `POST /workspace/canvas/{token}`. Captures PNG snapshot 250ms after save: measures #doc-canvas size, top-crops to 4:3 aspect, scales to 480×360 logical, renders at 2× DPR via html-to-image, uploads via `POST /workspace/canvas/{token}/snapshot`.
+  - `hydrate.js`: Replays kind.hydrate() for each block in saved Document JSON.
+  - `serialize.js`: Walks #doc-canvas DOM, serializes to JSON with title, blocks array.
+  - `kinds.js`: KINDS registry (text, divider, chart, textCard) + block-specific serialize/hydrate logic.
+  - `state.js`: `isHydrating()` flag to skip autosave during initial load.
+- **CSV picker** (`wwwroot/js/workspace/csv-picker.js`): Dropdown in left-pane header to switch CSV; fetches new table data via `GET /workspace/{canvasToken}/table?csvToken={token}`.
 - **DOM reads**: JS reads field indexes from `th[data-index]`, spark type from `[data-spark-type]`, filter type from `[data-field-type]` attributes. No hidden inputs or inline JSON blobs.
-- **Fetch calls**: All use `fetch()` without a wrapper. JSON body for AutoChart; `FormData` for ChangeFieldType; query params for Remove/Rename.
-- **Chart data**: Returned from `/workspace` (POST) as a JSON-serialised `List<Chart>`. The `ChartType` integer maps to `chartArray` index in `chart.js`: `['pie','bar','line','bar','scatter','polarArea','bar','mixed','matrix','mixedBar','bubble']`.
+- **Fetch calls**: All use `fetch()` without a wrapper. JSON body for AutoChart; `FormData` for ChangeFieldType; query params for legacy Remove/Rename.
+- **Chart data**: Returned from `/workspace` (POST) or `/workspace/chart` (per-chart) as a JSON-serialised `List<Chart>`. The `ChartType` integer maps to `chartArray` index in `chart.js`: `['pie','bar','line','bar','scatter','polarArea','bar','mixed','matrix','mixedBar','bubble']`.
 - **Chart rendering**: `chart.js:createChartGroup(indexes)` posts to the server, receives chart array, creates a `doc-chart-section` wrapper in `#doc-canvas`, and instantiates Chart.js charts inside it.
 
-### Tailwind
-- **Version 4 CLI build** (not CDN, not PostCSS). Run via `npx tailwindcss` in `LQ/wwwroot/`.
-- Input: `LQ/wwwroot/style.css`. Output: `LQ/wwwroot/style_tw.css`.
-- `tailwind.config.js` does not exist (Tailwind v4 is zero-config by default; it scans all files in the project).
-- Inline JS-generated classes that would be purged are preserved in `LQ/Views/tailwind_classes_in_js.html`.
+### CSS / Styling
+- **Custom CSS in Detail.cshtml**: No Tailwind; handwritten CSS for Phase 5 project pages.
+- **Color variables** (`:root`): `--bg`, `--bg-card`, `--nav-bg`, `--text`, `--text-muted`, `--text-light`, `--accent` (salmon #E9967A), `--border`, `--preview-bg` (off-white #FBFBFD), `--silhouette` (faint grey), `--badge-csv`, `--badge-canvas`, `--danger`.
+- **Fonts**: Syne (display, 600-800wt), DM Sans (body, 300-700wt); Google Fonts CDN.
+- **Grid**: 4 cols on wide, 3 on medium, 2 on tablet, 1 on mobile; 1.25rem gap.
+- **Item cards**: 4:3 preview aspect, flex column layout, item-body with item-info (icon + text) and item-menu.
+- **Item-info layout**: flex row with badge-icon (18×18px, color: var(--badge-csv) for CSV, var(--text-muted) for Canvas) and item-info-text (flex column with name + edit date).
+- **Badge icons**: SVG with `fill="none"`, `stroke="currentColor"`, `stroke-width="1.8"`. CSV: table grid (box + dividing lines). Canvas: document (rounded box + ruled lines).
+- **CSV card preview**: Real data table (first 5×4 cells) with fade-out gradients on right and bottom, "X cols · Y rows" stat in corner.
+- **Canvas card preview**: PNG image (`Canvas.PreviewPng`) with `object-fit: cover`, `object-position: top center`, `image-rendering: -webkit-optimize-contrast` for crisp strokes.
+- **Animations**: Cards stagger-fade-in on page load (240ms cubic-bezier, 30ms stagger); filter pill switches 180ms color transition; hover state 120ms border-color only (no scale/shadow).
+- **No Tailwind in project pages** — Detail.cshtml and Index.cshtml use custom CSS (handwritten; not Tailwind classes). Workspace views reuse existing Tailwind + custom editor CSS.
 
 ### EF Core
 - **Code-first** with manual migrations.
-- Five migrations in order:
+- Seven migrations in order:
   1. `20260110022414_InitialCreate` — CSVFile, Field, Value tables
   2. `20260421042659_GuestUploadSupport` — AnalystID nullable, GuestToken indexed
   3. `20260429091345_UploadStatusTracking` — PublicToken (Guid), Status (enum), ProcessingPayload (jsonb), composite indexes
   4. `20260502133005_AddCanvasPersistence` — Canvas table (CSVFileID PK, Document jsonb, UpdatedAt)
   5. `20260508035731_AddSparklineJsonToField` — SparklineJson, SparklineTypeName columns on Field
+  6. `20260516120905_FixPreviewJsonColumnType` — Renames Canvas.PreviewJson from text to jsonb (intermediate step during Phase 5)
+  7. `20260516143725_ReplacePreviewJsonWithPreviewPng` — Adds Project table (PK: ID, PublicToken, AnalystID, GuestToken, Name, timestamps). Adds ProjectID (required FK) to CSVFile and Canvas. Drops CSVFileID from Canvas PK, adds Canvas.ID (identity) + Canvas.PublicToken (Guid unique) + Canvas.Name. Replaces Canvas.PreviewJson with Canvas.PreviewPng (bytea). Adds Canvas.LastUsedCSVFileID (nullable). Backfills all CSVFile/Canvas with default Project per analyst/guest.
 - Direct `LQDbContext` injection; no Unit-of-Work wrapper beyond the DbContext.
 - Aggregate queries bypass LINQ entirely; only EF Core for inserts/updates/deletes and simple lookups.
 
@@ -333,3 +386,50 @@ Available at `http://localhost:5000/swagger` when running.
 | OAuth / social login | ❌ Not configured |
 
 The codebase is at the "working prototype" stage
+
+---
+
+## 11. Critical Files (Phase 1-5 Project Architecture)
+
+### Models
+- `LQ/Models/TableModels/Project.cs` — New entity: `ID` (PK), `PublicToken` (Guid, unique), `Name`, `AnalystID` (nullable FK), `GuestToken` (nullable), `CreatedTime`, `ModifiedTime`. Relationships: `ICollection<CSVFile>`, `ICollection<Canvas>`.
+- `LQ/Models/TableModels/Canvas.cs` — Updated: `ID` (identity PK, was CSVFileID), `PublicToken` (Guid, unique), `Name`, `ProjectID` (required FK), `Document` (jsonb), `PreviewPng` (bytea, nullable), `LastUsedCSVFileID` (nullable), `UpdatedAt`.
+- `LQ/Models/TableModels/CSVFile.cs` — Updated: Added `ProjectID` (required FK → Project), kept AnalystID (denormalized for legacy routes).
+- `LQ/Models/DTOs/ProjectDetailDTO.cs` — New DTO: `Token`, `Name`, `ModifiedTime`, `CSVFiles` (ProjectChildDTO list), `Canvases` (ProjectChildDTO list).
+- `LQ/Models/DTOs/ProjectChildDTO.cs` — New DTO: `Token`, `Kind` (ProjectChildKind enum: CSV or Canvas), `Name`, `ModifiedTime`, `Status`, `HasPreview`, `PreviewHeaders[][]`, `PreviewRows[][]`, `FieldCount`, `RowCount`.
+
+### Controllers
+- `LQ/Controllers/ProjectController.cs` — New: `Index()`, `Detail()`, `Create()`, `Rename()`, `Delete()`, `UploadFile()`, `CreateCanvas()`, `RenameCSV()`, `DeleteCSV()`, `RenameCanvas()`, `DeleteCanvas()`, `CanvasPreviewPng()` (GET preview image).
+- `LQ/Controllers/WorkspaceController.cs` — Updated: `EnterWorkspace(canvasToken)` (was session-keyed), `SaveCanvasSnapshot(canvasToken)`, `SaveCanvasSnapshotPng(canvasToken)` (receives PNG base64), removed legacy session-keyed routes.
+- `LQ/Controllers/HomeController.cs` — Stripped to minimal: `Show()` redirects to `/projects`, `GuestUpload()` (legacy, redirects to `/projects`).
+
+### Services
+- `LQ/Services/Implementations/ProjectService.cs` — New: inherits `TableRepository`. Methods: CRUD for Project/Canvas; `ResolveAccessibleProject()`, `ResolveAccessibleCanvas()` (with analyst/guest checks); calls `TableRepository.GetCardPreview()` for CSV cell data.
+- `LQ/Services/Interfaces/IProjectService.cs` — New interface for ProjectService.
+- `LQ/Services/Implementations/CSVService.cs` — Unchanged (inherits TableRepository); still handles upload, type detection, field categorization.
+- `LQ/Services/Implementations/AutoChartService.cs` — Unchanged; chart type detection still works with explicit `csvFileToken` resolution.
+
+### Repository
+- `LQ/Data/Repositories/TableRepository.cs` — New methods:
+  - `UpdateCanvasPreviewPng(canvasId, pngBytes)` — stores bytea in Canvas.PreviewPng.
+  - `GetCanvasPreviewPng(canvasId)` — retrieves bytea from Canvas.PreviewPng.
+  - `GetCardPreview(csvFileId, rowLimit, colLimit)` — returns string[][] (first N rows, M cols) for CSV card preview.
+  - `ResolveCanvasToken(token)` → Canvas — token-keyed lookup.
+  - `ResolveProjectToken(token)` → Project — token-keyed lookup.
+
+### Database
+- `LQ/Data/Database/LQDbContext.cs` — Updated: Added `DbSet<Project>`, updated `Canvas` key + relationships, added `ProjectID` FK to CSVFile.
+- `LQ/Migrations/20260516143725_ReplacePreviewJsonWithPreviewPng.cs` — Creates Project table, adds ProjectID to CSVFile/Canvas, adds Canvas.ID/PublicToken/Name, drops Canvas.CSVFileID key, replaces PreviewJson with PreviewPng (bytea).
+
+### Views
+- `LQ/Views/Project/Index.cshtml` — New: Project list page. Sticky nav, H1 title, "+ New project" button, project grid (4 cols wide, responsive). Project cards: thumbnail grid with 4-up recent CSV/Canvas previews, project name, metadata, stagger-fade-in animation.
+- `LQ/Views/Project/Detail.cshtml` — New: Project detail page. Header with project name (editable), buttons (Upload CSV, New canvas, Delete project). Filter bar (All/CSVs/Canvases, sort dropdown). Item-grid: CSV and Canvas cards mixed. Each card: preview (CSV table or Canvas PNG), item-info (CSV/Canvas icon + name), metadata (edit date), menu (Rename, Delete). All inline CSS; no Tailwind.
+
+### JavaScript
+- `LQ/wwwroot/js/canvas-persist/autosave.js` — Rewritten: MutationObserver triggers POST `/workspace/canvas/{token}`. After success, schedules `captureAndUploadSnapshot()` (250ms delay): measures #doc-canvas, top-crops to 4:3 aspect (srcH = min(scrollHeight, clientWidth * 3/4)), scales to ≤480×360, renders via html-to-image at pixelRatio: 2 (960×720 actual PNG), uploads PNG base64 via POST `/workspace/canvas/{token}/snapshot`.
+- `LQ/wwwroot/js/canvas-persist/index.js` — Added: `scheduleSnapshot(900)` call after hydration if canvas has content (ensures snapshot fires even for unedited canvases).
+- `LQ/wwwroot/js/workspace/csv-picker.js` — New: Dropdown in left-pane header; on change, fetches `GET /workspace/{token}/table?csvToken={token}`, updates #dataTable.
+
+### Styling
+- `LQ/Views/Project/Detail.cshtml` — Contains all CSS for project pages (no Tailwind). Custom `:root` variables, `.item-card`, `.item-preview`, `.badge-icon`, `.item-info`, `.item-body`, `.item-name`, hover states, animations, responsive grid.
+- `LQ/wwwroot/style_tw.css` — Unchanged (Tailwind for workspace views only).
