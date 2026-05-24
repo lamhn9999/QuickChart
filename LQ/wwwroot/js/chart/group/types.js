@@ -28,6 +28,7 @@ export const chartArray = [
   'bubble',
   'line',
   'radar',
+  'scatter', // 13 — Dumbbell (horizontal scatter + connector plugin)
 ];
 
 // SVG mini-icons (16×16 viewBox, currentColor). One per line for legibility.
@@ -46,6 +47,7 @@ const _ICONS = {
     bubble:   `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="3.5"  cy="12"   r="1.8" opacity=".55"/><circle cx="8.5"  cy="6.5"  r="3.5" opacity=".7"/><circle cx="13.5" cy="11"   r="2.5" opacity=".4"/></svg>`,
     area:     `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 12.5C3.5 10 4 8.5 5.5 8C7.5 6.5 8.5 5.8 10 5.5C11.5 5.2 12.5 3.5 14 2.5L14 14L1.5 14Z" fill="currentColor" opacity=".55"/><path d="M1.5 12.5C3.5 10 4 8.5 5.5 8C7.5 6.5 8.5 5.8 10 5.5C11.5 5.2 12.5 3.5 14 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     radar:    `<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><line x1="8" y1="8" x2="8" y2="2" stroke="currentColor" stroke-width=".7" opacity=".25"/><line x1="8" y1="8" x2="13.7" y2="6.1" stroke="currentColor" stroke-width=".7" opacity=".25"/><line x1="8" y1="8" x2="11.5" y2="12.9" stroke="currentColor" stroke-width=".7" opacity=".25"/><line x1="8" y1="8" x2="4.5" y2="12.9" stroke="currentColor" stroke-width=".7" opacity=".25"/><line x1="8" y1="8" x2="2.3" y2="6.1" stroke="currentColor" stroke-width=".7" opacity=".25"/><polygon points="8,2 13.7,6.1 11.5,12.9 4.5,12.9 2.3,6.1" fill="none" stroke="currentColor" stroke-width=".7" opacity=".18"/><polygon points="8,4 11.8,6.8 10.4,11.2 5.6,11.2 4.2,6.8" opacity=".25"/><polygon points="8,4 11.8,6.8 10.4,11.2 5.6,11.2 4.2,6.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" opacity=".9"/></svg>`,
+    dumbbell: `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><line x1="4" y1="5.5" x2="12" y2="5.5" stroke="currentColor" stroke-width="1.3" opacity=".4"/><circle cx="4" cy="5.5" r="2" fill="currentColor" opacity=".9"/><circle cx="12" cy="5.5" r="2" fill="currentColor" opacity=".5"/><line x1="4" y1="10.5" x2="10" y2="10.5" stroke="currentColor" stroke-width="1.3" opacity=".4"/><circle cx="4" cy="10.5" r="2" fill="currentColor" opacity=".9"/><circle cx="10" cy="10.5" r="2" fill="currentColor" opacity=".5"/></svg>`,
 };
 
 // Row 0: Pie · Bar · Line · Histogram   (matches enum 0–3)
@@ -66,4 +68,5 @@ export const CHART_META = [
   { label: 'Bubble', svg: _ICONS.bubble },
   { label: 'Area', svg: _ICONS.area },
   { label: 'Radar', svg: _ICONS.radar },
+  { label: 'Dumbbell', svg: _ICONS.dumbbell },
 ];

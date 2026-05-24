@@ -133,7 +133,7 @@ export function appendChart(
 
   // ── "Turn into" — stacked chart deck button ──────────────────────────
   {
-    // Signature color per ChartType enum index (0–11)
+    // Signature color per ChartType enum index (0–13)
     const TYPE_COLORS = [
       '#E9967A',
       '#60A5FA',
@@ -148,6 +148,7 @@ export function appendChart(
       '#F472B6',
       '#22D3EE',
       '#FCD34D', // 12 = Radar (amber)
+      '#6EE7B7', // 13 = Dumbbell (emerald)
     ];
 
     // Three card indices shown in the deck: back → front
