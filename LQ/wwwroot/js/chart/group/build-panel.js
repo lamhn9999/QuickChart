@@ -69,6 +69,7 @@ export function buildPanel(
     const isPie = chartArray[sample.chartType] === 'pie';
     const isLine = chartArray[sample.chartType] === 'line' && !isArea && !isRadar;
     const isHorizontalBar = sample.chartType === 6;
+    const isDumbbell = sample.chartType === 13;
 
     if (isPie) {
       wrapper.removeChild(ctx);
@@ -180,7 +181,7 @@ export function buildPanel(
           ? 1
           : isPie || isBubble || isRadar
             ? 1.5
-            : isHorizontalBar
+            : isHorizontalBar || isDumbbell
               ? 1.2
               : 1.8,
         plugins: {
@@ -235,6 +236,17 @@ export function buildPanel(
                         beginAtZero: true,
                       },
                     }
+                  : isDumbbell
+                    ? {
+                        x: { type: 'linear', ...axisStyle },
+                        y: {
+                          type: 'category',
+                          labels: sample.x.map(String),
+                          reverse: true,
+                          grid: { display: false },
+                          ticks: { color: LIGHT_TEXT, font: { size: 11 } },
+                        },
+                      }
                   : isPie
                     ? { x: { display: false }, y: { display: false } }
                     : {
@@ -381,8 +393,42 @@ export function buildPanel(
       cfg.options.scales.z = { position: 'right', ...axisStyle };
     }
 
+    if (isDumbbell) {
+      cfg.plugins = [
+        {
+          id: 'lqDumbbellConnector',
+          afterDatasetsDraw(/** @type {any} */ chart) {
+            const ds = chart.data.datasets;
+            if (ds.length < 2) return;
+            const meta0 = chart.getDatasetMeta(0);
+            const meta1 = chart.getDatasetMeta(1);
+            const n = Math.min(meta0.data.length, meta1.data.length);
+            const { ctx } = chart;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(130,130,130,0.45)';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < n; i++) {
+              const p0 = meta0.data[i];
+              const p1 = meta1.data[i];
+              if (!p0 || !p1) continue;
+              ctx.beginPath();
+              ctx.moveTo(p0.x, p0.y);
+              ctx.lineTo(p1.x, p1.y);
+              ctx.stroke();
+            }
+            ctx.restore();
+          },
+        },
+      ];
+      datasets.forEach((/** @type {any} */ ds) => {
+        ds.pointRadius = 6;
+        ds.pointHoverRadius = 9;
+        ds.showLine = false;
+      });
+    }
+
     if (sample.chartType === 6) cfg.options.indexAxis = 'y';
-    if (chartArray[sample.chartType] === 'scatter')
+    if (chartArray[sample.chartType] === 'scatter' && !isDumbbell)
       cfg.options.plugins.tooltip = { enabled: false };
 
     // @ts-ignore — Chart is a runtime global

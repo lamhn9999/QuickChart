@@ -192,6 +192,40 @@ public class AutoChartService : IAutoChartService
         return chart;
     }
 
+    private async Task<Chart?> DetectDumbbellChartAsync(Field catField, Field numericField1, Field numericField2, int[]? rowFilter = null)
+    {
+        var rows1 = await _repo.AverageByGroup(numericField1, catField, rowFilter);
+        var rows2 = await _repo.AverageByGroup(numericField2, catField, rowFilter);
+        if (rows1.Count == 0 || rows2.Count == 0) return null;
+
+        var map2 = rows2.ToDictionary(r => r.Key.ToString()!, r => r.Average);
+        var joined = rows1
+            .Where(r => map2.ContainsKey(r.Key.ToString()!))
+            .OrderByDescending(r => Math.Abs(r.Average - map2[r.Key.ToString()!]))
+            .Take(25)
+            .ToList();
+        if (joined.Count == 0) return null;
+
+        var chart = new Chart
+        {
+            ChartType = ChartType.Dumbbell,
+            Title = $"{numericField1.Name} vs {numericField2.Name} by {catField.Name}"
+        };
+        chart.X = joined.Select(r => r.Key).ToList();
+
+        var ds1 = new LabelData { Label = $"Mean {numericField1.Name}" };
+        var ds2 = new LabelData { Label = $"Mean {numericField2.Name}" };
+        foreach (var r in joined)
+        {
+            string cat = r.Key.ToString()!;
+            ds1.Data.Add(new { x = Math.Round(r.Average, 4), y = cat });
+            ds2.Data.Add(new { x = Math.Round(map2[cat], 4), y = cat });
+        }
+        chart.Y.Add(ds1);
+        chart.Y.Add(ds2);
+        return chart;
+    }
+
     // ─── Public API ───────────────────────────────────────────────────────────
 
     public List<Chart> DetectChart(int csvfileid, List<int> fieldindexes, CancellationToken cancellationToken = default)
@@ -821,7 +855,9 @@ public class AutoChartService : IAutoChartService
             if (catF == numeric[ni] || catF == numeric[nj]) continue;
             var k = Key(catF, numeric[ni], numeric[nj]); //Reg(k);
             if (chartIndex.GetValueOrDefault(k, -1) != 0) continue;
-            Add(await DetectMixedLineChartAsync(catF, numeric[ni], numeric[nj], rowFilter), k);
+            // Add(await DetectMixedLineChartAsync(catF, numeric[ni], numeric[nj], rowFilter), k);
+            Add(await DetectDumbbellChartAsync(catF, numeric[ni], numeric[nj], rowFilter), k);
+
 
             // Scatter: each category gets its own colored dataset of {x,y} points
             var raw3 = await GetRaw();
